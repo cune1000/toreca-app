@@ -4,18 +4,20 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { 
   Home, Database, Store, Settings, Eye,
-  ChevronLeft, ChevronRight, Plus,
+  ChevronLeft, ChevronRight, Plus, Cpu,
   Globe, Layers, Tag
 } from 'lucide-react'
 import DashboardContent from './DashboardContent'
 import CardForm from './CardForm'
 import ShopForm from './ShopForm'
+import ImageRecognition from './ImageRecognition'
 
 const TorekaApp = () => {
   const [currentPage, setCurrentPage] = useState('dashboard')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showCardForm, setShowCardForm] = useState(false)
   const [showShopForm, setShowShopForm] = useState(false)
+  const [showImageRecognition, setShowImageRecognition] = useState(false)
   const [refresh, setRefresh] = useState(0)
 
   // カードリスト
@@ -164,13 +166,22 @@ const TorekaApp = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="font-bold text-gray-800">カード一覧</h2>
-          <button
-            onClick={() => setShowCardForm(true)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
-          >
-            <Plus size={18} />
-            カード追加
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowImageRecognition(true)}
+              className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
+            >
+              <Cpu size={18} />
+              AI認識
+            </button>
+            <button
+              onClick={() => setShowCardForm(true)}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
+            >
+              <Plus size={18} />
+              カード追加
+            </button>
+          </div>
         </div>
         {cards.length > 0 ? (
           <table className="w-full">
@@ -420,6 +431,16 @@ const TorekaApp = () => {
           onSaved={() => {
             setRefresh(r => r + 1)
             fetchShops()
+          }}
+        />
+      )}
+
+      {showImageRecognition && (
+        <ImageRecognition
+          onClose={() => setShowImageRecognition(false)}
+          onRecognized={() => {
+            setRefresh(r => r + 1)
+            fetchCards()
           }}
         />
       )}
