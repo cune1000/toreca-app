@@ -1,52 +1,54 @@
 'use client'
 
 import { useState } from 'react'
-import DashboardContent from '@/components/DashboardContent'
-import CardForm from '@/components/CardForm'
-import ShopForm from '@/components/ShopForm'
-import { Plus, Database, Store } from 'lucide-react'
 
 export default function TestPage() {
-  const [showCardForm, setShowCardForm] = useState(false)
-  const [showShopForm, setShowShopForm] = useState(false)
-  const [refresh, setRefresh] = useState(0)
+  const [url, setUrl] = useState('https://www.cardrush-pokemon.jp/product/76315')
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const testScrape = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const data = await res.json()
+      setResult(data)
+    } catch (err: any) {
+      setResult({ error: err.message })
+    }
+    setLoading(false)
+  }
 
   return (
-    <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-      <div className="p-4 bg-white border-b flex justify-between items-center">
-        <h1 className="text-xl font-bold">DB接続テスト</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowCardForm(true)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
-          >
-            <Database size={18} />
-            カード追加
-          </button>
-          <button
-            onClick={() => setShowShopForm(true)}
-            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
-          >
-            <Store size={18} />
-            店舗追加
-          </button>
-        </div>
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-4">スクレイピングテスト</h1>
+      
+      <div className="mb-4">
+        <input
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          className="w-full p-2 border rounded"
+          placeholder="URLを入力"
+        />
       </div>
       
-      <DashboardContent key={refresh} />
+      <button
+        onClick={testScrape}
+        disabled={loading}
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+      >
+        {loading ? 'スクレイピング中...' : 'スクレイピング実行'}
+      </button>
       
-      {showCardForm && (
-        <CardForm
-          onClose={() => setShowCardForm(false)}
-          onSaved={() => setRefresh(r => r + 1)}
-        />
-      )}
-      
-      {showShopForm && (
-        <ShopForm
-          onClose={() => setShowShopForm(false)}
-          onSaved={() => setRefresh(r => r + 1)}
-        />
+      {result && (
+        <pre className="mt-4 p-4 bg-gray-100 rounded overflow-auto">
+          {JSON.stringify(result, null, 2)}
+        </pre>
       )}
     </div>
   )

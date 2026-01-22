@@ -5,12 +5,13 @@ import { supabase } from '@/lib/supabase'
 import { 
   Home, Database, Store, Settings, Eye,
   ChevronLeft, ChevronRight, Plus, Cpu,
-  Globe, Layers, Tag
+  Globe, Layers, Tag, Twitter
 } from 'lucide-react'
 import DashboardContent from './DashboardContent'
 import CardForm from './CardForm'
 import ShopForm from './ShopForm'
 import ImageRecognition from './ImageRecognition'
+import TwitterFeed from './TwitterFeed'
 
 const TorekaApp = () => {
   const [currentPage, setCurrentPage] = useState('dashboard')
@@ -18,6 +19,8 @@ const TorekaApp = () => {
   const [showCardForm, setShowCardForm] = useState(false)
   const [showShopForm, setShowShopForm] = useState(false)
   const [showImageRecognition, setShowImageRecognition] = useState(false)
+  const [showTwitterFeed, setShowTwitterFeed] = useState(false)
+  const [selectedShop, setSelectedShop] = useState(null)
   const [refresh, setRefresh] = useState(0)
 
   // カードリスト
@@ -249,23 +252,34 @@ const TorekaApp = () => {
         {shops.length > 0 ? (
           <div className="divide-y divide-gray-50">
             {shops.map((shop: any) => (
-              <div key={shop.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+              <div 
+                key={shop.id} 
+                className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
+                onClick={() => { setSelectedShop(shop); setShowTwitterFeed(true); }}
+              >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{shop.icon}</span>
                   <div>
                     <p className="font-medium text-gray-800">{shop.name}</p>
                     {shop.x_account && (
-                      <p className="text-sm text-gray-500">@{shop.x_account}</p>
+                      <p className="text-sm text-blue-500">@{shop.x_account}</p>
                     )}
                   </div>
                 </div>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  shop.status === 'active' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-gray-100 text-gray-700'
-                }`}>
-                  {shop.status === 'active' ? '監視中' : '停止中'}
-                </span>
+                <div className="flex items-center gap-2">
+                  {shop.x_account && (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                      X連携
+                    </span>
+                  )}
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    shop.status === 'active' 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {shop.status === 'active' ? '監視中' : '停止中'}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -441,6 +455,18 @@ const TorekaApp = () => {
           onRecognized={() => {
             setRefresh(r => r + 1)
             fetchCards()
+          }}
+        />
+      )}
+
+      {showTwitterFeed && selectedShop && (
+        <TwitterFeed
+          shop={selectedShop}
+          onClose={() => setShowTwitterFeed(false)}
+          onImageSelect={(imageUrl: string) => {
+            console.log('Selected image:', imageUrl)
+            setShowTwitterFeed(false)
+            // TODO: 選択した画像でAI認識を実行
           }}
         />
       )}
