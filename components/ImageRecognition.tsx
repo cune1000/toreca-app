@@ -25,27 +25,39 @@ export default function ImageRecognition({ onRecognized, onClose }) {
     }
   }
 
-  // AI認識を実行（デモ版 - 実際はClaude Vision APIを呼ぶ）
+  // AI認識を実行（本物のClaude Vision API）
   const runRecognition = async () => {
     setStep(2)
     setLoading(true)
 
-    // デモ用: 2秒待ってダミー結果を返す
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    try {
+      // APIを呼び出し
+      const response = await fetch('/api/recognize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imagePreview }),
+      })
 
-    // デモ用の認識結果
-    const demoResults = [
-      { name: 'メガカイリューex', cardNumber: '246/193', confidence: 94, rarity: 'SAR' },
-      { name: 'ピカチュウex', cardNumber: '001/078', confidence: 87, rarity: 'SR' },
-      { name: 'リザードンex', cardNumber: '125/165', confidence: 82, rarity: 'SAR' },
-    ]
-    
-    // ランダムに1つ選ぶ
-    const result = demoResults[Math.floor(Math.random() * demoResults.length)]
-    
-    setRecognitionResult(result)
-    setLoading(false)
-    setStep(3)
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || '認識に失敗しました')
+      }
+
+      setRecognitionResult({
+        name: result.name || '不明',
+        cardNumber: result.cardNumber || '',
+        rarity: result.rarity || '',
+        cardType: result.cardType || 'ポケモンカード',
+        confidence: result.confidence || 0,
+      })
+      setStep(3)
+    } catch (error: any) {
+      alert('エラー: ' + error.message)
+      setStep(1)
+    } finally {
+      setLoading(false)
+    }
   }
 
   // 結果を承認してカード登録
@@ -314,10 +326,10 @@ export default function ImageRecognition({ onRecognized, onClose }) {
           )}
         </div>
 
-        {/* デモ版の注意書き */}
+        {/* Claude Vision API */}
         <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 text-center">
           <p className="text-xs text-gray-500">
-            🎮 デモ版: 実際のAI認識ではなく、ダミーデータを返しています
+            🤖 Claude Vision APIで画像認識しています
           </p>
         </div>
       </div>
