@@ -2,25 +2,25 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Upload, RefreshCw, Image } from 'lucide-react'
+import { X, Save, RefreshCw, Image, Trash2 } from 'lucide-react'
 
-export default function CardForm({ onClose, onSaved }) {
+export default function CardEditForm({ card, onClose, onSaved }) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [categories, setCategories] = useState([])
   const [rarities, setRarities] = useState([])
   const [mediumCategories, setMediumCategories] = useState([])
-  const [imagePreview, setImagePreview] = useState(null)
+  const [imagePreview, setImagePreview] = useState(card?.image_url || null)
   const fileInputRef = useRef(null)
   
-  // フォームデータ
   const [form, setForm] = useState({
-    name: '',
-    card_number: '',
-    category_large_id: '',
-    category_medium_id: '',
-    rarity_id: '',
-    image_url: ''
+    name: card?.name || '',
+    card_number: card?.card_number || '',
+    category_large_id: card?.category_large_id || '',
+    category_medium_id: card?.category_medium_id || '',
+    rarity_id: card?.rarity_id || '',
+    image_url: card?.image_url || ''
   })
 
   // 大カテゴリ取得
@@ -71,7 +71,6 @@ export default function CardForm({ onClose, onSaved }) {
       const base64 = e.target?.result as string
       setImagePreview(base64)
       
-      // アップロード
       setUploading(true)
       try {
         const res = await fetch('/api/upload', {
@@ -79,7 +78,7 @@ export default function CardForm({ onClose, onSaved }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             image: base64,
-            fileName: `${Date.now()}_${file.name}`
+            fileName: `${card.id}_${Date.now()}.jpg`
           }),
         })
         const data = await res.json()
@@ -97,21 +96,22 @@ export default function CardForm({ onClose, onSaved }) {
     reader.readAsDataURL(file)
   }
 
+  // 保存
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('cards')
-      .insert([{
+      .update({
         name: form.name,
         card_number: form.card_number,
         category_large_id: form.category_large_id || null,
         category_medium_id: form.category_medium_id || null,
         rarity_id: form.rarity_id || null,
         image_url: form.image_url || null
-      }])
-      .select()
+      })
+      .eq('id', card.id)
 
     setLoading(false)
 
@@ -120,7 +120,30 @@ export default function CardForm({ onClose, onSaved }) {
       return
     }
 
-    alert('カードを登録しました！')
+    alert('カードを更新しました！')
+    if (onSaved) onSaved()
+    if (onClose) onClose()
+  }
+
+  // 削除
+  const handleDelete = async () => {
+    if (!confirm('このカードを削除しますか？')) return
+    
+    setDeleting(true)
+
+    const { error } = await supabase
+      .from('cards')
+      .delete()
+      .eq('id', card.id)
+
+    setDeleting(false)
+
+    if (error) {
+      alert('エラー: ' + error.message)
+      return
+    }
+
+    alert('カードを削除しました')
     if (onSaved) onSaved()
     if (onClose) onClose()
   }
@@ -129,14 +152,14 @@ export default function CardForm({ onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl w-[600px] max-h-[90vh] overflow-auto">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-800">カード追加</h2>
+          <h2 className="text-xl font-bold text-gray-800">カード編集</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
             <X size={20} className="text-gray-500" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* 画像アップロード */}
+          {/* 画像 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               カード画像
@@ -147,15 +170,11 @@ export default function CardForm({ onClose, onSaved }) {
             >
               {imagePreview ? (
                 <div className="relative">
-                  <img src={imagePreview} alt="Preview" className="max-h-40 mx-auto rounded-lg" />
+                  <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg" />
                   {uploading && (
                     <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-lg">
                       <RefreshCw className="animate-spin text-blue-500" size={24} />
-                      <span className="ml-2 text-blue-500">アップロード中...</span>
                     </div>
-                  )}
-                  {form.image_url && !uploading && (
-                    <p className="text-xs text-green-600 mt-2">✓ アップロード完了</p>
                   )}
                 </div>
               ) : (
@@ -184,7 +203,6 @@ export default function CardForm({ onClose, onSaved }) {
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="例: メガカイリューex"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -198,7 +216,6 @@ export default function CardForm({ onClose, onSaved }) {
               type="text"
               value={form.card_number}
               onChange={(e) => setForm({ ...form, card_number: e.target.value })}
-              placeholder="例: 246/193"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -265,31 +282,42 @@ export default function CardForm({ onClose, onSaved }) {
           )}
 
           {/* ボタン */}
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-between pt-4">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 flex items-center gap-2"
             >
-              キャンセル
+              {deleting ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              削除
             </button>
-            <button
-              type="submit"
-              disabled={loading || uploading || !form.name}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw size={16} className="animate-spin" />
-                  登録中...
-                </>
-              ) : (
-                <>
-                  <Plus size={16} />
-                  登録
-                </>
-              )}
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="submit"
+                disabled={loading || uploading || !form.name}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    保存
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

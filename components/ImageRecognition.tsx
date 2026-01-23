@@ -1,338 +1,515 @@
-'use client'
+'use client';
 
-import { useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
-import { Upload, Camera, Cpu, Check, X, RefreshCw, Zap, AlertTriangle } from 'lucide-react'
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { X, Loader2, Check, AlertCircle } from 'lucide-react';
 
-export default function ImageRecognition({ onRecognized, onClose }) {
-  const [step, setStep] = useState(1) // 1: アップロード, 2: 認識中, 3: 結果確認
-  const [image, setImage] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
-  const [recognitionResult, setRecognitionResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const fileInputRef = useRef(null)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+interface CardCandidate {
+  id: string;
+  name: string;
+  cardNumber?: string;
+  rarity?: string;
+  imageUrl?: string;
+  similarity: number;
+  isExactMatch: boolean;
+}
+
+interface RecognitionResult {
+  name: string;
+  cardNumber?: string;
+  rarity?: string;
+  series?: string;
+  confidence?: number;
+  matchedCard?: CardCandidate | null;
+  candidates?: CardCandidate[];
+  needsReview?: boolean;
+}
+
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface Rarity {
+  id: string;
+  name: string;
+}
+
+interface Props {
+  onClose: () => void;
+  onRecognized?: () => void;
+}
+
+export default function ImageRecognition({ onClose, onRecognized }: Props) {
+  const [image, setImage] = useState<string | null>(null);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [result, setResult] = useState<RecognitionResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<CardCandidate | null>(null);
+  
+  // カード登録用
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [categories, setCategories] = useState<{
+    large: Category[];
+    medium: Category[];
+    small: Category[];
+  }>({ large: [], medium: [], small: [] });
+  const [rarities, setRarities] = useState<Rarity[]>([]);
+  const [formData, setFormData] = useState({
+    name: '',
+    cardNumber: '',
+    categoryLargeId: '',
+    categoryMediumId: '',
+    categorySmallId: '',
+    rarityId: ''
+  });
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // カテゴリ・レアリティ取得
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      const [largeRes, raritiesRes] = await Promise.all([
+        supabase.from('category_large').select('id, name').order('name'),
+        supabase.from('rarities').select('id, name').order('name')
+      ]);
+      
+      if (largeRes.data) {
+        setCategories(prev => ({ ...prev, large: largeRes.data }));
+      }
+      if (raritiesRes.data) {
+        setRarities(raritiesRes.data);
+      }
+    };
+    fetchMasterData();
+  }, []);
+
+  // 大カテゴリ変更時
+  const handleLargeCategoryChange = async (id: string) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      categoryLargeId: id, 
+      categoryMediumId: '', 
+      categorySmallId: '' 
+    }));
+    
+    if (id) {
+      const { data } = await supabase
+        .from('category_medium')
+        .select('id, name')
+        .eq('category_large_id', id)
+        .order('name');
+      setCategories(prev => ({ ...prev, medium: data || [], small: [] }));
+    } else {
+      setCategories(prev => ({ ...prev, medium: [], small: [] }));
+    }
+  };
+
+  // 中カテゴリ変更時
+  const handleMediumCategoryChange = async (id: string) => {
+    setFormData(prev => ({ ...prev, categoryMediumId: id, categorySmallId: '' }));
+    
+    if (id) {
+      const { data } = await supabase
+        .from('category_small')
+        .select('id, name')
+        .eq('category_medium_id', id)
+        .order('name');
+      setCategories(prev => ({ ...prev, small: data || [] }));
+    } else {
+      setCategories(prev => ({ ...prev, small: [] }));
+    }
+  };
 
   // 画像選択
-  const handleImageSelect = (e) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setImage(file)
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  // AI認識を実行（本物のClaude Vision API）
-  const runRecognition = async () => {
-    setStep(2)
-    setLoading(true)
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImage(event.target?.result as string);
+      setResult(null);
+      setSelectedCard(null);
+      setError(null);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  // 認識実行
+  const handleRecognize = async () => {
+    if (!image) return;
+
+    setIsRecognizing(true);
+    setError(null);
 
     try {
-      // APIを呼び出し
       const response = await fetch('/api/recognize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imagePreview }),
-      })
+        body: JSON.stringify({ image, matchWithDb: true }),
+      });
 
-      const result = await response.json()
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || '認識に失敗しました')
+        throw new Error(data.error || '認識に失敗しました');
       }
 
-      setRecognitionResult({
-        name: result.name || '不明',
-        cardNumber: result.cardNumber || '',
-        rarity: result.rarity || '',
-        cardType: result.cardType || 'ポケモンカード',
-        confidence: result.confidence || 0,
-      })
-      setStep(3)
-    } catch (error: any) {
-      alert('エラー: ' + error.message)
-      setStep(1)
+      setResult(data);
+      
+      // 自動マッチした場合
+      if (data.matchedCard) {
+        setSelectedCard(data.matchedCard);
+      }
+      
+      // フォームに認識結果をセット
+      setFormData(prev => ({
+        ...prev,
+        name: data.name || '',
+        cardNumber: data.cardNumber || ''
+      }));
+
+      // レアリティをマッチ
+      if (data.rarity && rarities.length > 0) {
+        const matchedRarity = rarities.find(r => 
+          r.name.toLowerCase() === data.rarity?.toLowerCase()
+        );
+        if (matchedRarity) {
+          setFormData(prev => ({ ...prev, rarityId: matchedRarity.id }));
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '認識に失敗しました');
     } finally {
-      setLoading(false)
+      setIsRecognizing(false);
     }
-  }
+  };
 
-  // 結果を承認してカード登録
-  const approveResult = async () => {
-    if (!recognitionResult) return
-    
-    setLoading(true)
+  // 候補を選択
+  const handleSelectCandidate = (candidate: CardCandidate) => {
+    setSelectedCard(candidate);
+  };
 
-    // カテゴリとレアリティを取得
-    const { data: categories } = await supabase
-      .from('category_large')
-      .select('id')
-      .eq('name', 'ポケモンカード')
-      .single()
-
-    let rarityId = null
-    if (categories) {
-      const { data: rarities } = await supabase
-        .from('rarities')
-        .select('id')
-        .eq('large_id', categories.id)
-        .eq('name', recognitionResult.rarity)
-        .single()
-      if (rarities) rarityId = rarities.id
+  // 新規カード登録
+  const handleRegister = async () => {
+    if (!formData.name) {
+      setError('カード名は必須です');
+      return;
     }
 
-    // カード登録
-    const { data, error } = await supabase
-      .from('cards')
-      .insert([{
-        name: recognitionResult.name,
-        card_number: recognitionResult.cardNumber,
-        category_large_id: categories?.id || null,
-        rarity_id: rarityId
-      }])
-      .select()
+    setIsRegistering(true);
+    setError(null);
 
-    setLoading(false)
+    try {
+      // 画像をアップロード
+      let imageUrl = null;
+      if (image) {
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            image, 
+            fileName: `card_${Date.now()}.jpg` 
+          }),
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.success) {
+          imageUrl = uploadData.url;
+        }
+      }
 
-    if (error) {
-      alert('エラー: ' + error.message)
-      return
+      // カード登録
+      const { error: insertError } = await supabase
+        .from('cards')
+        .insert({
+          name: formData.name,
+          card_number: formData.cardNumber || null,
+          category_small_id: formData.categorySmallId || null,
+          rarity_id: formData.rarityId || null,
+          image_url: imageUrl
+        });
+
+      if (insertError) throw insertError;
+
+      alert('カードを登録しました');
+      
+      // コールバック
+      onRecognized?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '登録に失敗しました');
+    } finally {
+      setIsRegistering(false);
     }
+  };
 
-    alert('カードを登録しました！')
-    if (onRecognized) onRecognized(data[0])
-    if (onClose) onClose()
-  }
-
-  // リセット
-  const reset = () => {
-    setStep(1)
-    setImage(null)
-    setImagePreview(null)
-    setRecognitionResult(null)
-  }
+  // 類似度に応じた色
+  const getSimilarityColor = (similarity: number) => {
+    if (similarity >= 90) return 'text-green-600 bg-green-100';
+    if (similarity >= 70) return 'text-yellow-600 bg-yellow-100';
+    return 'text-red-600 bg-red-100';
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl w-[600px] max-h-[90vh] overflow-auto">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Cpu size={20} className="text-purple-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">AI画像認識</h2>
-              <p className="text-sm text-gray-500">カード画像から自動でカード情報を認識</p>
-            </div>
-          </div>
+      <div className="bg-white rounded-2xl w-[800px] max-h-[90vh] overflow-auto">
+        {/* ヘッダー */}
+        <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+          <h2 className="text-xl font-bold">カード画像認識</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-            <X size={20} className="text-gray-500" />
+            <X size={20} />
           </button>
         </div>
 
-        <div className="p-6">
-          {/* ステップインジケーター */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            {[
-              { num: 1, label: '画像選択' },
-              { num: 2, label: 'AI認識' },
-              { num: 3, label: '結果確認' },
-            ].map((s, i) => (
-              <div key={s.num} className="flex items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  step >= s.num 
-                    ? 'bg-purple-500 text-white' 
-                    : 'bg-gray-200 text-gray-500'
-                }`}>
-                  {step > s.num ? <Check size={16} /> : s.num}
-                </div>
-                <span className={`ml-2 text-sm ${step >= s.num ? 'text-gray-800' : 'text-gray-400'}`}>
-                  {s.label}
-                </span>
-                {i < 2 && <div className={`w-12 h-0.5 mx-3 ${step > s.num ? 'bg-purple-500' : 'bg-gray-200'}`} />}
-              </div>
-            ))}
-          </div>
-
-          {/* Step 1: 画像選択 */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
-              >
-                {imagePreview ? (
-                  <div className="space-y-4">
-                    <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
-                    <p className="text-sm text-gray-500">クリックして別の画像を選択</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                      <Upload size={32} className="text-gray-400" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-700">画像をアップロード</p>
-                      <p className="text-sm text-gray-500 mt-1">PNG, JPG, GIF（最大10MB）</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  キャンセル
-                </button>
-                <button
-                  onClick={runRecognition}
-                  disabled={!image}
-                  className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 flex items-center gap-2"
-                >
-                  <Zap size={18} />
-                  認識開始
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: 認識中 */}
-          {step === 2 && (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <RefreshCw size={40} className="text-purple-500 animate-spin" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">AI認識中...</h3>
-              <p className="text-gray-500">カード情報を解析しています</p>
-              <div className="mt-6 flex justify-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: 結果確認 */}
-          {step === 3 && recognitionResult && (
-            <div className="space-y-6">
-              <div className="flex gap-6">
-                {/* 画像 */}
-                <div className="w-1/3">
-                  <img src={imagePreview} alt="Card" className="w-full rounded-lg border border-gray-200" />
-                </div>
-
-                {/* 認識結果 */}
-                <div className="flex-1 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      recognitionResult.confidence >= 90 
-                        ? 'bg-green-100 text-green-700' 
-                        : recognitionResult.confidence >= 70
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      信頼度 {recognitionResult.confidence}%
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">カード名</label>
-                    <input
-                      type="text"
-                      value={recognitionResult.name}
-                      onChange={(e) => setRecognitionResult({ ...recognitionResult, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg font-medium text-lg"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-500 mb-1">カード番号</label>
-                      <input
-                        type="text"
-                        value={recognitionResult.cardNumber}
-                        onChange={(e) => setRecognitionResult({ ...recognitionResult, cardNumber: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-500 mb-1">レアリティ</label>
-                      <input
-                        type="text"
-                        value={recognitionResult.rarity}
-                        onChange={(e) => setRecognitionResult({ ...recognitionResult, rarity: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-                      />
-                    </div>
-                  </div>
-
-                  {recognitionResult.confidence < 80 && (
-                    <div className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg">
-                      <AlertTriangle size={18} className="text-yellow-600 mt-0.5" />
-                      <div className="text-sm text-yellow-700">
-                        信頼度が低いため、認識結果を確認してください。
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-between">
-                <button
-                  onClick={reset}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  やり直す
-                </button>
-                <div className="flex gap-3">
+        <div className="p-6 space-y-6">
+          {/* 画像選択 */}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+            
+            {image ? (
+              <div className="space-y-4">
+                <img
+                  src={image}
+                  alt="カード画像"
+                  className="max-h-64 mx-auto rounded-lg shadow"
+                />
+                <div className="flex justify-center gap-4">
                   <button
-                    onClick={onClose}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50"
                   >
-                    キャンセル
+                    画像を変更
                   </button>
                   <button
-                    onClick={approveResult}
-                    disabled={loading}
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
+                    onClick={handleRecognize}
+                    disabled={isRecognizing}
+                    className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
                   >
-                    {loading ? (
+                    {isRecognizing ? (
                       <>
-                        <RefreshCw size={18} className="animate-spin" />
-                        登録中...
+                        <Loader2 size={18} className="animate-spin" />
+                        認識中...
                       </>
                     ) : (
-                      <>
-                        <Check size={18} />
-                        この内容で登録
-                      </>
+                      'AIで認識する'
                     )}
                   </button>
                 </div>
               </div>
+            ) : (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full py-12 text-gray-500 hover:text-gray-700"
+              >
+                クリックしてカード画像を選択
+              </button>
+            )}
+          </div>
+
+          {/* エラー */}
+          {error && (
+            <div className="p-4 bg-red-100 text-red-700 rounded-lg flex items-center gap-2">
+              <AlertCircle size={20} />
+              {error}
+            </div>
+          )}
+
+          {/* 認識結果 */}
+          {result && (
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h3 className="font-semibold mb-2">AI認識結果</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>カード名: <span className="font-medium">{result.name}</span></div>
+                  <div>カード番号: <span className="font-medium">{result.cardNumber || '-'}</span></div>
+                  <div>レアリティ: <span className="font-medium">{result.rarity || '-'}</span></div>
+                  <div>確信度: <span className="font-medium">{result.confidence || '-'}%</span></div>
+                </div>
+              </div>
+
+              {/* マッチ状態 */}
+              {selectedCard ? (
+                <div className="p-4 border-2 border-green-300 bg-green-50 rounded-lg">
+                  <div className="flex items-center gap-4">
+                    {selectedCard.imageUrl && (
+                      <img
+                        src={selectedCard.imageUrl}
+                        alt=""
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <div className="font-medium">{selectedCard.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {selectedCard.cardNumber && `${selectedCard.cardNumber} / `}
+                        {selectedCard.rarity}
+                      </div>
+                    </div>
+                    <span className={`px-3 py-1 rounded ${getSimilarityColor(selectedCard.similarity)}`}>
+                      {selectedCard.similarity}% マッチ
+                    </span>
+                    <button
+                      onClick={() => setSelectedCard(null)}
+                      className="text-red-600 hover:underline text-sm"
+                    >
+                      解除
+                    </button>
+                  </div>
+                  <div className="mt-3 text-sm text-green-700 flex items-center gap-2">
+                    <Check size={16} />
+                    このカードはDBに登録済みです
+                  </div>
+                </div>
+              ) : result.candidates && result.candidates.length > 0 ? (
+                <div className="p-4 border-2 border-yellow-300 bg-yellow-50 rounded-lg">
+                  <div className="font-medium mb-3">候補から選択してください:</div>
+                  <div className="space-y-2">
+                    {result.candidates.map((candidate, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSelectCandidate(candidate)}
+                        className="w-full flex items-center gap-4 p-3 border rounded hover:bg-white transition-colors text-left"
+                      >
+                        {candidate.imageUrl && (
+                          <img
+                            src={candidate.imageUrl}
+                            alt=""
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <div className="font-medium">{candidate.name}</div>
+                          <div className="text-sm text-gray-600">
+                            {candidate.cardNumber && `${candidate.cardNumber} / `}
+                            {candidate.rarity}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-sm ${getSimilarityColor(candidate.similarity)}`}>
+                          {candidate.similarity}%
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 border-2 border-red-300 bg-red-50 rounded-lg">
+                  <div className="text-red-700">
+                    DBに該当するカードが見つかりませんでした。
+                    下のフォームから新規登録してください。
+                  </div>
+                </div>
+              )}
+
+              {/* 新規登録フォーム */}
+              {!selectedCard && (
+                <div className="p-4 border rounded-lg space-y-4">
+                  <h3 className="font-semibold">新規カード登録</h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">カード名 *</label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-3 py-2 border rounded"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">カード番号</label>
+                      <input
+                        type="text"
+                        value={formData.cardNumber}
+                        onChange={(e) => setFormData(prev => ({ ...prev, cardNumber: e.target.value }))}
+                        className="w-full px-3 py-2 border rounded"
+                        placeholder="例: 198/187"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">大カテゴリ</label>
+                      <select
+                        value={formData.categoryLargeId}
+                        onChange={(e) => handleLargeCategoryChange(e.target.value)}
+                        className="w-full px-3 py-2 border rounded"
+                      >
+                        <option value="">選択...</option>
+                        {categories.large.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">中カテゴリ</label>
+                      <select
+                        value={formData.categoryMediumId}
+                        onChange={(e) => handleMediumCategoryChange(e.target.value)}
+                        className="w-full px-3 py-2 border rounded"
+                        disabled={!formData.categoryLargeId}
+                      >
+                        <option value="">選択...</option>
+                        {categories.medium.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">小カテゴリ</label>
+                      <select
+                        value={formData.categorySmallId}
+                        onChange={(e) => setFormData(prev => ({ ...prev, categorySmallId: e.target.value }))}
+                        className="w-full px-3 py-2 border rounded"
+                        disabled={!formData.categoryMediumId}
+                      >
+                        <option value="">選択...</option>
+                        {categories.small.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">レアリティ</label>
+                    <select
+                      value={formData.rarityId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, rarityId: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded"
+                    >
+                      <option value="">選択...</option>
+                      {rarities.map(r => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleRegister}
+                    disabled={isRegistering || !formData.name}
+                    className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isRegistering ? '登録中...' : 'カードを登録'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Claude Vision API */}
-        <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-500">
-            🤖 Claude Vision APIで画像認識しています
-          </p>
-        </div>
       </div>
     </div>
-  )
+  );
 }

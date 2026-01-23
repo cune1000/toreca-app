@@ -25,11 +25,11 @@ export async function POST(request: NextRequest) {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     })
 
-    // domcontentloadedに変更（より早く完了する）
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 })
+    // タイムアウトを60秒に延長
+    await page.goto(url, { waitUntil: 'load', timeout: 60000 })
     
-    // 少し待ってJSが実行されるのを待つ
-    await page.waitForTimeout(2000)
+    // JSが実行されるのを待つ
+    await page.waitForTimeout(3000)
 
     let result = null
 
@@ -125,12 +125,12 @@ export async function POST(request: NextRequest) {
       scrapedAt: new Date().toISOString(),
     })
   } catch (error: any) {
-    console.error('Scrape error:', error)
+    console.error('Scrape error:', error.message)
     if (browser) {
       await browser.close()
     }
     return NextResponse.json(
-      { error: error.message || 'スクレイピングに失敗しました' },
+      { error: 'スクレイピングに失敗しました（タイムアウト）。もう一度お試しください。' },
       { status: 500 }
     )
   }

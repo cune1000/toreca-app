@@ -1,17 +1,25 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
 import { 
   Home, Database, Store, Settings, Eye,
   ChevronLeft, ChevronRight, Plus, Cpu,
-  Globe, Layers, Tag, Twitter
+  Globe, Layers, Tag, Edit2
 } from 'lucide-react'
 import DashboardContent from './DashboardContent'
 import CardForm from './CardForm'
 import ShopForm from './ShopForm'
 import ImageRecognition from './ImageRecognition'
 import TwitterFeed from './TwitterFeed'
+import CardDetail from './CardDetail'
+import CategoryManager from './CategoryManager'
+import CardImporter from './CardImporter'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 const TorekaApp = () => {
   const [currentPage, setCurrentPage] = useState('dashboard')
@@ -20,7 +28,11 @@ const TorekaApp = () => {
   const [showShopForm, setShowShopForm] = useState(false)
   const [showImageRecognition, setShowImageRecognition] = useState(false)
   const [showTwitterFeed, setShowTwitterFeed] = useState(false)
-  const [selectedShop, setSelectedShop] = useState(null)
+  const [showCardDetail, setShowCardDetail] = useState(false)
+  const [showCardImporter, setShowCardImporter] = useState(false)
+  const [selectedShop, setSelectedShop] = useState<any>(null)
+  const [editingShop, setEditingShop] = useState<any>(null)  // 編集用
+  const [selectedCard, setSelectedCard] = useState(null)
   const [refresh, setRefresh] = useState(0)
 
   // カードリスト
@@ -51,6 +63,19 @@ const TorekaApp = () => {
   const fetchSites = async () => {
     const { data } = await supabase.from('sale_sites').select('*')
     setSites(data || [])
+  }
+
+  // 店舗編集を開く
+  const openShopEdit = (shop: any, e: React.MouseEvent) => {
+    e.stopPropagation() // TwitterFeedが開くのを防ぐ
+    setEditingShop(shop)
+    setShowShopForm(true)
+  }
+
+  // 新規店舗追加を開く
+  const openShopAdd = () => {
+    setEditingShop(null)
+    setShowShopForm(true)
   }
 
   // サイドバー
@@ -171,6 +196,13 @@ const TorekaApp = () => {
           <h2 className="font-bold text-gray-800">カード一覧</h2>
           <div className="flex gap-2">
             <button
+              onClick={() => setShowCardImporter(true)}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-2"
+            >
+              <Globe size={18} />
+              公式からインポート
+            </button>
+            <button
               onClick={() => setShowImageRecognition(true)}
               className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
             >
@@ -187,38 +219,54 @@ const TorekaApp = () => {
           </div>
         </div>
         {cards.length > 0 ? (
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カテゴリ</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード番号</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">登録日</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {cards.map((card: any) => (
-                <tr key={card.id} className="hover:bg-gray-50 cursor-pointer">
-                  <td className="px-4 py-3 font-medium text-gray-800">{card.name}</td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {card.category_large ? `${card.category_large.icon} ${card.category_large.name}` : '-'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {card.rarity ? (
-                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                        {card.rarity.name}
-                      </span>
-                    ) : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{card.card_number || '-'}</td>
-                  <td className="px-4 py-3 text-right text-sm text-gray-500">
-                    {new Date(card.created_at).toLocaleDateString('ja-JP')}
-                  </td>
+          <div className="overflow-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">画像</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カテゴリ</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード番号</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">登録日</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {cards.map((card: any) => (
+                  <tr 
+                    key={card.id} 
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => { setSelectedCard(card); setShowCardDetail(true); }}
+                  >
+                    <td className="px-4 py-2">
+                      {card.image_url ? (
+                        <img src={card.image_url} alt={card.name} className="w-12 h-16 object-cover rounded" />
+                      ) : (
+                        <div className="w-12 h-16 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">
+                          No Image
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 font-medium text-gray-800">{card.name}</td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {card.category_large?.icon} {card.category_large?.name || '-'}
+                    </td>
+                    <td className="px-4 py-2">
+                      {card.rarity?.name && (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                          {card.rarity.name}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600">{card.card_number || '-'}</td>
+                    <td className="px-4 py-2 text-right text-sm text-gray-500">
+                      {new Date(card.created_at).toLocaleDateString('ja-JP')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="p-8 text-center text-gray-500">
             <Database size={48} className="mx-auto mb-4 text-gray-300" />
@@ -235,14 +283,14 @@ const TorekaApp = () => {
     </div>
   )
 
-  // 買取店舗ページ
+  // 買取店舗ページ（Xアイコン対応・編集機能付き）
   const ShopsPage = () => (
     <div className="p-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="font-bold text-gray-800">買取店舗一覧</h2>
           <button
-            onClick={() => setShowShopForm(true)}
+            onClick={openShopAdd}
             className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
           >
             <Plus size={18} />
@@ -254,11 +302,33 @@ const TorekaApp = () => {
             {shops.map((shop: any) => (
               <div 
                 key={shop.id} 
-                className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
-                onClick={() => { setSelectedShop(shop); setShowTwitterFeed(true); }}
+                className="p-4 flex items-center justify-between hover:bg-gray-50"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{shop.icon}</span>
+                <div 
+                  className="flex items-center gap-3 flex-1 cursor-pointer"
+                  onClick={() => { setSelectedShop(shop); setShowTwitterFeed(true); }}
+                >
+                  {/* Xアイコン or デフォルトアイコン */}
+                  {shop.icon ? (
+                    <img 
+                      src={shop.icon} 
+                      alt={shop.name}
+                      className="w-12 h-12 rounded-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://unavatar.io/twitter/${shop.x_account}`
+                      }}
+                    />
+                  ) : shop.x_account ? (
+                    <img 
+                      src={`https://unavatar.io/twitter/${shop.x_account}`}
+                      alt={shop.name}
+                      className="w-12 h-12 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                      <Store size={24} className="text-gray-400" />
+                    </div>
+                  )}
                   <div>
                     <p className="font-medium text-gray-800">{shop.name}</p>
                     {shop.x_account && (
@@ -279,6 +349,13 @@ const TorekaApp = () => {
                   }`}>
                     {shop.status === 'active' ? '監視中' : '停止中'}
                   </span>
+                  {/* 編集ボタン */}
+                  <button
+                    onClick={(e) => openShopEdit(shop, e)}
+                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Edit2 size={16} className="text-gray-500" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -288,7 +365,7 @@ const TorekaApp = () => {
             <Store size={48} className="mx-auto mb-4 text-gray-300" />
             <p>まだ買取店舗が登録されていません</p>
             <button
-              onClick={() => setShowShopForm(true)}
+              onClick={openShopAdd}
               className="mt-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
             >
               最初の店舗を追加
@@ -341,14 +418,7 @@ const TorekaApp = () => {
   )
 
   // カテゴリページ
-  const CategoriesPage = () => (
-    <div className="p-6">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="font-bold text-gray-800 mb-4">カテゴリ管理</h2>
-        <p className="text-gray-500">カテゴリ管理ページは今後実装予定です。</p>
-      </div>
-    </div>
-  )
+  const CategoriesPage = () => <CategoryManager />
 
   // 認識確認ページ
   const RecognitionPage = () => (
@@ -441,7 +511,11 @@ const TorekaApp = () => {
 
       {showShopForm && (
         <ShopForm
-          onClose={() => setShowShopForm(false)}
+          shop={editingShop}
+          onClose={() => {
+            setShowShopForm(false)
+            setEditingShop(null)
+          }}
           onSaved={() => {
             setRefresh(r => r + 1)
             fetchShops()
@@ -466,7 +540,23 @@ const TorekaApp = () => {
           onImageSelect={(imageUrl: string) => {
             console.log('Selected image:', imageUrl)
             setShowTwitterFeed(false)
-            // TODO: 選択した画像でAI認識を実行
+          }}
+        />
+      )}
+
+      {showCardDetail && selectedCard && (
+        <CardDetail
+          card={selectedCard}
+          onClose={() => setShowCardDetail(false)}
+        />
+      )}
+
+      {showCardImporter && (
+        <CardImporter
+          onClose={() => setShowCardImporter(false)}
+          onCompleted={() => {
+            setShowCardImporter(false)
+            setRefresh(r => r + 1)
           }}
         />
       )}

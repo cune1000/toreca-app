@@ -1,96 +1,110 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const BEARER_TOKEN = process.env.X_BEARER_TOKEN
-
-// ユーザーIDを取得
-async function getUserId(username: string): Promise<string | null> {
-  const response = await fetch(
-    `https://api.twitter.com/2/users/by/username/${username}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${BEARER_TOKEN}`,
-      },
-    }
-  )
-  
-  if (!response.ok) {
-    console.error('Failed to get user ID:', await response.text())
-    return null
-  }
-  
-  const data = await response.json()
-  return data.data?.id || null
-}
-
-// ユーザーの最新ツイートを取得（画像付き）
-async function getUserTweets(userId: string, maxResults: number = 10) {
-  const response = await fetch(
-    `https://api.twitter.com/2/users/${userId}/tweets?max_results=${maxResults}&tweet.fields=created_at,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url,type`,
-    {
-      headers: {
-        'Authorization': `Bearer ${BEARER_TOKEN}`,
-      },
-    }
-  )
-  
-  if (!response.ok) {
-    console.error('Failed to get tweets:', await response.text())
-    return null
-  }
-  
-  return await response.json()
-}
-
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const username = searchParams.get('username')
+
+  if (!username) {
+    return NextResponse.json({ error: 'username is required' }, { status: 400 })
+  }
+
+  const bearerToken = process.env.X_BEARER_TOKEN
+
+  if (!bearerToken) {
+    return NextResponse.json({ error: 'X_BEARER_TOKEN is not configured' }, { status: 500 })
+  }
+
   try {
-    const { searchParams } = new URL(request.url)
-    const username = searchParams.get('username')
-    
-    if (!username) {
-      return NextResponse.json({ error: 'usernameが必要です' }, { status: 400 })
+    // 1. ユーザーIDを取得
+    const userResponse = await fetch(
+      `https://api.twitter.com/2/users/by/username/${username}?user.fields=profile_image_url`,
+      {
+        headers: {
+          'Authorization': `Bearer ${bearerToken}`,
+        },
+      }
+    )
+
+    if (!userResponse.ok) {
+      const error = await userResponse.json()
+      console.error('Twitter API error (user):', error)
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
-    
-    // ユーザーIDを取得
-    const userId = await getUserId(username)
+
+    const userData = await userResponse.json()
+    const userId = userData.data?.id
+
     if (!userId) {
-      return NextResponse.json({ error: 'ユーザーが見つかりません' }, { status: 404 })
+      return NextResponse.json({ error: 'User ID not found' }, { status: 404 })
     }
-    
-    // ツイートを取得
-    const tweetsData = await getUserTweets(userId)
-    if (!tweetsData) {
-      return NextResponse.json({ error: 'ツイートの取得に失敗しました' }, { status: 500 })
+
+    // 2. ユーザーのツイートを取得（画像付き）
+    const tweetsResponse = await fetch(
+      `https://api.twitter.com/2/users/${userId}/tweets?max_results=20&expansions=attachments.media_keys&media.fields=url,preview_image_url,type&tweet.fields=created_at,text`,
+      {
+        headers: {
+          'Authorization': `Bearer ${bearerToken}`,
+        },
+      }
+    )
+
+    if (!tweetsResponse.ok) {
+      const error = await tweetsResponse.json()
+      console.error('Twitter API error (tweets):', error)
+      return NextResponse.json({ error: 'Failed to fetch tweets' }, { status: 500 })
     }
+
+    const tweetsData = await tweetsResponse.json()
     
-    // 画像付きツイートだけをフィルタリング
-    const tweets = tweetsData.data || []
-    const media = tweetsData.includes?.media || []
-    
-    const tweetsWithImages = tweets
+    // メディア情報をマップ化（高画質版を取得）
+    const mediaMap = new Map()
+    if (tweetsData.includes?.media) {
+      for (const media of tweetsData.includes.media) {
+        if (media.type === 'photo' && media.url) {
+          // 高画質版のURLに変換（?format=jpg&name=large を追加）
+          let highResUrl = media.url
+          if (highResUrl.includes('pbs.twimg.com')) {
+            // 既存のパラメータを削除して高画質パラメータを追加
+            highResUrl = highResUrl.split('?')[0] + '?format=jpg&name=large'
+          }
+          mediaMap.set(media.media_key, highResUrl)
+        }
+      }
+    }
+
+    // 画像付きツイートのみをフィルタリング
+    const tweets = (tweetsData.data || [])
       .filter((tweet: any) => tweet.attachments?.media_keys?.length > 0)
       .map((tweet: any) => {
-        const tweetMedia = tweet.attachments.media_keys
-          .map((key: string) => media.find((m: any) => m.media_key === key))
-          .filter((m: any) => m && m.type === 'photo')
+        const images = (tweet.attachments?.media_keys || [])
+          .map((key: string) => mediaMap.get(key))
+          .filter(Boolean)
         
         return {
           id: tweet.id,
           text: tweet.text,
           created_at: tweet.created_at,
-          images: tweetMedia.map((m: any) => m.url),
+          images,
         }
       })
       .filter((tweet: any) => tweet.images.length > 0)
-    
+
     return NextResponse.json({
-      username,
-      userId,
-      tweets: tweetsWithImages,
+      success: true,
+      user: {
+        id: userId,
+        username: userData.data.username,
+        name: userData.data.name,
+        profileImageUrl: userData.data.profile_image_url,
+      },
+      tweets,
+      total: tweets.length,
     })
+
   } catch (error: any) {
     console.error('Twitter API error:', error)
     return NextResponse.json(
-      { error: error.message || 'エラーが発生しました' },
+      { error: error.message || 'Failed to fetch tweets' },
       { status: 500 }
     )
   }
