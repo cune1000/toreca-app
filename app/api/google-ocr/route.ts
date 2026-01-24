@@ -25,7 +25,7 @@ const getCredentials = () => {
 }
 
 // Vision APIクライアント
-let visionClient: vision.ImageAnnotatorClient | null = null
+let visionClient: any = null
 
 const getVisionClient = () => {
   if (!visionClient) {
