@@ -1094,6 +1094,7 @@ const TorekaApp = () => {
         <CardDetail
           card={selectedCard}
           onClose={() => setShowCardDetail(false)}
+          onUpdated={() => setRefresh(r => r + 1)}
         />
       )}
 
