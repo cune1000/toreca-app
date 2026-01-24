@@ -35,7 +35,7 @@ const getGoogleCredentials = () => {
   throw new Error('Google Cloud credentials not found')
 }
 
-let visionClient: vision.ImageAnnotatorClient | null = null
+let visionClient: any = null
 
 const getVisionClient = () => {
   if (!visionClient) {
