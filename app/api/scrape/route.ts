@@ -1,3 +1,4 @@
+export const maxDuration = 60; // タイムアウトを60秒に延長
 import { NextRequest, NextResponse } from 'next/server'
 import { chromium } from 'playwright'
 
