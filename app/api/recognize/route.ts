@@ -3,8 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { 
   findSimilarCards, 
-  correctKnownErrors,
-  type Card
+  correctKnownErrors
 } from '@/lib/fuzzyMatch';
 
 const anthropic = new Anthropic({
@@ -139,7 +138,7 @@ export async function POST(request: NextRequest) {
     // あいまい検索で候補を取得
     const candidates = findSimilarCards(
       recognized.name,
-      dbCards as Card[],
+      (dbCards || []) as any[],
       { threshold: 50, maxResults: 5 }
     );
 
