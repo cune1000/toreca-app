@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
           id: numberMatch.id,
           name: numberMatch.name,
           cardNumber: numberMatch.card_number,
-          rarity: (numberMatch.rarities as { name: string } | null)?.name,
+          rarity: (numberMatch.rarities as any)?.name,
           imageUrl: numberMatch.image_url,
           similarity: 100,
           isExactMatch: true
