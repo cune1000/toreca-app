@@ -9,7 +9,7 @@ async function connectBrowser() {
   if (token) {
     // Browserless.io を使用（本番環境）
     return await chromium.connect({
-      wsEndpoint: `wss://chrome.browserless.io?token=${token}&stealth`
+      wsEndpoint: `wss://chrome.browserless.io?token=${token}&stealth&timeout=55000`
     })
   } else {
     // ローカル開発用
@@ -31,7 +31,7 @@ async function scrapeSnkrdunk(url: string) {
     })
     
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForTimeout(3000)
+    await page.waitForTimeout(2000)
     
     // ページ内容を取得
     const data = await page.evaluate(() => {
@@ -116,7 +116,7 @@ async function scrapeTorecaCamp(url: string) {
     })
     
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForTimeout(3000)
+    await page.waitForTimeout(2000)
     
     // ページ内容を取得
     const data = await page.evaluate(() => {
@@ -240,7 +240,7 @@ async function scrapeCardRush(url: string) {
     })
     
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForTimeout(3000)
+    await page.waitForTimeout(2000)
     
     const data = await page.evaluate(() => {
       const nameEl = document.querySelector('h1') || document.querySelector('.product-name')
