@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { X, Check, AlertCircle, Loader2, Image, Search, Plus, Grid } from 'lucide-react';
+import { X, Check, AlertCircle, Loader2, Image, Search, Plus, Grid, Clock, Trash2, Inbox } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,6 +28,14 @@ interface RecognizedCard {
   candidates: CardCandidate[];
   needsReview: boolean;
   error?: string;
+  excluded?: boolean;  // 除外フラグ
+}
+
+interface PendingCard {
+  cardImage?: string;
+  price?: number;
+  ocrText?: string;
+  manualName?: string;  // 手動入力したカード名
 }
 
 interface RecognitionStats {
@@ -52,11 +60,13 @@ interface Props {
   imageUrl?: string;
   imageBase64?: string;
   shop?: Shop;
+  tweetTime?: string;
+  tweetUrl?: string;
   onClose?: () => void;
   onCompleted?: () => void;
 }
 
-export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, onCompleted }: Props) {
+export default function BulkRecognition({ imageUrl, imageBase64, shop, tweetTime, tweetUrl, onClose, onCompleted }: Props) {
   const [image, setImage] = useState<string | null>(null);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [recognizedCards, setRecognizedCards] = useState<RecognizedCard[]>([]);
@@ -71,6 +81,10 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
   // テンプレート関連
   const [templates, setTemplates] = useState<GridTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  
+  // 保留リスト
+  const [pendingCards, setPendingCards] = useState<PendingCard[]>([]);
+  const [showPendingModal, setShowPendingModal] = useState(false);
   
   // 検索モーダル用
   const [searchModalIndex, setSearchModalIndex] = useState<number | null>(null);
@@ -193,17 +207,20 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
     }
   };
 
-  // カード検索
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  // カード検索（リアルタイム）
+  const handleSearch = async (query: string) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
     
     setIsSearching(true);
     try {
       const { data, error } = await supabase
         .from('cards')
         .select('id, name, image_url, card_number')
-        .ilike('name', `%${searchQuery}%`)
-        .limit(20);
+        .or(`name.ilike.%${query}%,card_number.ilike.%${query}%`)
+        .limit(12);
       
       if (error) throw error;
       
@@ -221,6 +238,17 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
       setIsSearching(false);
     }
   };
+
+  // デバウンス付きリアルタイム検索
+  useEffect(() => {
+    if (searchModalIndex === null) return;
+    
+    const timer = setTimeout(() => {
+      handleSearch(searchQuery);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchModalIndex]);
 
   // 検索結果からカードを選択
   const handleSelectFromSearch = (candidate: CardCandidate) => {
@@ -267,6 +295,66 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
     });
   };
 
+  // カードを除外
+  const handleExclude = (cardIndex: number) => {
+    setRecognizedCards(prev => {
+      const updated = [...prev];
+      updated[cardIndex] = {
+        ...updated[cardIndex],
+        excluded: true
+      };
+      return updated;
+    });
+  };
+
+  // 除外を取り消し
+  const handleRestoreExcluded = (cardIndex: number) => {
+    setRecognizedCards(prev => {
+      const updated = [...prev];
+      updated[cardIndex] = {
+        ...updated[cardIndex],
+        excluded: false
+      };
+      return updated;
+    });
+  };
+
+  // 保留リストに追加
+  const handleAddToPending = (cardIndex: number) => {
+    const card = recognizedCards[cardIndex];
+    setPendingCards(prev => [...prev, {
+      cardImage: card.cardImage,
+      price: card.price,
+      ocrText: card.ocrText,
+      manualName: ''
+    }]);
+    // 元のリストから除外
+    handleExclude(cardIndex);
+  };
+
+  // 保留リストから削除
+  const handleRemoveFromPending = (pendingIndex: number) => {
+    setPendingCards(prev => prev.filter((_, i) => i !== pendingIndex));
+  };
+
+  // 保留カードの名前を更新
+  const handlePendingNameChange = (pendingIndex: number, name: string) => {
+    setPendingCards(prev => {
+      const updated = [...prev];
+      updated[pendingIndex] = { ...updated[pendingIndex], manualName: name };
+      return updated;
+    });
+  };
+
+  // 保留カードの価格を更新
+  const handlePendingPriceChange = (pendingIndex: number, price: string) => {
+    setPendingCards(prev => {
+      const updated = [...prev];
+      updated[pendingIndex] = { ...updated[pendingIndex], price: price ? parseInt(price, 10) : undefined };
+      return updated;
+    });
+  };
+
   // 価格変更
   const handlePriceChange = (cardIndex: number, price: string) => {
     setRecognizedCards(prev => {
@@ -286,7 +374,8 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
       return;
     }
 
-    const cardsToSave = recognizedCards.filter(c => c.matchedCard && c.price);
+    // 除外されていない、マッチしている、価格があるカードのみ保存
+    const cardsToSave = recognizedCards.filter(c => !c.excluded && c.matchedCard && c.price);
     if (cardsToSave.length === 0) {
       setError('保存するカードがありません');
       return;
@@ -300,7 +389,8 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
         card_id: card.matchedCard!.id,
         shop_id: selectedShop,
         price: card.price,
-        recorded_at: new Date().toISOString()
+        recorded_at: new Date().toISOString(),
+        tweet_time: tweetTime || null
       }));
 
       const { error: insertError } = await supabase
@@ -321,6 +411,70 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
     }
   };
 
+  // 中断して保存
+  const handleSaveAndExit = async () => {
+    if (!selectedShop) {
+      alert('店舗を選択してください')
+      return
+    }
+
+    const unprocessedCards = recognizedCards.filter(c => !c.excluded && !c.matchedCard)
+    
+    if (unprocessedCards.length === 0) {
+      if (confirm('未処理のカードがありません。閉じますか？')) {
+        onClose?.()
+      }
+      return
+    }
+
+    if (!confirm(`${unprocessedCards.length}件の未処理カードを保留として保存しますか？`)) {
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      // 未処理カードをpending_cardsに保存
+      const pendingRecords = unprocessedCards.map(card => ({
+        shop_id: selectedShop,
+        card_image: card.cardImage,
+        ocr_text: card.ocrText,
+        price: card.price,
+        row_index: card.row,
+        col_index: card.col,
+        tweet_time: tweetTime || null,
+        status: 'pending'
+      }))
+
+      const { error } = await supabase
+        .from('pending_cards')
+        .insert(pendingRecords)
+
+      if (error) throw error
+
+      // マッチ済みのカードは買取価格として保存
+      const matchedCards = recognizedCards.filter(c => !c.excluded && c.matchedCard && c.price)
+      if (matchedCards.length > 0) {
+        const priceRecords = matchedCards.map(card => ({
+          card_id: card.matchedCard!.id,
+          shop_id: selectedShop,
+          price: card.price,
+          recorded_at: new Date().toISOString(),
+          tweet_time: tweetTime || null
+        }))
+
+        await supabase.from('purchase_prices').insert(priceRecords)
+      }
+
+      alert(`${matchedCards.length}件を保存、${unprocessedCards.length}件を保留しました`)
+      onCompleted?.()
+    } catch (err: any) {
+      console.error('Save error:', err)
+      alert('保存に失敗しました: ' + err.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   // 類似度に応じた色
   const getSimilarityColor = (similarity: number) => {
     if (similarity >= 90) return 'bg-green-100 text-green-800';
@@ -338,6 +492,12 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
               <Search size={24} />
               買取表認識
             </h2>
+            {tweetTime && (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Clock size={16} />
+                <span>{new Date(tweetTime).toLocaleString('ja-JP')}</span>
+              </div>
+            )}
             {stats && (
               <div className="flex items-center gap-3 text-sm">
                 <span className="text-gray-600">{stats.total}件</span>
@@ -426,13 +586,35 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+              
+              {/* 保留リストボタン */}
+              {pendingCards.length > 0 && (
+                <button
+                  onClick={() => setShowPendingModal(true)}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2"
+                >
+                  <Clock size={18} />
+                  保留 ({pendingCards.length})
+                </button>
+              )}
+              
               <button
                 onClick={handleSave}
-                disabled={isSaving || !selectedShop || !recognizedCards.some(c => c.matchedCard && c.price)}
+                disabled={isSaving || !selectedShop || !recognizedCards.some(c => !c.excluded && c.matchedCard && c.price)}
                 className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
               >
                 {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                 買取価格を保存
+              </button>
+              
+              {/* 中断して保存ボタン */}
+              <button
+                onClick={handleSaveAndExit}
+                disabled={isSaving}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2"
+              >
+                <Inbox size={18} />
+                中断して保存
               </button>
             </div>
 
@@ -454,10 +636,14 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
             <div className="flex-1 overflow-auto p-4">
               {recognizedCards.length > 0 ? (
                 <div className="space-y-4">
-                  {recognizedCards.map((card, index) => (
+                  {recognizedCards.map((card, index) => {
+                    // 除外されたカードはスキップ
+                    if (card.excluded) return null;
+                    
+                    return (
                     <div
                       key={index}
-                      className={`p-4 rounded-lg border-2 ${
+                      className={`p-4 rounded-lg border-2 relative ${
                         card.matchedCard 
                           ? 'border-green-200 bg-green-50' 
                           : card.needsReview 
@@ -465,6 +651,26 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
                             : 'border-red-200 bg-red-50'
                       }`}
                     >
+                      {/* 除外・保留ボタン（右上） */}
+                      <div className="absolute top-2 right-2 flex gap-1">
+                        {!card.matchedCard && (
+                          <button
+                            onClick={() => handleAddToPending(index)}
+                            className="p-1 text-orange-500 hover:bg-orange-100 rounded"
+                            title="保留リストに追加"
+                          >
+                            <Clock size={16} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleExclude(index)}
+                          className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                          title="除外"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                      
                       <div className="flex items-start gap-3">
                         {/* 切り出し画像 */}
                         <div className="flex-shrink-0">
@@ -591,7 +797,7 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-400">
@@ -623,23 +829,22 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
             
             <div className="p-4">
               {/* 検索ボックス */}
-              <div className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder="カード名を入力..."
-                  className="flex-1 px-4 py-2 border rounded-lg"
-                  autoFocus
-                />
-                <button
-                  onClick={handleSearch}
-                  disabled={isSearching}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-                >
-                  {isSearching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
-                </button>
+              <div className="relative mb-4">
+                <div className="flex items-center border rounded-lg overflow-hidden">
+                  <Search size={20} className="ml-3 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="2文字以上でリアルタイム検索..."
+                    className="flex-1 px-3 py-2 outline-none"
+                    autoFocus
+                  />
+                  {isSearching && <Loader2 size={20} className="mr-3 animate-spin text-blue-500" />}
+                </div>
+                {searchQuery.length > 0 && searchQuery.length < 2 && (
+                  <p className="text-xs text-gray-400 mt-1">あと{2 - searchQuery.length}文字入力してください</p>
+                )}
               </div>
 
               {/* 対象カードの画像 */}
@@ -684,12 +889,114 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, onClose, 
                       </button>
                     ))}
                   </div>
-                ) : searchQuery && !isSearching ? (
+                ) : searchQuery.length >= 2 && !isSearching ? (
                   <div className="text-center text-gray-500 py-8">
-                    検索結果がありません
+                    「{searchQuery}」に一致するカードが見つかりません
+                  </div>
+                ) : !searchQuery ? (
+                  <div className="text-center text-gray-400 py-8">
+                    カード名または型番を入力して検索
                   </div>
                 ) : null}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 保留リストモーダル */}
+      {showPendingModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
+          <div className="bg-white rounded-xl w-[700px] max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2">
+                <Clock size={20} />
+                保留リスト ({pendingCards.length}件)
+              </h3>
+              <button
+                onClick={() => setShowPendingModal(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-4">
+              {pendingCards.length > 0 ? (
+                <div className="space-y-4">
+                  {pendingCards.map((card, index) => (
+                    <div key={index} className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="flex items-start gap-4">
+                        {/* 画像 */}
+                        {card.cardImage && (
+                          <img
+                            src={card.cardImage}
+                            alt={`Pending ${index}`}
+                            className="w-20 h-28 object-cover rounded border"
+                          />
+                        )}
+                        
+                        {/* 入力フォーム */}
+                        <div className="flex-1 space-y-2">
+                          <div>
+                            <label className="text-xs text-gray-500">カード名（後で検索用）</label>
+                            <input
+                              type="text"
+                              value={card.manualName || ''}
+                              onChange={(e) => handlePendingNameChange(index, e.target.value)}
+                              placeholder="カード名を入力..."
+                              className="w-full px-3 py-2 border rounded-lg"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-gray-500">価格</label>
+                            <div className="flex items-center gap-2">
+                              <span>¥</span>
+                              <input
+                                type="number"
+                                value={card.price || ''}
+                                onChange={(e) => handlePendingPriceChange(index, e.target.value)}
+                                className="w-32 px-3 py-2 border rounded-lg text-right"
+                              />
+                            </div>
+                          </div>
+                          
+                          {card.ocrText && (
+                            <div className="text-xs text-gray-400">
+                              OCR: {card.ocrText}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* 削除ボタン */}
+                        <button
+                          onClick={() => handleRemoveFromPending(index)}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-400 py-8">
+                  保留中のカードはありません
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t bg-gray-50">
+              <p className="text-sm text-gray-500 mb-2">
+                保留したカードは後でカード検索・追加してから登録できます
+              </p>
+              <button
+                onClick={() => setShowPendingModal(false)}
+                className="w-full py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                閉じる
+              </button>
             </div>
           </div>
         </div>

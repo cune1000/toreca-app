@@ -1,8 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Image, Cpu, Check, X } from 'lucide-react'
+import { RefreshCw, Image, Cpu, Check, X, Clock, Inbox } from 'lucide-react'
+import { createClient } from '@supabase/supabase-js'
 import BulkRecognition from './BulkRecognition'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+interface SelectedImage {
+  url: string
+  tweetTime: string
+  tweetUrl: string
+  tweetId: string
+}
 
 export default function TwitterFeed({ shop, onImageSelect, onClose }: {
   shop: any;
@@ -12,8 +25,9 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
   const [loading, setLoading] = useState(false)
   const [tweets, setTweets] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null)
   const [showBulkRecognition, setShowBulkRecognition] = useState(false)
+  const [savingToPending, setSavingToPending] = useState(false)
 
   // ツイートを取得
   const fetchTweets = async () => {
@@ -45,14 +59,61 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
   }
 
   // 画像を選択
-  const selectImage = (imageUrl: string) => {
-    setSelectedImage(imageUrl)
+  const selectImage = (imageUrl: string, tweet: any) => {
+    setSelectedImage({
+      url: imageUrl,
+      tweetTime: tweet.created_at,
+      tweetUrl: `https://x.com/${shop.x_account}/status/${tweet.id}`,
+      tweetId: tweet.id
+    })
   }
 
   // 一括認識を開く
   const openBulkRecognition = () => {
     if (selectedImage) {
       setShowBulkRecognition(true)
+    }
+  }
+
+  // 保留リストに追加
+  const addToPending = async () => {
+    if (!selectedImage) return
+    
+    if (!shop?.id) {
+      alert('店舗IDが見つかりません')
+      return
+    }
+
+    setSavingToPending(true)
+    try {
+      console.log('Adding to pending:', {
+        shop_id: shop.id,
+        image_url: selectedImage.url,
+        tweet_url: selectedImage.tweetUrl,
+        tweet_time: selectedImage.tweetTime
+      })
+      
+      const { data, error } = await supabase.from('pending_images').insert({
+        shop_id: shop.id,
+        image_url: selectedImage.url,
+        tweet_url: selectedImage.tweetUrl,
+        tweet_time: selectedImage.tweetTime,
+        status: 'pending'
+      }).select()
+
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+
+      console.log('Saved:', data)
+      alert('保留リストに追加しました')
+      setSelectedImage(null)
+    } catch (err: any) {
+      console.error('Failed to add to pending:', err)
+      alert('保存に失敗しました: ' + (err.message || JSON.stringify(err)))
+    } finally {
+      setSavingToPending(false)
     }
   }
 
@@ -142,16 +203,17 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
                 <div className="grid grid-cols-2 gap-4">
                   {tweets.map((tweet: any) => (
                     <div key={tweet.id} className="border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="p-3 text-xs text-gray-500 bg-gray-50">
+                      <div className="p-3 text-xs text-gray-500 bg-gray-50 flex items-center gap-1">
+                        <Clock size={12} />
                         {new Date(tweet.created_at).toLocaleString('ja-JP')}
                       </div>
                       <div className="grid grid-cols-2 gap-1 p-1">
                         {tweet.images.map((imageUrl: string, idx: number) => (
                           <div
                             key={idx}
-                            onClick={() => selectImage(imageUrl)}
+                            onClick={() => selectImage(imageUrl, tweet)}
                             className={`relative cursor-pointer rounded overflow-hidden ${
-                              selectedImage === imageUrl ? 'ring-4 ring-purple-500' : ''
+                              selectedImage?.url === imageUrl ? 'ring-4 ring-purple-500' : ''
                             }`}
                           >
                             <img
@@ -160,7 +222,7 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
                               className="w-full h-32 object-cover"
                               referrerPolicy="no-referrer"
                             />
-                            {selectedImage === imageUrl && (
+                            {selectedImage?.url === imageUrl && (
                               <div className="absolute inset-0 bg-purple-500/30 flex items-center justify-center">
                                 <Check size={32} className="text-white" />
                               </div>
@@ -183,20 +245,36 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
             <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-purple-50">
               <div className="flex items-center gap-3">
                 <img 
-                  src={selectedImage} 
+                  src={selectedImage.url} 
                   alt="Selected" 
                   className="w-16 h-16 object-cover rounded"
                   referrerPolicy="no-referrer"
                 />
-                <p className="text-sm text-gray-700">この画像をAI認識しますか？</p>
+                <div>
+                  <p className="text-sm text-gray-700">この画像を処理しますか？</p>
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Clock size={12} />
+                    {new Date(selectedImage.tweetTime).toLocaleString('ja-JP')}
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={openBulkRecognition}
-                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
-              >
-                <Cpu size={18} />
-                買取表を一括認識
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={addToPending}
+                  disabled={savingToPending}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Inbox size={18} />
+                  保留に追加
+                </button>
+                <button
+                  onClick={openBulkRecognition}
+                  className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
+                >
+                  <Cpu size={18} />
+                  今すぐ認識
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -205,8 +283,10 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
       {/* 一括認識モーダル */}
       {showBulkRecognition && selectedImage && (
         <BulkRecognition
-          imageUrl={selectedImage}
+          imageUrl={selectedImage.url}
           shop={shop}
+          tweetTime={selectedImage.tweetTime}
+          tweetUrl={selectedImage.tweetUrl}
           onClose={() => setShowBulkRecognition(false)}
           onCompleted={() => {
             setShowBulkRecognition(false)
