@@ -79,7 +79,6 @@ function extractCardName(fullText: string): string | null {
   if (lines.length === 0) return null
   
   for (const line of lines.slice(0, 5)) {
-    // HPや数字だけの行はスキップ
     if (/^[\d\s]+$/.test(line)) continue
     if (/^HP\s*\d+/i.test(line)) continue
     if (line.length < 2) continue
@@ -88,13 +87,11 @@ function extractCardName(fullText: string): string | null {
       .replace(/\s+/g, '')
       .replace(/[「」『』【】\[\]]/g, '')
     
-    // 明らかにカード名でないものを除外
     if (name.includes('買取') || name.includes('価格') || name.includes('円') || 
         name.includes('PSA') || name.includes('鑑定')) {
       continue
     }
     
-    // 2文字以上でひらがな/カタカナ/漢字を含む
     if (name.length >= 2 && /[ぁ-んァ-ヶ一-龥]/.test(name)) {
       return name
     }
@@ -132,30 +129,25 @@ function normalizeCardName(name: string): string {
     .toLowerCase()
     .replace(/\s+/g, '')
     .replace(/[ー−]/g, '-')
-    // 全角英数を半角に
     .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => 
       String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
     )
-    // サフィックスの表記ゆれを統一
     .replace(/ｅｘ/g, 'ex')
     .replace(/ＥＸ/g, 'ex')
     .replace(/ｖｍａｘ/g, 'vmax')
     .replace(/ｖｓｔａｒ/g, 'vstar')
 }
 
-// 類似度を計算（レーベンシュタイン距離ベース）
+// 類似度を計算
 function calculateSimilarity(str1: string, str2: string): number {
-  // 完全一致
   if (str1 === str2) return 100
   
-  // 部分一致チェック
   if (str1.includes(str2) || str2.includes(str1)) {
     const longer = str1.length > str2.length ? str1 : str2
     const shorter = str1.length > str2.length ? str2 : str1
     return Math.round((shorter.length / longer.length) * 90)
   }
   
-  // レーベンシュタイン距離
   const distance = levenshteinDistance(str1, str2)
   const maxLen = Math.max(str1.length, str2.length)
   const similarity = Math.round((1 - distance / maxLen) * 100)
@@ -192,11 +184,10 @@ export async function POST(request: NextRequest) {
   const { 
     image, 
     autoMatchThreshold = 80,
-    // 切り抜きパラメータ（%で指定）
-    headerRatio = 8,      // ヘッダー部分（上部）
-    footerRatio = 12,     // フッター部分（下部）
-    priceRowRatio = 10,   // 各カード下部の価格表示部分
-    sidePadding = 0       // 左右のパディング
+    headerRatio = 8,
+    footerRatio = 12,
+    priceRowRatio = 10,
+    sidePadding = 0
   } = await request.json()
 
   if (!image) {
@@ -206,7 +197,6 @@ export async function POST(request: NextRequest) {
   try {
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
 
-    // 1. Claude Visionでカードの配置（行数、列数）と価格を取得
     console.log('Step 1: Analyzing image with Claude Vision...')
     
     const claudeResponse = await anthropic.messages.create({
@@ -269,7 +259,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`Grid: ${grid.rows} rows x ${grid.cols} cols, ${cardPositions.length} cards`)
 
-    // 2. 画像を切り出し
     console.log('Step 2: Cutting card images...')
     console.log(`Parameters: header=${headerRatio}%, footer=${footerRatio}%, priceRow=${priceRowRatio}%, sidePadding=${sidePadding}%`)
     
@@ -279,7 +268,6 @@ export async function POST(request: NextRequest) {
     const imgWidth = fullImage.width
     const imgHeight = fullImage.height
     
-    // パラメータを適用（%からピクセルに変換）
     const contentTop = Math.floor(imgHeight * (headerRatio / 100))
     const contentBottom = Math.floor(imgHeight * (1 - footerRatio / 100))
     const contentHeight = contentBottom - contentTop
@@ -295,7 +283,6 @@ export async function POST(request: NextRequest) {
     console.log(`Image: ${imgWidth}x${imgHeight}, Content area: ${contentWidth}x${contentHeight}`)
     console.log(`Cell size: ${colWidth.toFixed(0)}x${rowHeight.toFixed(0)}, Card height: ${cardHeight.toFixed(0)}`)
 
-    // 3. DBからカード一覧を取得
     console.log('Step 3: Loading DB cards...')
     const { data: dbCards, error: dbError } = await supabase
       .from('cards')
@@ -305,7 +292,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`Found ${dbCards?.length || 0} cards in DB`)
 
-    // 4. 各カードを切り出してGoogle Vision OCRで名前を読み取り
     console.log('Step 4: Processing each card with Google Vision OCR...')
     
     let autoMatched = 0
@@ -317,29 +303,24 @@ export async function POST(request: NextRequest) {
     for (const cardPos of cardPositions) {
       const { row, col, price } = cardPos
       
-      // カード領域を計算
       const x = Math.floor(contentLeft + col * colWidth)
       const y = Math.floor(contentTop + row * rowHeight)
       const w = Math.floor(colWidth)
       const h = Math.floor(cardHeight)
 
-      // 範囲チェック
       const safeX = Math.max(0, Math.min(x, imgWidth - 1))
       const safeY = Math.max(0, Math.min(y, imgHeight - 1))
       const safeW = Math.min(w, imgWidth - safeX)
       const safeH = Math.min(h, imgHeight - safeY)
 
       try {
-        // 切り出し
         const cardImage = fullImage.clone().crop({ x: safeX, y: safeY, w: safeW, h: safeH })
         const cardBuffer = await cardImage.getBuffer('image/jpeg')
 
-        // Google Vision OCRでカード名を読み取り
         const { text: ocrText, cardName } = await ocrCardImage(cardBuffer)
         
         console.log(`Card [${row},${col}]: OCR result = "${cardName}" (full: "${ocrText.substring(0, 50)}...")`)
 
-        // あいまい検索でDBカードを探す
         const candidates = findSimilarCards(cardName || '', dbCards || [], 5)
           .map(c => ({
             id: c.id,
@@ -366,7 +347,6 @@ export async function POST(request: NextRequest) {
           noMatch++
         }
 
-        // 切り出し画像をBase64に
         const cardImageBase64 = `data:image/jpeg;base64,${cardBuffer.toString('base64')}`
 
         results.push({
@@ -374,8 +354,8 @@ export async function POST(request: NextRequest) {
           col,
           price,
           cardImage: cardImageBase64,
-          ocrText: cardName,  // OCRで読み取った名前
-          ocrFullText: ocrText,  // OCR全文（デバッグ用）
+          ocrText: cardName,
+          ocrFullText: ocrText,
           matchedCard,
           candidates,
           needsReview: needsReviewFlag
@@ -412,7 +392,6 @@ export async function POST(request: NextRequest) {
         needsReview,
         noMatch
       },
-      // 使用したパラメータを返す（デバッグ用）
       params: {
         headerRatio,
         footerRatio,

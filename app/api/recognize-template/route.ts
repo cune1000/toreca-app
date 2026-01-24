@@ -30,7 +30,7 @@ const getGoogleCredentials = () => {
   throw new Error('Google Cloud credentials not found')
 }
 
-let visionClient: vision.ImageAnnotatorClient | null = null
+let visionClient: any = null
 
 const getVisionClient = () => {
   if (!visionClient) {
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`Found ${dbCards?.length || 0} cards in DB`)
 
-    // 4. セルを走査して切り抜き
+    // 4. セルを走査して切り抜く
     console.log('Step 4: Processing cells...')
     
     const results = []
@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
         if (safeW <= 0 || safeH <= 0) continue
         
         try {
-          // 切り抜き
+          // 切り抜く
           const cardImage = fullImage.clone().crop({ x: safeX, y: safeY, w: safeW, h: safeH })
           const cardBuffer = await cardImage.getBuffer('image/jpeg')
           
