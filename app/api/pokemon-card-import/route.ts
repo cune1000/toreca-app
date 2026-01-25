@@ -51,7 +51,7 @@ async function getCardLinksFromList(page: any, listUrl: string): Promise<string[
   
   // 絞り込みが適用されるまで長めに待機
   console.log('Waiting for filters to apply...')
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(8000)
   
   // スクロールして遅延読み込みを発火
   for (let i = 0; i < 10; i++) {
@@ -67,18 +67,22 @@ async function getCardLinksFromList(page: any, listUrl: string): Promise<string[
   })
   await page.waitForTimeout(2000)
   
-  // カードリンクを取得
+  // カードリンクを取得（画像のdata-srcからカードIDを抽出）
   const links = await page.evaluate(() => {
     const baseUrl = 'https://www.pokemon-card.com'
     const cardLinks: string[] = []
     
-    // カード画像のリンクを取得
-    document.querySelectorAll('a[href*="/card-search/details.php"]').forEach(a => {
-      const href = a.getAttribute('href')
-      if (href) {
-        const fullUrl = href.startsWith('http') ? href : baseUrl + href
-        if (!cardLinks.includes(fullUrl)) {
-          cardLinks.push(fullUrl)
+    // カード画像からIDを抽出してURLを構築
+    document.querySelectorAll('a[id^="card-show-id"] img, .List_item img, img[data-src*="/card_images/"]').forEach(img => {
+      const dataSrc = img.getAttribute('data-src') || img.getAttribute('src') || ''
+      
+      // カードIDを抽出（例: /049993_P_MYUKIMENOKOEX.jpg → 049993）
+      const match = dataSrc.match(/\/(\d{5,6})_/)
+      if (match) {
+        const cardId = match[1]
+        const detailUrl = `${baseUrl}/card-search/details.php/card/${cardId}/regu/all`
+        if (!cardLinks.includes(detailUrl)) {
+          cardLinks.push(detailUrl)
         }
       }
     })
