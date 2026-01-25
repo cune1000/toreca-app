@@ -75,21 +75,24 @@ async function adjustForRestTime(nextCheckDate: Date): Promise<Date> {
   return nextCheckDate
 }
 
-// スクレイピング実行
+// スクレイピング実行（Railway経由）
 async function scrapeUrl(url: string): Promise<{ 
   price: number | null
   stock: number | null
+  mode?: string
   error?: string 
 }> {
   try {
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
     
-    const res = await fetch(`${baseUrl}/api/scrape`, {
+    if (!RAILWAY_URL) {
+      throw new Error('RAILWAY_SCRAPER_URL is not configured')
+    }
+    
+    const res = await fetch(`${RAILWAY_URL}/scrape`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, mode: 'auto' }),
     })
     
     const data = await res.json()
@@ -111,7 +114,7 @@ async function scrapeUrl(url: string): Promise<{
           }
         }
       }
-      return { price: data.price || null, stock }
+      return { price: data.price || null, stock, mode: data.mode }
     }
     
     return { price: null, stock: null, error: data.error || 'Unknown error' }
@@ -197,7 +200,9 @@ export async function GET(request: NextRequest) {
       console.log(`Processing: ${cardName} @ ${siteName}`)
       
       try {
-        const { price, stock, error } = await scrapeUrl(saleUrl.product_url)
+        const { price, stock, mode, error } = await scrapeUrl(saleUrl.product_url)
+        
+        console.log(`Result: price=${price}, stock=${stock}, mode=${mode}, error=${error}`)
         
         if (error) {
           // エラー：30分後にリトライ
