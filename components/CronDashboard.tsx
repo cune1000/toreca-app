@@ -127,8 +127,12 @@ export default function CronDashboard() {
     setRunning(true)
     try {
       const res = await fetch('/api/cron/update-prices', { method: 'POST' })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`HTTP ${res.status}: ${text || 'Unknown error'}`)
+      }
       const data = await res.json()
-      alert(`実行完了\n処理: ${data.processed}件\n更新: ${data.updated}件\nエラー: ${data.errors}件`)
+      alert(`実行完了\n処理: ${data.processed || 0}件\n更新: ${data.updated || 0}件\nエラー: ${data.errors || 0}件\n${data.message || ''}`)
       fetchLogs()
       fetchUrlStatus()
     } catch (err: any) {
@@ -201,7 +205,6 @@ export default function CronDashboard() {
               <p className="text-2xl font-bold text-blue-700">{stats.priceChanges}</p>
             </div>
           </div>
-
           <div className="bg-white rounded-xl border overflow-hidden">
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-bold">実行ログ</h3>
