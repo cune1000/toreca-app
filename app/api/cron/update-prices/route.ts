@@ -87,14 +87,14 @@ export async function GET(request: NextRequest) {
         id,
         card_id,
         site_id,
-        url,
+        product_url,
         last_price,
         last_stock,
         last_checked_at,
         card:card_id(name),
         site:site_id(name, site_key)
       `)
-      .not('url', 'is', null)
+      .not('product_url', 'is', null)
       .order('last_checked_at', { ascending: true, nullsFirst: true })
       .limit(50)
 
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        const scrapeResult = await scrapeViaRailway(site.url, 'light')
+        const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
         
         if (!scrapeResult.success) {
           results.errors++
@@ -248,14 +248,14 @@ export async function POST(request: NextRequest) {
         id,
         card_id,
         site_id,
-        url,
+        product_url,
         last_price,
         last_stock,
         last_checked_at,
         card:card_id(name),
         site:site_id(name, site_key)
       `)
-      .not('url', 'is', null)
+      .not('product_url', 'is', null)
       .order('last_checked_at', { ascending: true, nullsFirst: true })
       .limit(limit)
 
@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const scrapeResult = await scrapeViaRailway(site.url, 'light')
+        const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
         
         if (!scrapeResult.success) {
           results.errors++
