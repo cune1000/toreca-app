@@ -1,28 +1,52 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { 
+  getLargeCategories, 
+  getMediumCategories, 
+  getSmallCategories, 
+  getRarities,
+  addCategory,
+  updateCategory,
+  deleteCategory,
+  reorderCategories
+} from '@/lib/api/categories'
 import { Plus, X, Edit, Trash2, RefreshCw, ChevronDown, ChevronRight, GripVertical } from 'lucide-react'
 
+type CategoryType = 'large' | 'medium' | 'small' | 'rarity'
+
+interface CategoryItem {
+  id: string
+  name: string
+  icon?: string
+  sort_order: number
+  parentId?: string
+}
+
+interface FormData {
+  name: string
+  icon: string
+}
+
 export default function CategoryManager() {
-  const [largeCategories, setLargeCategories] = useState([])
-  const [expandedLarge, setExpandedLarge] = useState(null)
-  const [expandedMedium, setExpandedMedium] = useState(null)
-  const [mediumCategories, setMediumCategories] = useState({})
-  const [smallCategories, setSmallCategories] = useState({})
-  const [rarities, setRarities] = useState({})
+  const [largeCategories, setLargeCategories] = useState<CategoryItem[]>([])
+  const [expandedLarge, setExpandedLarge] = useState<string | null>(null)
+  const [expandedMedium, setExpandedMedium] = useState<string | null>(null)
+  const [mediumCategories, setMediumCategories] = useState<Record<string, CategoryItem[]>>({})
+  const [smallCategories, setSmallCategories] = useState<Record<string, CategoryItem[]>>({})
+  const [rarities, setRarities] = useState<Record<string, CategoryItem[]>>({})
   const [loading, setLoading] = useState(true)
   
   // 編集モーダル
   const [showModal, setShowModal] = useState(false)
-  const [modalType, setModalType] = useState('')
-  const [editingItem, setEditingItem] = useState(null)
-  const [parentId, setParentId] = useState(null)
-  const [formData, setFormData] = useState({ name: '', icon: '' })
+  const [modalType, setModalType] = useState<CategoryType>('large')
+  const [editingItem, setEditingItem] = useState<CategoryItem | null>(null)
+  const [parentId, setParentId] = useState<string | null>(null)
+  const [formData, setFormData] = useState<FormData>({ name: '', icon: '' })
 
   // ドラッグ状態
-  const [draggedItem, setDraggedItem] = useState(null)
-  const [draggedType, setDraggedType] = useState('')
+  const [draggedItem, setDraggedItem] = useState<CategoryItem | null>(null)
+  const [draggedType, setDraggedType] = useState<CategoryType | ''>('')
 
   useEffect(() => {
     fetchLargeCategories()
@@ -30,40 +54,26 @@ export default function CategoryManager() {
 
   const fetchLargeCategories = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('category_large')
-      .select('*')
-      .order('sort_order')
-    setLargeCategories(data || [])
+    const data = await getLargeCategories()
+    setLargeCategories(data)
     setLoading(false)
   }
 
-  const fetchMediumAndRarities = async (largeId) => {
-    const { data: mediumData } = await supabase
-      .from('category_medium')
-      .select('*')
-      .eq('large_id', largeId)
-      .order('sort_order')
-    setMediumCategories(prev => ({ ...prev, [largeId]: mediumData || [] }))
-
-    const { data: rarityData } = await supabase
-      .from('rarities')
-      .select('*')
-      .eq('large_id', largeId)
-      .order('sort_order')
-    setRarities(prev => ({ ...prev, [largeId]: rarityData || [] }))
+  const fetchMediumAndRarities = async (largeId: string) => {
+    const [mediumData, rarityData] = await Promise.all([
+      getMediumCategories(largeId),
+      getRarities(largeId)
+    ])
+    setMediumCategories(prev => ({ ...prev, [largeId]: mediumData }))
+    setRarities(prev => ({ ...prev, [largeId]: rarityData }))
   }
 
-  const fetchSmallCategories = async (mediumId) => {
-    const { data } = await supabase
-      .from('category_small')
-      .select('*')
-      .eq('medium_id', mediumId)
-      .order('sort_order')
-    setSmallCategories(prev => ({ ...prev, [mediumId]: data || [] }))
+  const fetchSmallCategoriesData = async (mediumId: string) => {
+    const data = await getSmallCategories(mediumId)
+    setSmallCategories(prev => ({ ...prev, [mediumId]: data }))
   }
 
-  const toggleLarge = (largeId) => {
+  const toggleLarge = (largeId: string) => {
     if (expandedLarge === largeId) {
       setExpandedLarge(null)
       setExpandedMedium(null)
@@ -76,18 +86,18 @@ export default function CategoryManager() {
     }
   }
 
-  const toggleMedium = (mediumId) => {
+  const toggleMedium = (mediumId: string) => {
     if (expandedMedium === mediumId) {
       setExpandedMedium(null)
     } else {
       setExpandedMedium(mediumId)
       if (!smallCategories[mediumId]) {
-        fetchSmallCategories(mediumId)
+        fetchSmallCategoriesData(mediumId)
       }
     }
   }
 
-  const openModal = (type, item = null, pId = null) => {
+  const openModal = (type: CategoryType, item: CategoryItem | null = null, pId: string | null = null) => {
     setModalType(type)
     setEditingItem(item)
     setParentId(pId)
@@ -97,61 +107,43 @@ export default function CategoryManager() {
 
   // 保存
   const handleSave = async () => {
-    let table = ''
-    let insertData: any = { name: formData.name }
-
-    switch (modalType) {
-      case 'large':
-        table = 'category_large'
-        insertData.icon = formData.icon
-        // 新規追加時は最後に追加
-        if (!editingItem) {
-          insertData.sort_order = largeCategories.length
-        }
-        break
-      case 'medium':
-        table = 'category_medium'
-        insertData.large_id = parentId
-        if (!editingItem) {
-          insertData.sort_order = (mediumCategories[parentId] || []).length
-        }
-        break
-      case 'small':
-        table = 'category_small'
-        insertData.medium_id = parentId
-        if (!editingItem) {
-          insertData.sort_order = (smallCategories[parentId] || []).length
-        }
-        break
-      case 'rarity':
-        table = 'rarities'
-        insertData.large_id = parentId
-        if (!editingItem) {
-          insertData.sort_order = (rarities[parentId] || []).length
-        }
-        break
-    }
-
     try {
       if (editingItem) {
-        const updateData: any = { name: formData.name }
-        if (modalType === 'large') updateData.icon = formData.icon
-        
-        const { error } = await supabase.from(table).update(updateData).eq('id', editingItem.id)
-        if (error) throw error
+        const result = await updateCategory(modalType, editingItem.id, {
+          name: formData.name,
+          icon: modalType === 'large' ? formData.icon : undefined
+        })
+        if (!result.success) throw new Error(result.error)
       } else {
-        const { error } = await supabase.from(table).insert([insertData])
-        if (error) throw error
+        // 新規追加時のsortOrder計算
+        let sortOrder = 0
+        if (modalType === 'large') {
+          sortOrder = largeCategories.length
+        } else if (modalType === 'medium' && parentId) {
+          sortOrder = (mediumCategories[parentId] || []).length
+        } else if (modalType === 'small' && parentId) {
+          sortOrder = (smallCategories[parentId] || []).length
+        } else if (modalType === 'rarity' && parentId) {
+          sortOrder = (rarities[parentId] || []).length
+        }
+
+        const result = await addCategory(modalType, {
+          name: formData.name,
+          icon: modalType === 'large' ? formData.icon : undefined,
+          parentId: parentId || undefined,
+          sortOrder
+        })
+        if (!result.success) throw new Error(result.error)
       }
 
       setShowModal(false)
       
       if (modalType === 'large') {
         fetchLargeCategories()
-      } else if (modalType === 'medium' || modalType === 'rarity') {
+      } else if ((modalType === 'medium' || modalType === 'rarity') && parentId) {
         fetchMediumAndRarities(parentId)
-      } else if (modalType === 'small') {
-        fetchSmallCategories(parentId)
+      } else if (modalType === 'small' && parentId) {
+        fetchSmallCategoriesData(parentId)
       }
     } catch (err: any) {
       console.error('Save error:', err)
@@ -160,21 +152,19 @@ export default function CategoryManager() {
   }
 
   // 削除
-  const handleDelete = async (type, id, parentIdVal = null) => {
+  const handleDelete = async (type: CategoryType, id: string, parentIdVal: string | null = null) => {
     if (!confirm('削除しますか？関連するデータも削除される可能性があります。')) return
 
-    const table = type === 'large' ? 'category_large' : type === 'medium' ? 'category_medium' : type === 'small' ? 'category_small' : 'rarities'
-    
     try {
-      const { error } = await supabase.from(table).delete().eq('id', id)
-      if (error) throw error
+      const result = await deleteCategory(type, id)
+      if (!result.success) throw new Error(result.error)
 
       if (type === 'large') {
         fetchLargeCategories()
-      } else if (type === 'medium' || type === 'rarity') {
+      } else if ((type === 'medium' || type === 'rarity') && parentIdVal) {
         fetchMediumAndRarities(parentIdVal)
-      } else if (type === 'small') {
-        fetchSmallCategories(parentIdVal)
+      } else if (type === 'small' && parentIdVal) {
+        fetchSmallCategoriesData(parentIdVal)
       }
     } catch (err: any) {
       console.error('Delete error:', err)
@@ -183,75 +173,59 @@ export default function CategoryManager() {
   }
 
   // ドラッグ&ドロップで並び替え
-  const handleDragStart = (e, item, type, parentIdVal = null) => {
-    setDraggedItem({ ...item, parentId: parentIdVal })
+  const handleDragStart = (e: React.DragEvent, item: CategoryItem, type: CategoryType, parentIdVal: string | null = null) => {
+    setDraggedItem({ ...item, parentId: parentIdVal || undefined })
     setDraggedType(type)
     e.dataTransfer.effectAllowed = 'move'
   }
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
   }
 
-  const handleDrop = async (e, targetItem, type, parentIdVal = null) => {
+  const handleDrop = async (e: React.DragEvent, targetItem: CategoryItem, targetType: CategoryType, targetParentId: string | null = null) => {
     e.preventDefault()
-    
-    if (!draggedItem || draggedType !== type) return
+    if (!draggedItem || draggedType !== targetType) return
     if (draggedItem.id === targetItem.id) return
-    if (draggedItem.parentId !== parentIdVal) return // 同じ親内でのみ移動可能
+    if (draggedItem.parentId !== targetParentId) return
 
-    let items = []
-    let table = ''
-    
-    switch (type) {
-      case 'large':
-        items = [...largeCategories]
-        table = 'category_large'
-        break
-      case 'medium':
-        items = [...(mediumCategories[parentIdVal] || [])]
-        table = 'category_medium'
-        break
-      case 'small':
-        items = [...(smallCategories[parentIdVal] || [])]
-        table = 'category_small'
-        break
-      case 'rarity':
-        items = [...(rarities[parentIdVal] || [])]
-        table = 'rarities'
-        break
+    // 並び替えロジック
+    let items: CategoryItem[] = []
+    if (targetType === 'large') {
+      items = [...largeCategories]
+    } else if (targetType === 'medium' && targetParentId) {
+      items = [...(mediumCategories[targetParentId] || [])]
+    } else if (targetType === 'small' && targetParentId) {
+      items = [...(smallCategories[targetParentId] || [])]
+    } else if (targetType === 'rarity' && targetParentId) {
+      items = [...(rarities[targetParentId] || [])]
     }
 
-    const draggedIndex = items.findIndex(i => i.id === draggedItem.id)
+    const dragIndex = items.findIndex(i => i.id === draggedItem.id)
     const targetIndex = items.findIndex(i => i.id === targetItem.id)
+
+    if (dragIndex === -1 || targetIndex === -1) return
+
+    // 入れ替え
+    items.splice(dragIndex, 1)
+    items.splice(targetIndex, 0, draggedItem)
+
+    // sort_order更新
+    const reorderItems = items.map((item, index) => ({ id: item.id, sort_order: index }))
     
-    // 並び替え
-    const [removed] = items.splice(draggedIndex, 1)
-    items.splice(targetIndex, 0, removed)
+    await reorderCategories(targetType, reorderItems)
 
-    // 即座にUIを更新
-    if (type === 'large') {
-      setLargeCategories(items)
-    } else if (type === 'medium') {
-      setMediumCategories(prev => ({ ...prev, [parentIdVal]: items }))
-    } else if (type === 'small') {
-      setSmallCategories(prev => ({ ...prev, [parentIdVal]: items }))
-    } else if (type === 'rarity') {
-      setRarities(prev => ({ ...prev, [parentIdVal]: items }))
+    // UI更新
+    if (targetType === 'large') {
+      setLargeCategories(items.map((item, index) => ({ ...item, sort_order: index })))
+    } else if (targetType === 'medium' && targetParentId) {
+      setMediumCategories(prev => ({ ...prev, [targetParentId]: items.map((item, index) => ({ ...item, sort_order: index })) }))
+    } else if (targetType === 'small' && targetParentId) {
+      setSmallCategories(prev => ({ ...prev, [targetParentId]: items.map((item, index) => ({ ...item, sort_order: index })) }))
+    } else if (targetType === 'rarity' && targetParentId) {
+      setRarities(prev => ({ ...prev, [targetParentId]: items.map((item, index) => ({ ...item, sort_order: index })) }))
     }
-
-    // DBを更新
-    try {
-      for (let i = 0; i < items.length; i++) {
-        await supabase.from(table).update({ sort_order: i }).eq('id', items[i].id)
-      }
-    } catch (err) {
-      console.error('Sort update error:', err)
-    }
-
-    setDraggedItem(null)
-    setDraggedType('')
   }
 
   const handleDragEnd = () => {
@@ -272,18 +246,16 @@ export default function CategoryManager() {
         </button>
       </div>
 
-      <p className="text-sm text-gray-500 mb-4">💡 ドラッグ&ドロップで並び順を変更できます</p>
-
       {loading ? (
-        <div className="text-center py-12">
+        <div className="text-center py-8">
           <RefreshCw className="animate-spin mx-auto text-gray-400" size={32} />
         </div>
       ) : (
-        <div className="space-y-4">
-          {largeCategories.map((large: any) => (
+        <div className="space-y-3">
+          {largeCategories.map((large) => (
             <div 
               key={large.id} 
-              className={`bg-white rounded-xl shadow-sm border overflow-hidden ${
+              className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${
                 draggedItem?.id === large.id && draggedType === 'large' ? 'opacity-50' : ''
               }`}
               draggable
@@ -293,8 +265,8 @@ export default function CategoryManager() {
               onDragEnd={handleDragEnd}
             >
               {/* 大カテゴリヘッダー */}
-              <div className="p-4 flex items-center justify-between hover:bg-gray-50">
-                <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => toggleLarge(large.id)}>
+              <div className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer">
+                <div className="flex items-center gap-3 flex-1" onClick={() => toggleLarge(large.id)}>
                   <GripVertical size={18} className="text-gray-400 cursor-grab" />
                   {expandedLarge === large.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                   <span className="text-2xl">{large.icon}</span>
@@ -310,7 +282,7 @@ export default function CategoryManager() {
                 </div>
               </div>
 
-              {/* 展開時のコンテンツ */}
+              {/* 展開コンテンツ */}
               {expandedLarge === large.id && (
                 <div className="border-t border-gray-100 bg-gray-50">
                   {/* レアリティセクション */}
@@ -326,7 +298,7 @@ export default function CategoryManager() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {(rarities[large.id] || []).map((rarity: any) => (
+                      {(rarities[large.id] || []).map((rarity) => (
                         <div 
                           key={rarity.id} 
                           className={`flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm cursor-grab ${
@@ -365,7 +337,7 @@ export default function CategoryManager() {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      {(mediumCategories[large.id] || []).map((medium: any) => (
+                      {(mediumCategories[large.id] || []).map((medium) => (
                         <div 
                           key={medium.id} 
                           className={`bg-white rounded-lg border border-gray-200 ${
@@ -407,7 +379,7 @@ export default function CategoryManager() {
                                 </button>
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                {(smallCategories[medium.id] || []).map((small: any) => (
+                                {(smallCategories[medium.id] || []).map((small) => (
                                   <div 
                                     key={small.id} 
                                     className={`flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs cursor-grab ${

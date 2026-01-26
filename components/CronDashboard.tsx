@@ -1,25 +1,60 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import { RefreshCw, CheckCircle, Clock, Settings, Save, Play, XCircle } from 'lucide-react'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 const DAY_NAMES = ['日曜', '月曜', '火曜', '水曜', '木曜', '金曜', '土曜']
 
+interface CronLog {
+  id: string
+  executed_at: string
+  card_name: string
+  site_name: string
+  status: 'success' | 'error' | 'skipped'
+  error_message?: string
+  new_price?: number
+  old_price?: number
+  price_changed: boolean
+  stock_changed?: boolean
+}
+
+interface RestTime {
+  day_of_week: number
+  rest_start_1?: string | null
+  rest_end_1?: string | null
+  rest_start_2?: string | null
+  rest_end_2?: string | null
+}
+
+interface UrlStatus {
+  id: string
+  card?: { name: string }
+  site?: { name: string }
+  last_price?: number
+  last_stock?: number
+  check_interval?: number
+  next_check_at?: string
+  error_count: number
+  last_error?: string
+}
+
+interface Stats {
+  total: number
+  success: number
+  errors: number
+  priceChanges: number
+}
+
 export default function CronDashboard() {
   const [activeTab, setActiveTab] = useState<'logs' | 'settings' | 'status'>('logs')
-  const [logs, setLogs] = useState<any[]>([])
-  const [restTimes, setRestTimes] = useState<any[]>([])
-  const [urlStatus, setUrlStatus] = useState<any[]>([])
+  const [logs, setLogs] = useState<CronLog[]>([])
+  const [restTimes, setRestTimes] = useState<RestTime[]>([])
+  const [urlStatus, setUrlStatus] = useState<UrlStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
-  const [stats, setStats] = useState({ total: 0, success: 0, errors: 0, priceChanges: 0 })
+  const [stats, setStats] = useState<Stats>({ total: 0, success: 0, errors: 0, priceChanges: 0 })
 
   useEffect(() => {
     fetchLogs()
@@ -112,17 +147,36 @@ export default function CronDashboard() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex gap-2">
-          <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'logs' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          <button 
+            onClick={() => setActiveTab('logs')} 
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+              activeTab === 'logs' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
             <Clock size={18} /> ログ
           </button>
-          <button onClick={() => setActiveTab('status')} className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'status' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          <button 
+            onClick={() => setActiveTab('status')} 
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+              activeTab === 'status' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
             <RefreshCw size={18} /> 監視状況
           </button>
-          <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'settings' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          <button 
+            onClick={() => setActiveTab('settings')} 
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+              activeTab === 'settings' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
             <Settings size={18} /> 休憩時間
           </button>
         </div>
-        <button onClick={runCronManually} disabled={running} className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
+        <button 
+          onClick={runCronManually} 
+          disabled={running} 
+          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
+        >
           {running ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />} 手動実行
         </button>
       </div>
@@ -130,19 +184,35 @@ export default function CronDashboard() {
       {activeTab === 'logs' && (
         <div className="space-y-6">
           <div className="grid grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl p-4 border"><p className="text-sm text-gray-500">24h チェック数</p><p className="text-2xl font-bold">{stats.total}</p></div>
-            <div className="bg-green-50 rounded-xl p-4 border border-green-200"><p className="text-sm text-green-600">成功</p><p className="text-2xl font-bold text-green-700">{stats.success}</p></div>
-            <div className="bg-red-50 rounded-xl p-4 border border-red-200"><p className="text-sm text-red-600">エラー</p><p className="text-2xl font-bold text-red-700">{stats.errors}</p></div>
-            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200"><p className="text-sm text-blue-600">価格変動</p><p className="text-2xl font-bold text-blue-700">{stats.priceChanges}</p></div>
+            <div className="bg-white rounded-xl p-4 border">
+              <p className="text-sm text-gray-500">24h チェック数</p>
+              <p className="text-2xl font-bold">{stats.total}</p>
+            </div>
+            <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+              <p className="text-sm text-green-600">成功</p>
+              <p className="text-2xl font-bold text-green-700">{stats.success}</p>
+            </div>
+            <div className="bg-red-50 rounded-xl p-4 border border-red-200">
+              <p className="text-sm text-red-600">エラー</p>
+              <p className="text-2xl font-bold text-red-700">{stats.errors}</p>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+              <p className="text-sm text-blue-600">価格変動</p>
+              <p className="text-2xl font-bold text-blue-700">{stats.priceChanges}</p>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border overflow-hidden">
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-bold">実行ログ</h3>
-              <button onClick={fetchLogs} className="p-2 hover:bg-gray-100 rounded-lg"><RefreshCw size={18} className="text-gray-500" /></button>
+              <button onClick={fetchLogs} className="p-2 hover:bg-gray-100 rounded-lg">
+                <RefreshCw size={18} className="text-gray-500" />
+              </button>
             </div>
             {loading ? (
-              <div className="p-8 text-center"><RefreshCw className="animate-spin mx-auto text-gray-400" size={32} /></div>
+              <div className="p-8 text-center">
+                <RefreshCw className="animate-spin mx-auto text-gray-400" size={32} />
+              </div>
             ) : (
               <div className="max-h-[500px] overflow-auto">
                 <table className="w-full">
@@ -159,18 +229,36 @@ export default function CronDashboard() {
                   <tbody className="divide-y">
                     {logs.map((log) => (
                       <tr key={log.id} className={`hover:bg-gray-50 ${log.status === 'error' ? 'bg-red-50' : ''}`}>
-                        <td className="px-4 py-2 text-sm text-gray-600">{new Date(log.executed_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                        <td className="px-4 py-2 text-sm text-gray-600">
+                          {new Date(log.executed_at).toLocaleString('ja-JP', { 
+                            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                          })}
+                        </td>
                         <td className="px-4 py-2 text-sm font-medium">{log.card_name}</td>
                         <td className="px-4 py-2 text-sm text-gray-600">{log.site_name}</td>
                         <td className="px-4 py-2">
-                          {log.status === 'success' ? <span className="flex items-center gap-1 text-green-600 text-sm"><CheckCircle size={14} /> 成功</span> :
-                           log.status === 'error' ? <span className="flex items-center gap-1 text-red-600 text-sm" title={log.error_message}><XCircle size={14} /> エラー</span> :
-                           <span className="text-gray-500 text-sm">スキップ</span>}
+                          {log.status === 'success' ? (
+                            <span className="flex items-center gap-1 text-green-600 text-sm">
+                              <CheckCircle size={14} /> 成功
+                            </span>
+                          ) : log.status === 'error' ? (
+                            <span className="flex items-center gap-1 text-red-600 text-sm" title={log.error_message}>
+                              <XCircle size={14} /> エラー
+                            </span>
+                          ) : (
+                            <span className="text-gray-500 text-sm">スキップ</span>
+                          )}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right">{log.new_price ? `¥${log.new_price.toLocaleString()}` : '-'}</td>
+                        <td className="px-4 py-2 text-sm text-right">
+                          {log.new_price ? `¥${log.new_price.toLocaleString()}` : '-'}
+                        </td>
                         <td className="px-4 py-2">
-                          {log.price_changed && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">価格↑↓</span>}
-                          {log.stock_changed && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded ml-1">在庫↑↓</span>}
+                          {log.price_changed && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">価格↑↓</span>
+                          )}
+                          {log.stock_changed && (
+                            <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded ml-1">在庫↑↓</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -186,7 +274,9 @@ export default function CronDashboard() {
         <div className="bg-white rounded-xl border overflow-hidden">
           <div className="p-4 border-b flex items-center justify-between">
             <h3 className="font-bold">監視中のURL</h3>
-            <button onClick={fetchUrlStatus} className="p-2 hover:bg-gray-100 rounded-lg"><RefreshCw size={18} className="text-gray-500" /></button>
+            <button onClick={fetchUrlStatus} className="p-2 hover:bg-gray-100 rounded-lg">
+              <RefreshCw size={18} className="text-gray-500" />
+            </button>
           </div>
           <div className="max-h-[600px] overflow-auto">
             <table className="w-full">
@@ -205,14 +295,33 @@ export default function CronDashboard() {
                   <tr key={url.id} className={`hover:bg-gray-50 ${url.error_count > 0 ? 'bg-red-50' : ''}`}>
                     <td className="px-4 py-2 text-sm font-medium">{url.card?.name}</td>
                     <td className="px-4 py-2 text-sm text-gray-600">{url.site?.name}</td>
-                    <td className="px-4 py-2 text-sm text-right">{url.last_price ? `¥${url.last_price.toLocaleString()}` : '-'}</td>
+                    <td className="px-4 py-2 text-sm text-right">
+                      {url.last_price ? `¥${url.last_price.toLocaleString()}` : '-'}
+                    </td>
                     <td className="px-4 py-2 text-sm text-center">
-                      <span className={`px-2 py-0.5 rounded text-xs ${url.check_interval <= 30 ? 'bg-green-100 text-green-700' : url.check_interval <= 180 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        (url.check_interval || 30) <= 30 ? 'bg-green-100 text-green-700' : 
+                        (url.check_interval || 30) <= 180 ? 'bg-yellow-100 text-yellow-700' : 
+                        'bg-gray-100 text-gray-700'
+                      }`}>
                         {formatInterval(url.check_interval || 30)}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-600">{url.next_check_at ? new Date(url.next_check_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
-                    <td className="px-4 py-2 text-center">{url.error_count > 0 && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded" title={url.last_error}>{url.error_count}回</span>}</td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {url.next_check_at 
+                        ? new Date(url.next_check_at).toLocaleString('ja-JP', { 
+                            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                          }) 
+                        : '-'
+                      }
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      {url.error_count > 0 && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded" title={url.last_error}>
+                          {url.error_count}回
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -228,7 +337,11 @@ export default function CronDashboard() {
               <h3 className="font-bold">休憩時間設定</h3>
               <p className="text-sm text-gray-500 mt-1">休憩時間中は価格チェックを行いません（日本時間）</p>
             </div>
-            <button onClick={saveRestTimes} disabled={saving} className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2">
+            <button 
+              onClick={saveRestTimes} 
+              disabled={saving} 
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2"
+            >
               {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />} 保存
             </button>
           </div>
@@ -238,15 +351,35 @@ export default function CronDashboard() {
                 <div className="w-16 font-medium">{DAY_NAMES[rt.day_of_week]}</div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500">休憩1:</span>
-                  <input type="time" value={rt.rest_start_1 || ''} onChange={(e) => updateRestTime(rt.day_of_week, 'rest_start_1', e.target.value)} className="px-2 py-1 border rounded text-sm" />
+                  <input 
+                    type="time" 
+                    value={rt.rest_start_1 || ''} 
+                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_start_1', e.target.value)} 
+                    className="px-2 py-1 border rounded text-sm" 
+                  />
                   <span>〜</span>
-                  <input type="time" value={rt.rest_end_1 || ''} onChange={(e) => updateRestTime(rt.day_of_week, 'rest_end_1', e.target.value)} className="px-2 py-1 border rounded text-sm" />
+                  <input 
+                    type="time" 
+                    value={rt.rest_end_1 || ''} 
+                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_end_1', e.target.value)} 
+                    className="px-2 py-1 border rounded text-sm" 
+                  />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500">休憩2:</span>
-                  <input type="time" value={rt.rest_start_2 || ''} onChange={(e) => updateRestTime(rt.day_of_week, 'rest_start_2', e.target.value)} className="px-2 py-1 border rounded text-sm" />
+                  <input 
+                    type="time" 
+                    value={rt.rest_start_2 || ''} 
+                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_start_2', e.target.value)} 
+                    className="px-2 py-1 border rounded text-sm" 
+                  />
                   <span>〜</span>
-                  <input type="time" value={rt.rest_end_2 || ''} onChange={(e) => updateRestTime(rt.day_of_week, 'rest_end_2', e.target.value)} className="px-2 py-1 border rounded text-sm" />
+                  <input 
+                    type="time" 
+                    value={rt.rest_end_2 || ''} 
+                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_end_2', e.target.value)} 
+                    className="px-2 py-1 border rounded text-sm" 
+                  />
                 </div>
               </div>
             ))}

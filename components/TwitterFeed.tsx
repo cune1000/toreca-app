@@ -2,13 +2,9 @@
 
 import { useState } from 'react'
 import { RefreshCw, Image, Cpu, Check, X, Clock, Inbox } from 'lucide-react'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
+import { addPendingImage } from '@/lib/api/pending'
 import BulkRecognition from './BulkRecognition'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 interface SelectedImage {
   url: string
@@ -17,11 +13,20 @@ interface SelectedImage {
   tweetId: string
 }
 
-export default function TwitterFeed({ shop, onImageSelect, onClose }: {
-  shop: any;
-  onImageSelect?: (url: string) => void;
-  onClose: () => void;
-}) {
+interface Shop {
+  id: string
+  name: string
+  x_account?: string
+  icon?: string
+}
+
+interface Props {
+  shop: Shop
+  onImageSelect?: (url: string) => void
+  onClose: () => void
+}
+
+export default function TwitterFeed({ shop, onImageSelect, onClose }: Props) {
   const [loading, setLoading] = useState(false)
   const [tweets, setTweets] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +80,7 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
     }
   }
 
-  // 保留リストに追加
+  // 保留リストに追加（lib/api使用）
   const addToPending = async () => {
     if (!selectedImage) return
     
@@ -86,27 +91,17 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
 
     setSavingToPending(true)
     try {
-      console.log('Adding to pending:', {
-        shop_id: shop.id,
-        image_url: selectedImage.url,
-        tweet_url: selectedImage.tweetUrl,
-        tweet_time: selectedImage.tweetTime
-      })
-      
-      const { data, error } = await supabase.from('pending_images').insert({
+      const { data, error } = await addPendingImage({
         shop_id: shop.id,
         image_url: selectedImage.url,
         tweet_url: selectedImage.tweetUrl,
         tweet_time: selectedImage.tweetTime,
-        status: 'pending'
-      }).select()
+      })
 
       if (error) {
-        console.error('Supabase error:', error)
-        throw error
+        throw new Error(error)
       }
 
-      console.log('Saved:', data)
       alert('保留リストに追加しました')
       setSelectedImage(null)
     } catch (err: any) {
@@ -134,7 +129,7 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: {
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                  <span className="text-xl">🏪</span>
+                  <span className="text-xl">🪪</span>
                 </div>
               )}
               <div>

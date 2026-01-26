@@ -2,19 +2,46 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Upload, RefreshCw, Image } from 'lucide-react'
+import { getLargeCategories, getMediumCategories, getRarities } from '@/lib/api/categories'
+import { addCard } from '@/lib/api/cards'
+import { Plus, X, RefreshCw, Image } from 'lucide-react'
 
-export default function CardForm({ onClose, onSaved }) {
+interface Category {
+  id: string
+  name: string
+  icon?: string
+}
+
+interface Rarity {
+  id: string
+  name: string
+}
+
+interface FormData {
+  name: string
+  card_number: string
+  category_large_id: string
+  category_medium_id: string
+  rarity_id: string
+  image_url: string
+}
+
+interface Props {
+  onClose: () => void
+  onSaved?: () => void
+}
+
+export default function CardForm({ onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [categories, setCategories] = useState([])
-  const [rarities, setRarities] = useState([])
-  const [mediumCategories, setMediumCategories] = useState([])
-  const [imagePreview, setImagePreview] = useState(null)
-  const fileInputRef = useRef(null)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [rarities, setRarities] = useState<Rarity[]>([])
+  const [mediumCategories, setMediumCategories] = useState<Category[]>([])
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   // フォームデータ
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormData>({
     name: '',
     card_number: '',
     category_large_id: '',
@@ -26,43 +53,34 @@ export default function CardForm({ onClose, onSaved }) {
   // 大カテゴリ取得
   useEffect(() => {
     async function fetchCategories() {
-      const { data } = await supabase
-        .from('category_large')
-        .select('*')
-        .order('sort_order')
-      setCategories(data || [])
+      const data = await getLargeCategories()
+      setCategories(data)
     }
     fetchCategories()
   }, [])
 
   // 大カテゴリが変わったらレアリティと中カテゴリを取得
   useEffect(() => {
-    async function fetchRarities() {
+    async function fetchRelatedData() {
       if (!form.category_large_id) {
         setRarities([])
         setMediumCategories([])
         return
       }
       
-      const { data: rarityData } = await supabase
-        .from('rarities')
-        .select('*')
-        .eq('large_id', form.category_large_id)
-        .order('sort_order')
-      setRarities(rarityData || [])
+      const [rarityData, mediumData] = await Promise.all([
+        getRarities(form.category_large_id),
+        getMediumCategories(form.category_large_id)
+      ])
       
-      const { data: mediumData } = await supabase
-        .from('category_medium')
-        .select('*')
-        .eq('large_id', form.category_large_id)
-        .order('sort_order')
-      setMediumCategories(mediumData || [])
+      setRarities(rarityData)
+      setMediumCategories(mediumData)
     }
-    fetchRarities()
+    fetchRelatedData()
   }, [form.category_large_id])
 
   // 画像選択
-  const handleImageSelect = async (e) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -97,26 +115,23 @@ export default function CardForm({ onClose, onSaved }) {
     reader.readAsDataURL(file)
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('cards')
-      .insert([{
-        name: form.name,
-        card_number: form.card_number,
-        category_large_id: form.category_large_id || null,
-        category_medium_id: form.category_medium_id || null,
-        rarity_id: form.rarity_id || null,
-        image_url: form.image_url || null
-      }])
-      .select()
+    const result = await addCard({
+      name: form.name,
+      card_number: form.card_number || undefined,
+      category_large_id: form.category_large_id || undefined,
+      category_medium_id: form.category_medium_id || undefined,
+      rarity_id: form.rarity_id || undefined,
+      image_url: form.image_url || undefined
+    })
 
     setLoading(false)
 
-    if (error) {
-      alert('エラー: ' + error.message)
+    if (!result) {
+      alert('カードの登録に失敗しました')
       return
     }
 
@@ -214,7 +229,7 @@ export default function CardForm({ onClose, onSaved }) {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
-              {categories.map((cat: any) => (
+              {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
               ))}
             </select>
@@ -232,7 +247,7 @@ export default function CardForm({ onClose, onSaved }) {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">選択してください</option>
-                {mediumCategories.map((cat: any) => (
+                {mediumCategories.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
@@ -246,7 +261,7 @@ export default function CardForm({ onClose, onSaved }) {
                 レアリティ
               </label>
               <div className="flex flex-wrap gap-2">
-                {rarities.map((rarity: any) => (
+                {rarities.map((rarity) => (
                   <button
                     key={rarity.id}
                     type="button"

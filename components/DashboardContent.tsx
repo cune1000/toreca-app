@@ -1,20 +1,63 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { 
+  getDashboardStats, 
+  getRecentCards, 
+  getPriceChanges, 
+  getCronStats,
+  searchCardsForDashboard,
+  getLargeCategories,
+  getAllSaleSites 
+} from '@/lib/api/dashboard'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Database, Store, Globe, Clock, Search, RefreshCw, TrendingUp, AlertCircle } from 'lucide-react'
 
+interface Stats {
+  cards: number
+  shops: number
+  sites: number
+  pending: number
+}
+
+interface CronStats {
+  success: number
+  errors: number
+  changes: number
+}
+
+interface PriceChange {
+  card_name: string
+  site_name: string
+  old_price: number | null
+  new_price: number | null
+  executed_at: string
+}
+
+interface RecentCard {
+  id: string
+  name: string
+  card_number?: string
+  created_at: string
+}
+
+interface SearchResult {
+  id: string
+  name: string
+  card_number?: string
+  image_url?: string
+}
+
 export default function DashboardContent() {
-  const [stats, setStats] = useState({ cards: 0, shops: 0, sites: 0, pending: 0 })
-  const [categories, setCategories] = useState([])
-  const [saleSites, setSaleSites] = useState([])
-  const [recentCards, setRecentCards] = useState([])
+  const [stats, setStats] = useState<Stats>({ cards: 0, shops: 0, sites: 0, pending: 0 })
+  const [categories, setCategories] = useState<any[]>([])
+  const [saleSites, setSaleSites] = useState<any[]>([])
+  const [recentCards, setRecentCards] = useState<RecentCard[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState([])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [priceChanges, setPriceChanges] = useState([])
-  const [cronStats, setCronStats] = useState({ success: 0, errors: 0, changes: 0 })
+  const [priceChanges, setPriceChanges] = useState<PriceChange[]>([])
+  const [cronStats, setCronStats] = useState<CronStats>({ success: 0, errors: 0, changes: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -24,65 +67,22 @@ export default function DashboardContent() {
   const fetchData = async () => {
     setLoading(true)
     
-    // カード数（カウントのみ）
-    const { count: cardCount } = await supabase.from('cards').select('*', { count: 'exact', head: true })
-    
-    // 買取店舗数
-    const { count: shopCount } = await supabase.from('purchase_shops').select('*', { count: 'exact', head: true })
-    
-    // 販売サイト数
-    const { count: siteCount } = await supabase.from('sale_sites').select('*', { count: 'exact', head: true })
-    
-    // 保留中
-    const { count: pendingCount } = await supabase.from('pending_images').select('*', { count: 'exact', head: true }).eq('status', 'pending')
-    
-    setStats({
-      cards: cardCount || 0,
-      shops: shopCount || 0,
-      sites: siteCount || 0,
-      pending: pendingCount || 0
-    })
+    // 並列で全データ取得（lib/api使用）
+    const [statsData, categoriesData, sitesData, cardsData, changesData, cronStatsData] = await Promise.all([
+      getDashboardStats(),
+      getLargeCategories(),
+      getAllSaleSites(),
+      getRecentCards(50),
+      getPriceChanges(24, 10),
+      getCronStats(24)
+    ])
 
-    // 大カテゴリ
-    const { data: catData } = await supabase.from('category_large').select('*').order('sort_order')
-    setCategories(catData || [])
-
-    // 販売サイト
-    const { data: sitesData } = await supabase.from('sale_sites').select('*')
-    setSaleSites(sitesData || [])
-
-    // 最近登録されたカード（50件）
-    const { data: cardsData } = await supabase
-      .from('cards')
-      .select('id, name, card_number, created_at')
-      .order('created_at', { ascending: false })
-      .limit(50)
-    setRecentCards(cardsData || [])
-
-    // 価格変動（過去24時間）
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const { data: changesData } = await supabase
-      .from('cron_logs')
-      .select('card_name, site_name, old_price, new_price, executed_at')
-      .eq('price_changed', true)
-      .gte('executed_at', oneDayAgo)
-      .order('executed_at', { ascending: false })
-      .limit(10)
-    setPriceChanges(changesData || [])
-
-    // Cron統計（過去24時間）
-    const { data: cronData } = await supabase
-      .from('cron_logs')
-      .select('status, price_changed')
-      .gte('executed_at', oneDayAgo)
-    
-    if (cronData) {
-      setCronStats({
-        success: cronData.filter(l => l.status === 'success').length,
-        errors: cronData.filter(l => l.status === 'error').length,
-        changes: cronData.filter(l => l.price_changed).length
-      })
-    }
+    setStats(statsData)
+    setCategories(categoriesData)
+    setSaleSites(sitesData)
+    setRecentCards(cardsData)
+    setPriceChanges(changesData)
+    setCronStats(cronStatsData)
 
     setLoading(false)
   }
@@ -96,12 +96,8 @@ export default function DashboardContent() {
 
     const timer = setTimeout(async () => {
       setIsSearching(true)
-      const { data } = await supabase
-        .from('cards')
-        .select('id, name, card_number, image_url')
-        .or(`name.ilike.%${searchQuery}%,card_number.ilike.%${searchQuery}%`)
-        .limit(10)
-      setSearchResults(data || [])
+      const results = await searchCardsForDashboard(searchQuery, 10)
+      setSearchResults(results)
       setIsSearching(false)
     }, 300)
 
@@ -211,7 +207,7 @@ export default function DashboardContent() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="date" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `¥${(v/1000)}k`} />
-              <Tooltip formatter={(value) => `¥${value.toLocaleString()}`} />
+              <Tooltip formatter={(value: number) => `¥${value.toLocaleString()}`} />
               <Area type="monotone" dataKey="sale" stroke="#10b981" fill="#10b98120" strokeWidth={2} name="販売価格" />
               <Area type="monotone" dataKey="purchase" stroke="#3b82f6" fill="#3b82f620" strokeWidth={2} name="買取価格" />
             </AreaChart>
@@ -243,7 +239,7 @@ export default function DashboardContent() {
                   <p className="text-sm">
                     <span className="text-gray-400">¥{change.old_price?.toLocaleString()}</span>
                     <span className="mx-1">→</span>
-                    <span className={change.new_price > change.old_price ? 'text-red-600' : 'text-green-600'}>
+                    <span className={change.new_price && change.old_price && change.new_price > change.old_price ? 'text-red-600' : 'text-green-600'}>
                       ¥{change.new_price?.toLocaleString()}
                     </span>
                   </p>
