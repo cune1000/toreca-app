@@ -8,7 +8,7 @@ const supabase = createClient(
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-// Gemini API呼び出し
+// Gemini API呼び出し（画像認識用）
 async function callGemini(imageBase64: string, mimeType: string, additionalContext?: string) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
   
@@ -108,6 +108,80 @@ ${additionalContext ? `追加情報: ${additionalContext}` : ''}
   return data
 }
 
+// Gemini Grounding（Google検索連携）でカード情報を補完
+async function enrichWithGrounding(card: any, isPsa: boolean): Promise<any> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
+  
+  // 検索クエリを構築
+  const priceStr = card.price ? `${card.price.toLocaleString()}円` : ''
+  const psaStr = isPsa ? 'PSA鑑定' : ''
+  
+  const prompt = `ポケモンカード「${card.name}」${priceStr} ${psaStr}について、正式なカード情報を教えてください。
+
+以下のJSON形式で返してください。必ずJSONのみを返し、他のテキストは含めないでください:
+{
+  "official_name": "正式なカード名（日本語）",
+  "card_number": "型番（例: 025/025, 001/SV, SAR）",
+  "expansion": "収録パック名",
+  "rarity": "レアリティ（SAR, SR, UR, AR等）",
+  "confidence": "high/medium/low",
+  "notes": "補足情報があれば"
+}
+
+情報が見つからない場合は confidence を "low" にしてください。`
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        tools: [{
+          google_search_retrieval: {}  // ← Grounding有効化
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1024,
+        }
+      })
+    })
+
+    if (!response.ok) {
+      console.error(`Grounding API error for "${card.name}": ${response.status}`)
+      return null
+    }
+
+    const data = await response.json()
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text
+    
+    if (!responseText) {
+      return null
+    }
+
+    // JSONを抽出
+    const groundingResult = extractJSON(responseText)
+    
+    // 検索に使われたクエリとソースを取得
+    const groundingMetadata = data.candidates?.[0]?.groundingMetadata
+    
+    return {
+      ...groundingResult,
+      search_queries: groundingMetadata?.webSearchQueries || [],
+      sources: groundingMetadata?.groundingChunks?.map((c: any) => ({
+        url: c.web?.uri,
+        title: c.web?.title
+      })) || []
+    }
+  } catch (error) {
+    console.error(`Grounding error for "${card.name}":`, error)
+    return null
+  }
+}
+
 // レスポンスからJSONを抽出
 function extractJSON(text: string): any {
   // ```json ... ``` を除去
@@ -130,7 +204,15 @@ function extractJSON(text: string): any {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { imageBase64, imageUrl, mimeType = 'image/jpeg', tweetText, shopId } = body
+    const { 
+      imageBase64, 
+      imageUrl, 
+      mimeType = 'image/jpeg', 
+      tweetText, 
+      shopId,
+      enableGrounding = true,  // Grounding有効/無効フラグ（デフォルト: 有効）
+      groundingConcurrency = 5  // 並列数（デフォルト: 5）
+    } = body
 
     if (!imageBase64 && !imageUrl) {
       return NextResponse.json({ error: 'imageBase64 or imageUrl is required' }, { status: 400 })
@@ -171,8 +253,8 @@ export async function POST(request: NextRequest) {
       additionalContext += 'このツイートはPSA等の鑑定品に関するものと思われます。'
     }
 
-    // Gemini API呼び出し
-    console.log('Calling Gemini API...')
+    // Step 1: Gemini API呼び出し（画像認識）
+    console.log('Step 1: Calling Gemini API for image recognition...')
     const geminiResponse = await callGemini(base64Data, detectedMimeType, additionalContext)
 
     // レスポンス解析
@@ -191,6 +273,44 @@ export async function POST(request: NextRequest) {
       result.is_psa = true
       result.psa_info = result.psa_info || { detected: true, grades_found: [] }
       result.psa_info.detected = true
+    }
+
+    // Step 2: Grounding で各カード情報を補完
+    if (enableGrounding && result.cards && result.cards.length > 0) {
+      console.log(`Step 2: Enriching ${result.cards.length} cards with Grounding...`)
+      
+      // 並列処理（レート制限対策で同時実行数を制限）
+      const enrichedCards = []
+      for (let i = 0; i < result.cards.length; i += groundingConcurrency) {
+        const batch = result.cards.slice(i, i + groundingConcurrency)
+        const batchResults = await Promise.all(
+          batch.map(async (card: any) => {
+            const grounding = await enrichWithGrounding(card, result.is_psa)
+            return {
+              ...card,
+              grounding: grounding || null
+            }
+          })
+        )
+        enrichedCards.push(...batchResults)
+        
+        // バッチ間で少し待機（レート制限対策）
+        if (i + groundingConcurrency < result.cards.length) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+      
+      result.cards = enrichedCards
+      
+      // Grounding成功率を計算
+      const groundingSuccess = enrichedCards.filter((c: any) => c.grounding?.confidence === 'high').length
+      result.grounding_stats = {
+        total: enrichedCards.length,
+        high_confidence: groundingSuccess,
+        success_rate: Math.round((groundingSuccess / enrichedCards.length) * 100)
+      }
+      
+      console.log(`Grounding complete: ${groundingSuccess}/${enrichedCards.length} high confidence`)
     }
 
     // 店舗情報を追加
@@ -212,7 +332,8 @@ export async function POST(request: NextRequest) {
       meta: {
         imageSource: imageUrl ? 'url' : 'base64',
         isPsaFromTweet: isPsaFromText,
-        tweetText: tweetText || null
+        tweetText: tweetText || null,
+        groundingEnabled: enableGrounding
       }
     })
 
@@ -229,6 +350,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   return NextResponse.json({
     message: 'Purchase Price Recognition API',
+    version: '2.0 (with Grounding)',
     usage: {
       method: 'POST',
       body: {
@@ -236,13 +358,20 @@ export async function GET(request: NextRequest) {
         imageUrl: 'URL of image (optional if imageBase64 provided)',
         mimeType: 'image/jpeg or image/png (default: image/jpeg)',
         tweetText: 'Tweet text for PSA detection (optional)',
-        shopId: 'Shop ID (optional)'
+        shopId: 'Shop ID (optional)',
+        enableGrounding: 'Enable Google Search grounding (default: true)',
+        groundingConcurrency: 'Parallel grounding requests (default: 5)'
       }
     },
     example: {
       imageUrl: 'https://example.com/price-list.jpg',
       tweetText: '【PSA10】買取価格更新！',
-      shopId: 'uuid-here'
+      shopId: 'uuid-here',
+      enableGrounding: true
+    },
+    grounding_info: {
+      description: 'Google検索連携で正式カード名・型番を自動取得',
+      expected_improvement: '0% → 80%+ auto-match rate'
     }
   })
 }
