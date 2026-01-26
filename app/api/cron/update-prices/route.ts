@@ -8,12 +8,10 @@ function verifyCronAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
   
-  // Vercel Cronからの呼び出しの場合
   if (authHeader === `Bearer ${cronSecret}`) {
     return true
   }
   
-  // 開発環境では認証スキップ
   if (process.env.NODE_ENV === 'development') {
     return true
   }
@@ -36,9 +34,39 @@ async function scrapeViaRailway(url: string, mode: string = 'light') {
   return await res.json()
 }
 
+// cron_logsに記録
+async function logCronResult(
+  cardSaleId: string,
+  cardName: string,
+  siteName: string,
+  status: 'success' | 'error' | 'skipped',
+  oldPrice: number | null,
+  newPrice: number | null,
+  oldStock: number | null,
+  newStock: number | null,
+  errorMessage?: string
+) {
+  const priceChanged = oldPrice !== null && newPrice !== null && oldPrice !== newPrice
+  const stockChanged = oldStock !== null && newStock !== null && oldStock !== newStock
+
+  await supabase.from('cron_logs').insert({
+    card_sale_url_id: cardSaleId,
+    card_name: cardName,
+    site_name: siteName,
+    status,
+    old_price: oldPrice,
+    new_price: newPrice,
+    old_stock: oldStock,
+    new_stock: newStock,
+    price_changed: priceChanged,
+    stock_changed: stockChanged,
+    error_message: errorMessage || null,
+    executed_at: new Date().toISOString()
+  })
+}
+
 // GET: Cronジョブとして実行
 export async function GET(request: NextRequest) {
-  // 認証チェック
   if (!verifyCronAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -53,10 +81,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. 更新が必要なカードURLを取得（優先度順）
-    // - 最後の更新から24時間以上経過
-    // - 価格変動が激しいもの優先
-    // - 在庫ありのもの優先
     const { data: saleSites, error: fetchError } = await supabase
       .from('card_sale_sites')
       .select(`
@@ -72,7 +96,7 @@ export async function GET(request: NextRequest) {
       `)
       .not('url', 'is', null)
       .order('last_checked_at', { ascending: true, nullsFirst: true })
-      .limit(50) // 1回のCronで最大50件
+      .limit(50)
 
     if (fetchError) throw fetchError
 
@@ -84,12 +108,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 2. 各URLをスクレイピング
     for (const site of saleSites) {
       results.processed++
       
       const cardName = (site.cards as any)?.name || 'Unknown'
       const siteName = (site.sale_sites as any)?.name || 'Unknown'
+      const oldPrice = site.last_price
+      const oldStock = site.last_stock
       
       try {
         // 24時間以内に更新済みの場合はスキップ
@@ -99,30 +124,25 @@ export async function GET(request: NextRequest) {
           
           if (hoursSince < 24) {
             results.skipped++
+            await logCronResult(site.id, cardName, siteName, 'skipped', oldPrice, oldPrice, oldStock, oldStock)
             continue
           }
         }
 
-        // スクレイピング実行
         const scrapeResult = await scrapeViaRailway(site.url, 'light')
         
         if (!scrapeResult.success) {
           results.errors++
-          results.details.push({
-            cardName,
-            siteName,
-            error: scrapeResult.error || 'Scrape failed'
-          })
+          const errorMsg = scrapeResult.error || 'Scrape failed'
+          results.details.push({ cardName, siteName, error: errorMsg })
+          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, errorMsg)
           continue
         }
 
-        // 価格と在庫を取得
         let newPrice = scrapeResult.price || scrapeResult.mainPrice
         let newStock = scrapeResult.stock
         
-        // 状態別価格がある場合（トレカキャンプ等）
         if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
-          // 状態Aの価格を優先
           const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
           const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
           
@@ -135,11 +155,9 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // 価格が取得できた場合のみ更新
         if (newPrice !== null && newPrice !== undefined) {
           const priceChanged = site.last_price !== newPrice
           
-          // card_sale_sites を更新
           await supabase
             .from('card_sale_sites')
             .update({
@@ -149,7 +167,6 @@ export async function GET(request: NextRequest) {
             })
             .eq('id', site.id)
 
-          // 価格変動があった場合は履歴に記録
           if (priceChanged) {
             await supabase
               .from('price_history')
@@ -161,32 +178,21 @@ export async function GET(request: NextRequest) {
           }
 
           results.updated++
-          results.details.push({
-            cardName,
-            siteName,
-            oldPrice: site.last_price,
-            newPrice,
-            changed: priceChanged
-          })
+          results.details.push({ cardName, siteName, oldPrice, newPrice, changed: priceChanged })
+          await logCronResult(site.id, cardName, siteName, 'success', oldPrice, newPrice, oldStock, newStock)
         } else {
           results.errors++
-          results.details.push({
-            cardName,
-            siteName,
-            error: 'Price not found in response'
-          })
+          const errorMsg = 'Price not found in response'
+          results.details.push({ cardName, siteName, error: errorMsg })
+          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, errorMsg)
         }
 
-        // レート制限対策（1秒待機）
         await new Promise(resolve => setTimeout(resolve, 1000))
 
       } catch (err: any) {
         results.errors++
-        results.details.push({
-          cardName,
-          siteName,
-          error: err.message
-        })
+        results.details.push({ cardName, siteName, error: err.message })
+        await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, err.message)
       }
     }
 
@@ -209,7 +215,6 @@ export async function GET(request: NextRequest) {
 
 // POST: 手動実行用
 export async function POST(request: NextRequest) {
-  // bodyが空でもエラーにならないように修正
   let limit = 10
   let forceUpdate = false
   
@@ -221,7 +226,6 @@ export async function POST(request: NextRequest) {
     // bodyが空の場合はデフォルト値を使用
   }
   
-  // GETと同じ処理を実行（認証スキップ）
   const startTime = Date.now()
   const results = {
     processed: 0,
@@ -264,15 +268,17 @@ export async function POST(request: NextRequest) {
       
       const cardName = (site.cards as any)?.name || 'Unknown'
       const siteName = (site.sale_sites as any)?.name || 'Unknown'
+      const oldPrice = site.last_price
+      const oldStock = site.last_stock
       
       try {
-        // forceUpdateでない場合、24時間以内に更新済みならスキップ
         if (!forceUpdate && site.last_checked_at) {
           const lastChecked = new Date(site.last_checked_at)
           const hoursSince = (Date.now() - lastChecked.getTime()) / (1000 * 60 * 60)
           
           if (hoursSince < 24) {
             results.skipped++
+            await logCronResult(site.id, cardName, siteName, 'skipped', oldPrice, oldPrice, oldStock, oldStock)
             continue
           }
         }
@@ -281,7 +287,9 @@ export async function POST(request: NextRequest) {
         
         if (!scrapeResult.success) {
           results.errors++
-          results.details.push({ cardName, siteName, error: scrapeResult.error })
+          const errorMsg = scrapeResult.error || 'Scrape failed'
+          results.details.push({ cardName, siteName, error: errorMsg })
+          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, errorMsg)
           continue
         }
 
@@ -324,10 +332,13 @@ export async function POST(request: NextRequest) {
           }
 
           results.updated++
-          results.details.push({ cardName, siteName, oldPrice: site.last_price, newPrice, changed: priceChanged })
+          results.details.push({ cardName, siteName, oldPrice, newPrice, changed: priceChanged })
+          await logCronResult(site.id, cardName, siteName, 'success', oldPrice, newPrice, oldStock, newStock)
         } else {
           results.errors++
-          results.details.push({ cardName, siteName, error: 'Price not found' })
+          const errorMsg = 'Price not found'
+          results.details.push({ cardName, siteName, error: errorMsg })
+          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, errorMsg)
         }
 
         await new Promise(resolve => setTimeout(resolve, 1000))
@@ -335,6 +346,7 @@ export async function POST(request: NextRequest) {
       } catch (err: any) {
         results.errors++
         results.details.push({ cardName, siteName, error: err.message })
+        await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, err.message)
       }
     }
 
