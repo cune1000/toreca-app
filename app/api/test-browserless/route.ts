@@ -1,4 +1,4 @@
-export const maxDuration = 60;
+export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
 import { chromium } from 'playwright'

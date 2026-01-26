@@ -1,180 +1,295 @@
-import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
-import { 
-  findSimilarCards, 
-  correctKnownErrors
-} from '@/lib/fuzzyMatch';
+import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { extractJSON } from '@/lib/utils'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Gemini API呼び出し（画像認識用）
+async function callGemini(imageBase64: string, mimeType: string, additionalContext?: string) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
+  
+  const prompt = `この画像はトレーディングカードの買取価格表です。
 
-export async function POST(request: NextRequest) {
-  try {
-    const { image, matchWithDb = true } = await request.json();
+${additionalContext ? `追加情報: ${additionalContext}` : ''}
 
-    if (!image) {
-      return NextResponse.json({ error: '画像が必要です' }, { status: 400 });
-    }
+【指示】
+1. まず画像のレイアウト構造を分析してください（グリッド形式、リスト形式など）
+2. 左上から右へ、上から下へ順番にすべてのカードを読み取ってください
+3. 各カードの位置（bounding box）を0〜1000の相対座標で返してください
 
-    // Base64データの抽出
-    const base64Data = image.replace(/^data:image\/[a-z]+;base64,/, '');
-    const mediaType = image.match(/^data:(image\/[a-z]+);base64,/)?.[1] || 'image/jpeg';
+各カードについて以下を抽出:
+- カード名: カード画像の近くに書かれた名前。読めない場合はイラストの特徴で記述
+  （例：ポンチョピカチュウ、リザードンex、マオ＆スイレン、ナンジャモ等）
+- 買取枚数: 「○枚」と書かれた数字（あれば）
+- 買取価格: 金額（数値のみ、カンマなし）
+- bounding_box: カード画像と価格を含む領域の座標
+  - x: 左端のX座標（0-1000）
+  - y: 上端のY座標（0-1000）
+  - width: 幅（0-1000）
+  - height: 高さ（0-1000）
 
-    // Claude Vision APIで認識
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-                data: base64Data,
-              },
-            },
-            {
-              type: 'text',
-              text: `この画像のトレーディングカードを識別してください。
-
-以下のJSON形式で返してください。必ず有効なJSONのみを返してください。
-説明文や前置きは不要です。
-
+以下のJSON形式で返してください。必ずJSONのみを返し、他のテキストは含めないでください:
 {
-  "name": "カード名（日本語、正確に）",
-  "cardNumber": "カード番号（例: 198/187）またはnull",
-  "rarity": "レアリティ（SAR, SR, AR, UR, RR, R, C等）またはnull",
-  "series": "シリーズ名（分かれば）またはnull",
-  "confidence": 認識の確信度（0-100の数値）
+  "cards": [
+    {
+      "index": 1,
+      "name": "カード名またはイラスト特徴",
+      "quantity": 20,
+      "price": 300000,
+      "bounding_box": {
+        "x": 10,
+        "y": 100,
+        "width": 120,
+        "height": 150
+      },
+      "raw_text": "読み取れた元のテキスト"
+    }
+  ],
+  "layout": {
+    "type": "grid",
+    "rows": 6,
+    "cols": 8,
+    "total_detected": 48
+  },
+  "shop_info": {
+    "name": "店舗名",
+    "date": "日付"
+  },
+  "is_psa": false,
+  "psa_info": {
+    "detected": false,
+    "grades_found": []
+  }
 }
 
-注意:
-- カード名は正確に読み取ってください
-- 「ex」「EX」「V」「VMAX」「VSTAR」などの接尾辞も含めてください
-- 確信度は、カード名の読み取りがどれだけ確実かを示します`,
-            },
-          ],
-        },
-      ],
-    });
+重要:
+- PSA、BGS、CGC等の鑑定品の場合は is_psa を true に
+- 価格は数値のみ（例: 300000）
+- bounding_boxは画像全体を1000x1000とした相対座標で返してください
+- カード名が読めなくても、イラストの特徴（キャラクター、衣装、ポーズ）で識別
+- すべてのカードを漏れなく抽出してください`
 
-    // レスポンスからJSONを抽出
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: mimeType, data: imageBase64 } },
+          { text: prompt }
+        ]
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+    })
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Gemini API error: ${response.status} - ${error}`)
+  }
+
+  return await response.json()
+}
+
+// Gemini Grounding（Google検索連携）でカード情報を補完
+async function enrichWithGrounding(card: any, isPsa: boolean): Promise<any> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
+  
+  const priceStr = card.price ? `${card.price.toLocaleString()}円` : ''
+  const psaStr = isPsa ? 'PSA鑑定' : ''
+  
+  const prompt = `ポケモンカード「${card.name}」${priceStr} ${psaStr}について、正式なカード情報を教えてください。
+
+以下のJSON形式で返してください。必ずJSONのみを返し、他のテキストは含めないでください:
+{
+  "official_name": "正式なカード名（日本語）",
+  "card_number": "型番（例: 025/025, 001/SV, SAR）",
+  "expansion": "収録パック名",
+  "rarity": "レアリティ（SAR, SR, UR, AR等）",
+  "confidence": "high/medium/low",
+  "notes": "補足情報があれば"
+}
+
+情報が見つからない場合は confidence を "low" にしてください。`
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ google_search_retrieval: {} }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+      })
+    })
+
+    if (!response.ok) {
+      console.error(`Grounding API error for "${card.name}": ${response.status}`)
+      return null
+    }
+
+    const data = await response.json()
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text
     
-    let jsonStr = responseText;
-    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1];
-    }
+    if (!responseText) return null
+
+    const groundingResult = extractJSON(responseText)
+    const groundingMetadata = data.candidates?.[0]?.groundingMetadata
     
-    const directJsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-    if (directJsonMatch) {
-      jsonStr = directJsonMatch[0];
+    return {
+      ...groundingResult,
+      search_queries: groundingMetadata?.webSearchQueries || [],
+      sources: groundingMetadata?.groundingChunks?.map((c: any) => ({
+        url: c.web?.uri,
+        title: c.web?.title
+      })) || []
+    }
+  } catch (error) {
+    console.error(`Grounding error for "${card.name}":`, error)
+    return null
+  }
+}
+
+// POST: 画像から買取価格を認識
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { 
+      imageBase64, 
+      imageUrl, 
+      mimeType = 'image/jpeg', 
+      tweetText, 
+      shopId,
+      enableGrounding = true,
+      groundingConcurrency = 5
+    } = body
+
+    if (!imageBase64 && !imageUrl) {
+      return NextResponse.json({ error: 'imageBase64 or imageUrl is required' }, { status: 400 })
     }
 
-    let recognized: {
-      name: string;
-      cardNumber?: string;
-      rarity?: string;
-      series?: string;
-      confidence?: number;
-    };
-
-    try {
-      recognized = JSON.parse(jsonStr);
-    } catch {
-      console.error('JSON parse error:', jsonStr);
-      return NextResponse.json({ 
-        error: 'AI認識結果のパースに失敗しました',
-        rawResponse: responseText 
-      }, { status: 500 });
+    if (!GEMINI_API_KEY) {
+      return NextResponse.json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
     }
 
-    // 既知の誤認識パターンを修正
-    recognized.name = correctKnownErrors(recognized.name);
+    let base64Data = imageBase64
+    let detectedMimeType = mimeType
 
-    // DBマッチングが不要な場合
-    if (!matchWithDb) {
-      return NextResponse.json({
-        success: true,
-        ...recognized,
-        matched: false
-      });
-    }
-
-    // DBからカード一覧を取得
-    const { data: dbCards, error: dbError } = await supabase
-      .from('cards')
-      .select(`
-        id,
-        name,
-        card_number,
-        image_url,
-        rarity_id,
-        rarities (
-          name
-        )
-      `);
-
-    if (dbError) {
-      return NextResponse.json({
-        success: true,
-        ...recognized,
-        matched: false,
-        dbError: dbError.message
-      });
-    }
-
-    // あいまい検索で候補を取得
-    const candidates = findSimilarCards(
-      recognized.name,
-      (dbCards || []) as any[],
-      { threshold: 50, maxResults: 5 }
-    );
-
-    // カード番号でも検索
-    if (recognized.cardNumber) {
-      const numberMatch = dbCards?.find(c => c.card_number === recognized.cardNumber);
-      if (numberMatch && !candidates.find(c => c.id === numberMatch.id)) {
-        candidates.unshift({
-          id: numberMatch.id,
-          name: numberMatch.name,
-          cardNumber: numberMatch.card_number,
-          rarity: (numberMatch.rarities as any)?.name,
-          imageUrl: numberMatch.image_url,
-          similarity: 100,
-          isExactMatch: true
-        });
+    // URLから画像を取得
+    if (imageUrl && !imageBase64) {
+      console.log('Fetching image from URL:', imageUrl)
+      const imageResponse = await fetch(imageUrl)
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to fetch image: ${imageResponse.status}`)
       }
+      const contentType = imageResponse.headers.get('content-type')
+      if (contentType) {
+        detectedMimeType = contentType.split(';')[0]
+      }
+      const arrayBuffer = await imageResponse.arrayBuffer()
+      base64Data = Buffer.from(arrayBuffer).toString('base64')
     }
 
-    const bestMatch = candidates[0] || null;
-    const isAutoMatch = bestMatch && bestMatch.similarity >= 85;
+    // ツイートテキストからPSA判定
+    const PSA_KEYWORDS = ['PSA', 'psa', 'PSA10', 'PSA9', 'PSA8', '鑑定', 'グレーディング', 'BGS', 'CGC']
+    const isPsaFromText = tweetText ? PSA_KEYWORDS.some(kw => tweetText.includes(kw)) : false
+
+    let additionalContext = ''
+    if (tweetText) additionalContext += `ツイート本文: "${tweetText}"\n`
+    if (isPsaFromText) additionalContext += 'このツイートはPSA等の鑑定品に関するものと思われます。'
+
+    // Step 1: Gemini API呼び出し（画像認識）
+    console.log('Step 1: Calling Gemini API for image recognition...')
+    const geminiResponse = await callGemini(base64Data, detectedMimeType, additionalContext)
+
+    const responseText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!responseText) throw new Error('No response from Gemini')
+
+    console.log('Gemini response:', responseText)
+    const result = extractJSON(responseText)
+
+    if (isPsaFromText && !result.is_psa) {
+      result.is_psa = true
+      result.psa_info = result.psa_info || { detected: true, grades_found: [] }
+      result.psa_info.detected = true
+    }
+
+    // Step 2: Grounding で各カード情報を補完
+    if (enableGrounding && result.cards && result.cards.length > 0) {
+      console.log(`Step 2: Enriching ${result.cards.length} cards with Grounding...`)
+      
+      const enrichedCards = []
+      for (let i = 0; i < result.cards.length; i += groundingConcurrency) {
+        const batch = result.cards.slice(i, i + groundingConcurrency)
+        const batchResults = await Promise.all(
+          batch.map(async (card: any) => {
+            const grounding = await enrichWithGrounding(card, result.is_psa)
+            return { ...card, grounding: grounding || null }
+          })
+        )
+        enrichedCards.push(...batchResults)
+        
+        if (i + groundingConcurrency < result.cards.length) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+      
+      result.cards = enrichedCards
+      
+      const groundingSuccess = enrichedCards.filter((c: any) => c.grounding?.confidence === 'high').length
+      result.grounding_stats = {
+        total: enrichedCards.length,
+        high_confidence: groundingSuccess,
+        success_rate: Math.round((groundingSuccess / enrichedCards.length) * 100)
+      }
+      
+      console.log(`Grounding complete: ${groundingSuccess}/${enrichedCards.length} high confidence`)
+    }
+
+    // 店舗情報を追加
+    if (shopId) {
+      const { data: shop } = await supabase
+        .from('purchase_shops')
+        .select('name')
+        .eq('id', shopId)
+        .single()
+      
+      if (shop) result.shop = { id: shopId, name: shop.name }
+    }
 
     return NextResponse.json({
       success: true,
-      ...recognized,
-      matched: true,
-      matchedCard: isAutoMatch ? bestMatch : null,
-      candidates,
-      needsReview: !isAutoMatch && candidates.length > 0
-    });
+      data: result,
+      meta: {
+        imageSource: imageUrl ? 'url' : 'base64',
+        isPsaFromTweet: isPsaFromText,
+        tweetText: tweetText || null,
+        groundingEnabled: enableGrounding
+      }
+    })
 
-  } catch (error) {
-    console.error('Recognition error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : '認識に失敗しました' },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error('Recognition error:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
+}
+
+// GET: テスト用
+export async function GET() {
+  return NextResponse.json({
+    message: 'Purchase Price Recognition API',
+    version: '2.0 (with Grounding)',
+    usage: {
+      method: 'POST',
+      body: {
+        imageBase64: 'base64 encoded image (optional if imageUrl provided)',
+        imageUrl: 'URL of image (optional if imageBase64 provided)',
+        mimeType: 'image/jpeg or image/png (default: image/jpeg)',
+        tweetText: 'Tweet text for PSA detection (optional)',
+        shopId: 'Shop ID (optional)',
+        enableGrounding: 'Enable Google Search grounding (default: true)',
+        groundingConcurrency: 'Parallel grounding requests (default: 5)'
+      }
+    }
+  })
 }
