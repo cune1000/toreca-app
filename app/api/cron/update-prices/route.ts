@@ -22,7 +22,7 @@ function verifyCronAuth(request: NextRequest): boolean {
 }
 
 // Railway経由でスクレイピング
-async function scrapeViaRailway(url: string, mode: string = 'auto') {
+async function scrapeViaRailway(url: string, mode: string = 'light') {
   if (!RAILWAY_URL) {
     throw new Error('RAILWAY_SCRAPER_URL is not configured')
   }
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
         }
 
         // スクレイピング実行
-        const scrapeResult = await scrapeViaRailway(site.url, 'auto')
+        const scrapeResult = await scrapeViaRailway(site.url, 'light')
         
         if (!scrapeResult.success) {
           results.errors++
