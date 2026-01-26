@@ -6,7 +6,7 @@ import fs from 'fs'
 
 export interface GoogleCredentialsConfig {
   keyFilename?: string
-  credentials?: any
+  credentials?: Record<string, any>
 }
 
 // Google Cloud認証情報を取得
@@ -37,7 +37,8 @@ let visionClient: any = null
 export async function getVisionClient() {
   if (!visionClient) {
     const vision = await import('@google-cloud/vision')
-    visionClient = new vision.ImageAnnotatorClient(getGoogleCredentials())
+    const creds = getGoogleCredentials()
+    visionClient = new vision.ImageAnnotatorClient(creds as any)
   }
   return visionClient
 }
@@ -48,7 +49,8 @@ let productSearchClient: any = null
 export async function getProductSearchClient() {
   if (!productSearchClient) {
     const vision = await import('@google-cloud/vision')
-    productSearchClient = new vision.ProductSearchClient(getGoogleCredentials())
+    const creds = getGoogleCredentials()
+    productSearchClient = new vision.ProductSearchClient(creds as any)
   }
   return productSearchClient
 }
