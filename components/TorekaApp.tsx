@@ -25,7 +25,12 @@ const supabase = createClient(
 )
 
 const TorekaApp = () => {
-  const [currentPage, setCurrentPage] = useState('dashboard')
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('toreca-currentPage') || 'dashboard'
+    }
+    return 'dashboard'
+  })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showCardForm, setShowCardForm] = useState(false)
   const [showShopForm, setShowShopForm] = useState(false)
@@ -55,6 +60,11 @@ const TorekaApp = () => {
     fetchSites()
     fetchPendingImages()
   }, [refresh])
+
+  // ページ変更時にlocalStorageに保存
+  useEffect(() => {
+    localStorage.setItem('toreca-currentPage', currentPage)
+  }, [currentPage])
 
   const fetchCards = async () => {
     const { data } = await supabase
