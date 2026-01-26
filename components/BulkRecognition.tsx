@@ -168,7 +168,7 @@ export default function BulkRecognition({
       const res = await fetch('/api/image-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: url }),
+        body: JSON.stringify({ url, returnBase64: true }),
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`image-proxy: ${res.status}`);
