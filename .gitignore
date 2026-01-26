@@ -42,3 +42,5 @@ next-env.d.ts
 
 google-credentials.json".next.zip" 
 "*.zip" 
+.next.zip 
+*.zip 
