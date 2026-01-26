@@ -151,7 +151,8 @@ async function enrichWithGrounding(card: any, isPsa: boolean): Promise<any> {
     })
 
     if (!response.ok) {
-      console.error(`Grounding API error for "${card.name}": ${response.status}`)
+      const errorBody = await response.text()
+      console.error(`Grounding API error for "${card.name}": ${response.status} - ${errorBody}`)
       return null
     }
 
