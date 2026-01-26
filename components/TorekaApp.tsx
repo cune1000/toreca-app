@@ -51,7 +51,7 @@ const TorekaApp = () => {
   
   // 選択状態
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null)
-  const [editingShop, setEditingShop] = useState<Shop | null>(null)
+  const [editingShop, setEditingShop] = useState<any>(null)  // ShopFormの型と互換性のためany
   const [selectedCard, setSelectedCard] = useState<CardWithRelations | null>(null)
   const [bulkRecognitionImage, setBulkRecognitionImage] = useState<{
     url?: string
