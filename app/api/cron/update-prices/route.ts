@@ -209,7 +209,17 @@ export async function GET(request: NextRequest) {
 
 // POST: 手動実行用
 export async function POST(request: NextRequest) {
-  const { limit = 10, forceUpdate = false } = await request.json()
+  // bodyが空でもエラーにならないように修正
+  let limit = 10
+  let forceUpdate = false
+  
+  try {
+    const body = await request.json()
+    limit = body.limit ?? 10
+    forceUpdate = body.forceUpdate ?? false
+  } catch {
+    // bodyが空の場合はデフォルト値を使用
+  }
   
   // GETと同じ処理を実行（認証スキップ）
   const startTime = Date.now()
@@ -267,7 +277,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const scrapeResult = await scrapeViaRailway(site.url, 'auto')
+        const scrapeResult = await scrapeViaRailway(site.url, 'light')
         
         if (!scrapeResult.success) {
           results.errors++
