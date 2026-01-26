@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
             name: card.name,
             cardNumber: card.card_number,
             imageUrl: card.image_url,
-            rarity: (card.rarities as { name: string } | null)?.name,
+            rarity: (card.rarities as any)?.name,
             similarity: Math.round(cosineSimilarity(queryEmbedding, card.embedding) * 100),
           }))
           .filter(card => card.similarity >= threshold)
