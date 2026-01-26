@@ -44,3 +44,6 @@ google-credentials.json".next.zip"
 "*.zip" 
 .next.zip 
 *.zip 
+google-credentials.json 
+*.zip 
+.next/ 
