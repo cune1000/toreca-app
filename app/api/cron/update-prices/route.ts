@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+// ★ Edge Runtime ではなく Node.js Runtime を強制
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -90,7 +94,12 @@ async function scrapeUrl(url: string): Promise<{
   try {
     const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
     
+    // ★ デバッグログ追加
+    console.log('[ENV] RAILWAY_SCRAPER_URL:', RAILWAY_URL ? 'SET' : 'NOT SET')
+    
     if (!RAILWAY_URL) {
+      console.error('[ENV] Missing RAILWAY_SCRAPER_URL - available keys:', 
+        Object.keys(process.env).filter(k => k.includes('RAILWAY') || k.includes('NEXT')).join(', '))
       throw new Error('RAILWAY_SCRAPER_URL is not configured')
     }
     
@@ -138,6 +147,9 @@ export async function GET(request: NextRequest) {
   }
   
   console.log('=== Starting smart price update cron ===')
+  
+  // ★ 起動時に環境変数をログ出力
+  console.log('[ENV CHECK] RAILWAY_SCRAPER_URL:', process.env.RAILWAY_SCRAPER_URL ? 'OK' : 'MISSING')
   
   const results = {
     processed: 0,
