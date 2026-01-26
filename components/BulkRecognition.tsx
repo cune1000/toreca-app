@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { X, Check, AlertCircle, Loader2, Search, Grid, Clock, Sparkles, Filter } from 'lucide-react';
+import { X, Check, AlertCircle, Loader2, Search, Clock, Sparkles, Filter } from 'lucide-react';
 
 // =============================================================================
 // Constants & Types
@@ -37,7 +37,6 @@ interface RecognizedCard {
   quantity?: number;
   name?: string;
   ocrText?: string;
-  bounding_box?: { x: number; y: number; width: number; height: number };
   matchedCard: CardCandidate | null;
   candidates: CardCandidate[];
   needsReview: boolean;
@@ -46,7 +45,6 @@ interface RecognizedCard {
 }
 
 interface Shop { id: string; name: string; }
-interface GridTemplate { id: string; name: string; shop_id?: string; }
 
 interface Props {
   imageUrl?: string;
@@ -71,21 +69,16 @@ export default function BulkRecognition({
   onClose,
   onCompleted,
 }: Props) {
-  // ---------------------------------------------------------------------------
   // State
-  // ---------------------------------------------------------------------------
   const [isMounted, setIsMounted] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [recognizedCards, setRecognizedCards] = useState<RecognizedCard[]>([]);
-  const [recognitionMethod, setRecognitionMethod] = useState<'gemini' | 'template' | 'ocr'>('gemini');
   const [globalCondition, setGlobalCondition] = useState('normal');
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShop, setSelectedShop] = useState(shop?.id || '');
-  const [templates, setTemplates] = useState<GridTemplate[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState('');
   const [searchModalIndex, setSearchModalIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<CardCandidate[]>([]);
@@ -95,19 +88,14 @@ export default function BulkRecognition({
   const [filterExpansion, setFilterExpansion] = useState('');
   const [rarities, setRarities] = useState<string[]>([]);
   const [expansions, setExpansions] = useState<string[]>([]);
-  const [hoveredCardIndex, setHoveredCardIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
 
-  // ---------------------------------------------------------------------------
   // Refs
-  // ---------------------------------------------------------------------------
   const abortRef = useRef<AbortController | null>(null);
   const lastUrlRef = useRef<string | null>(null);
 
-  // ---------------------------------------------------------------------------
   // Computed
-  // ---------------------------------------------------------------------------
   const stats = useMemo(() => ({
     total: recognizedCards.length,
     autoMatched: recognizedCards.filter(c => c.matchedCard && !c.excluded).length,
@@ -117,15 +105,10 @@ export default function BulkRecognition({
 
   const displayImage = image || imageUrl;
 
-  // ---------------------------------------------------------------------------
-  // Callbacks（useEffectより前に定義）
-  // ---------------------------------------------------------------------------
-  
-  // 画像をBase64に変換
+  // Callbacks
   const loadImageAsBase64 = useCallback(async (url: string) => {
     if (lastUrlRef.current === url) return;
     lastUrlRef.current = url;
-
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -151,7 +134,6 @@ export default function BulkRecognition({
     }
   }, []);
 
-  // カード検索
   const handleSearch = useCallback(async (query: string) => {
     if (!query || query.length < 2) {
       setSearchResults([]);
@@ -185,7 +167,6 @@ export default function BulkRecognition({
     }
   }, [filterRarity, filterExpansion]);
 
-  // 自動マッチング
   const autoMatchCards = useCallback(async (cards: RecognizedCard[]) => {
     setProgress('カードをマッチング中...');
     const updated = [...cards];
@@ -218,26 +199,14 @@ export default function BulkRecognition({
     setProgress('');
   }, []);
 
-  // ---------------------------------------------------------------------------
   // Effects
-  // ---------------------------------------------------------------------------
-
-  // マウント確認
   useEffect(() => { setIsMounted(true); }, []);
 
-  // 店舗一覧取得
   useEffect(() => {
     supabase.from('purchase_shops').select('id, name').order('name')
       .then(({ data }) => { if (data) setShops(data); });
   }, []);
 
-  // テンプレート一覧取得
-  useEffect(() => {
-    supabase.from('grid_templates').select('id, name, shop_id').order('name')
-      .then(({ data }) => { if (data) setTemplates(data); });
-  }, []);
-
-  // フィルター用リスト取得
   useEffect(() => {
     const fetchFilters = async () => {
       const [{ data: r }, { data: e }] = await Promise.all([
@@ -250,7 +219,6 @@ export default function BulkRecognition({
     fetchFilters();
   }, []);
 
-  // 画像読み込み
   useEffect(() => {
     if (imageBase64) {
       setImage(imageBase64);
@@ -259,23 +227,18 @@ export default function BulkRecognition({
     }
   }, [imageUrl, imageBase64, loadImageAsBase64]);
 
-  // shop props
   useEffect(() => {
     if (shop?.id) setSelectedShop(shop.id);
   }, [shop]);
 
-  // デバウンス検索
   useEffect(() => {
     if (searchModalIndex === null) return;
     const timer = setTimeout(() => handleSearch(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery, searchModalIndex, handleSearch]);
 
-  // ---------------------------------------------------------------------------
-  // Handlers - Recognition
-  // ---------------------------------------------------------------------------
-
-  const handleGeminiRecognize = async () => {
+  // Handlers
+  const handleRecognize = async () => {
     if (!image && !imageUrl) return;
     setIsRecognizing(true);
     setError(null);
@@ -300,7 +263,6 @@ export default function BulkRecognition({
         quantity: c.quantity,
         name: c.name,
         ocrText: c.raw_text,
-        bounding_box: c.bounding_box,
         matchedCard: null,
         candidates: [],
         needsReview: true,
@@ -318,58 +280,6 @@ export default function BulkRecognition({
       setIsRecognizing(false);
     }
   };
-
-  const handleTemplateRecognize = async () => {
-    if (!image) return;
-    setIsRecognizing(true);
-    setProgress('テンプレートで切り抜き中...');
-    try {
-      const res = await fetch('/api/recognize-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, templateId: selectedTemplate, autoMatchThreshold: 70 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setRecognizedCards(data.cards.map((c: any) => ({ ...c, condition: globalCondition })));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '認識に失敗しました');
-    } finally {
-      setIsRecognizing(false);
-      setProgress('');
-    }
-  };
-
-  const handleOcrRecognize = async () => {
-    if (!image) return;
-    setIsRecognizing(true);
-    setProgress('OCRで解析中...');
-    try {
-      const res = await fetch('/api/recognize-ocr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, autoMatchThreshold: 80 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setRecognizedCards(data.cards.map((c: any) => ({ ...c, condition: globalCondition })));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '認識に失敗しました');
-    } finally {
-      setIsRecognizing(false);
-      setProgress('');
-    }
-  };
-
-  const handleRecognize = () => {
-    if (recognitionMethod === 'gemini') handleGeminiRecognize();
-    else if (recognitionMethod === 'template' && selectedTemplate) handleTemplateRecognize();
-    else handleOcrRecognize();
-  };
-
-  // ---------------------------------------------------------------------------
-  // Handlers - Card Operations
-  // ---------------------------------------------------------------------------
 
   const handleSelectFromSearch = (candidate: CardCandidate) => {
     if (searchModalIndex === null) return;
@@ -415,10 +325,6 @@ export default function BulkRecognition({
     setRecognizedCards(prev => prev.map(c => ({ ...c, condition: globalCondition })));
   };
 
-  // ---------------------------------------------------------------------------
-  // Handlers - Save
-  // ---------------------------------------------------------------------------
-
   const handleSave = async () => {
     if (!selectedShop) return setError('店舗を選択してください');
     const toSave = recognizedCards.filter(c => !c.excluded && c.matchedCard && c.price);
@@ -449,34 +355,7 @@ export default function BulkRecognition({
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
-  const getBoundingBoxStyle = (
-    bbox: RecognizedCard['bounding_box'],
-    isHovered: boolean,
-    isMatched: boolean
-  ): React.CSSProperties => {
-    if (!bbox) return {};
-    const s = 1000;
-    return {
-      position: 'absolute',
-      left: `${(bbox.x / s) * 100}%`,
-      top: `${(bbox.y / s) * 100}%`,
-      width: `${(bbox.width / s) * 100}%`,
-      height: `${(bbox.height / s) * 100}%`,
-      border: isMatched ? '3px solid #22c55e' : isHovered ? '3px solid #eab308' : '2px solid #3b82f6',
-      backgroundColor: isMatched ? 'rgba(34,197,94,0.2)' : isHovered ? 'rgba(234,179,8,0.3)' : 'rgba(59,130,246,0.1)',
-      cursor: 'pointer',
-      transition: 'all 0.2s',
-    };
-  };
-
-  // ---------------------------------------------------------------------------
   // Render
-  // ---------------------------------------------------------------------------
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
       <div className="bg-white rounded-2xl w-[95vw] h-[90vh] flex flex-col overflow-hidden">
@@ -509,42 +388,11 @@ export default function BulkRecognition({
         {/* Main */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left: Image */}
-          <div className="w-1/2 p-4 border-r overflow-auto bg-gray-50">
-            {/* 認識方法 */}
-            <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={18} className="text-purple-600" />
-                <span className="font-bold text-purple-700">認識方法</span>
-              </div>
-              <div className="flex gap-2">
-                {(['gemini', 'template', 'ocr'] as const).map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setRecognitionMethod(m)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      recognitionMethod === m ? 'bg-purple-500 text-white' : 'bg-white border hover:bg-purple-50'
-                    }`}
-                  >
-                    {m === 'gemini' ? '🤖 Gemini AI' : m === 'template' ? '📐 テンプレート' : '📝 OCR'}
-                  </button>
-                ))}
-              </div>
-              {recognitionMethod === 'template' && (
-                <select
-                  value={selectedTemplate}
-                  onChange={e => setSelectedTemplate(e.target.value)}
-                  className="w-full mt-2 px-3 py-2 border rounded-lg"
-                >
-                  <option value="">テンプレートを選択...</option>
-                  {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              )}
-            </div>
-
+          <div className="w-1/3 p-4 border-r overflow-auto bg-gray-50">
             {/* 状態一括設定 */}
             <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-blue-700 text-sm">カード状態（一括設定）</span>
+                <span className="font-bold text-blue-700 text-sm">カード状態</span>
                 <button
                   onClick={applyGlobalCondition}
                   className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -552,7 +400,7 @@ export default function BulkRecognition({
                   全カードに適用
                 </button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {CONDITION_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
@@ -569,29 +417,15 @@ export default function BulkRecognition({
               </div>
             </div>
 
-            {/* 画像 */}
+            {/* 画像（参照用） */}
             {displayImage ? (
               <div className="relative">
                 <img src={displayImage} alt="買取表" className="w-full rounded-lg shadow-lg" />
-                {recognizedCards.map((card, idx) => card.bounding_box && (
-                  <div
-                    key={idx}
-                    style={getBoundingBoxStyle(card.bounding_box, hoveredCardIndex === idx, !!card.matchedCard)}
-                    onClick={() => setSearchModalIndex(idx)}
-                    onMouseEnter={() => setHoveredCardIndex(idx)}
-                    onMouseLeave={() => setHoveredCardIndex(null)}
-                  >
-                    <span className="absolute -top-5 left-0 text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold">
-                      {idx + 1}
-                    </span>
-                  </div>
-                ))}
                 {!recognizedCards.length && !isRecognizing && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-lg">
                     <button
                       onClick={handleRecognize}
-                      disabled={recognitionMethod === 'template' && !selectedTemplate}
-                      className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2 shadow-lg disabled:opacity-50"
+                      className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2 shadow-lg"
                     >
                       <Sparkles size={20} />
                       認識開始
@@ -613,7 +447,7 @@ export default function BulkRecognition({
           </div>
 
           {/* Right: Results */}
-          <div className="w-1/2 flex flex-col overflow-hidden">
+          <div className="w-2/3 flex flex-col overflow-hidden">
             {/* 店舗選択 & 保存 */}
             <div className="p-4 border-b flex items-center gap-4 flex-shrink-0">
               <select
@@ -649,38 +483,34 @@ export default function BulkRecognition({
             {/* Card List */}
             <div className="flex-1 overflow-auto p-4">
               {recognizedCards.length > 0 ? (
-                <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
                   {recognizedCards.filter(c => !c.excluded).map(card => (
                     <div
                       key={card.index}
-                      className={`p-3 border rounded-lg transition-colors ${
-                        hoveredCardIndex === card.index ? 'border-yellow-500 bg-yellow-50' : ''
-                      } ${card.matchedCard ? 'border-green-300 bg-green-50' : 'bg-white'}`}
-                      onMouseEnter={() => setHoveredCardIndex(card.index)}
-                      onMouseLeave={() => setHoveredCardIndex(null)}
+                      className={`p-3 border rounded-lg ${card.matchedCard ? 'border-green-300 bg-green-50' : 'bg-white'}`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                        <div className="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
                           {card.index + 1}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium truncate">{card.name || '不明'}</span>
+                            <span className="font-medium text-sm truncate">{card.name || '不明'}</span>
                             {card.quantity && <span className="text-xs text-gray-500">{card.quantity}枚</span>}
                           </div>
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="text-gray-500">¥</span>
+                            <span className="text-gray-500 text-sm">¥</span>
                             <input
                               type="number"
                               value={card.price || ''}
                               onChange={e => handlePriceChange(card.index, e.target.value)}
-                              className="w-28 px-2 py-1 border rounded text-right font-bold"
+                              className="w-24 px-2 py-1 border rounded text-right font-bold text-sm"
                               placeholder="価格"
                             />
                             <select
                               value={card.condition}
                               onChange={e => handleConditionChange(card.index, e.target.value)}
-                              className={`px-2 py-1 rounded text-sm font-medium ${
+                              className={`px-2 py-1 rounded text-xs font-medium ${
                                 CONDITION_OPTIONS.find(o => o.value === card.condition)?.color || ''
                               }`}
                             >
@@ -692,13 +522,12 @@ export default function BulkRecognition({
                           {card.matchedCard ? (
                             <div className="flex items-center gap-2 p-2 bg-green-100 rounded">
                               {card.matchedCard.imageUrl && (
-                                <img src={card.matchedCard.imageUrl} alt="" className="w-10 h-14 object-cover rounded" />
+                                <img src={card.matchedCard.imageUrl} alt="" className="w-8 h-11 object-cover rounded" />
                               )}
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-green-700 truncate">{card.matchedCard.name}</p>
-                                <p className="text-xs text-green-600">
-                                  {[card.matchedCard.cardNumber, card.matchedCard.rarity, card.matchedCard.expansion]
-                                    .filter(Boolean).join(' / ')}
+                                <p className="text-xs font-medium text-green-700 truncate">{card.matchedCard.name}</p>
+                                <p className="text-xs text-green-600 truncate">
+                                  {[card.matchedCard.cardNumber, card.matchedCard.rarity].filter(Boolean).join(' / ')}
                                 </p>
                               </div>
                               <button onClick={() => handleClearMatch(card.index)} className="text-xs text-red-500 hover:underline">
@@ -706,21 +535,21 @@ export default function BulkRecognition({
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <button
                                 onClick={() => setSearchModalIndex(card.index)}
-                                className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                               >
-                                <Search size={14} />カードを検索
+                                <Search size={12} />検索
                               </button>
                               {card.candidates.slice(0, 3).map((c, i) => (
                                 <button
                                   key={i}
                                   onClick={() => handleSelectCandidate(card.index, c)}
-                                  className="p-1 border rounded hover:bg-blue-50"
+                                  className="p-0.5 border rounded hover:bg-blue-50"
                                   title={c.name}
                                 >
-                                  {c.imageUrl && <img src={c.imageUrl} alt="" className="w-8 h-10 object-cover rounded" />}
+                                  {c.imageUrl && <img src={c.imageUrl} alt="" className="w-6 h-8 object-cover rounded" />}
                                 </button>
                               ))}
                             </div>
@@ -731,7 +560,7 @@ export default function BulkRecognition({
                           className="p-1 text-gray-400 hover:text-red-500"
                           title="除外"
                         >
-                          <X size={18} />
+                          <X size={16} />
                         </button>
                       </div>
                     </div>
