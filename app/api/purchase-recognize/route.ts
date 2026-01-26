@@ -10,31 +10,42 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 // Gemini API呼び出し
 async function callGemini(imageBase64: string, mimeType: string, additionalContext?: string) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key=${GEMINI_API_KEY}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
   
   const prompt = `この画像はトレーディングカードの買取価格表です。
-画像から以下の情報を抽出してJSON形式で返してください。
 
 ${additionalContext ? `追加情報: ${additionalContext}` : ''}
 
-抽出する情報:
-1. カード名（日本語）
-2. 買取価格（数値のみ、カンマなし）
-3. 状態やランク（あれば）
+【指示】
+1. まず画像のレイアウト構造を分析してください（グリッド形式、リスト形式など）
+2. 左上から右へ、上から下へ順番にすべてのカードを読み取ってください
+
+各カードについて以下を抽出:
+- カード名: カード画像の近くに書かれた名前。読めない場合はイラストの特徴で記述
+  （例：ポンチョピカチュウ、リザードンex、マオ＆スイレン、ナンジャモ等）
+- 買取枚数: 「○枚」と書かれた数字（あれば）
+- 買取価格: 金額（数値のみ、カンマなし）
 
 以下のJSON形式で返してください。必ずJSONのみを返し、他のテキストは含めないでください:
 {
   "cards": [
     {
-      "name": "カード名",
-      "price": 12345,
-      "condition": "状態（あれば）",
-      "raw_text": "元のテキスト"
+      "index": 1,
+      "name": "カード名またはイラスト特徴",
+      "quantity": 20,
+      "price": 300000,
+      "raw_text": "読み取れた元のテキスト"
     }
   ],
+  "layout": {
+    "type": "grid",
+    "rows": 6,
+    "cols": 8,
+    "total_detected": 48
+  },
   "shop_info": {
-    "detected_shop_name": "店舗名（検出できれば）",
-    "date": "日付（検出できれば）"
+    "name": "店舗名",
+    "date": "日付"
   },
   "is_psa": false,
   "psa_info": {
@@ -43,12 +54,11 @@ ${additionalContext ? `追加情報: ${additionalContext}` : ''}
   }
 }
 
-注意:
-- PSA、BGS、CGC等の鑑定品の場合は is_psa を true にし、psa_info.detected を true にしてください
-- 鑑定品の場合、グレード（10, 9, 8等）も psa_info.grades_found に含めてください
-- 価格は数値のみ（例: 50000）
-- 読み取れない部分は null にしてください
-- カード名は正確に読み取ってください`
+重要:
+- PSA、BGS、CGC等の鑑定品の場合は is_psa を true に
+- 価格は数値のみ（例: 300000）
+- カード名が読めなくても、イラストの特徴（キャラクター、衣装、ポーズ）で識別
+- すべてのカードを漏れなく抽出してください`
 
   const response = await fetch(url, {
     method: 'POST',
