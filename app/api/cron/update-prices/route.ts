@@ -22,6 +22,11 @@ function getNextInterval(currentInterval: number, changed: boolean): number {
   return INTERVALS[currentIndex + 1]
 }
 
+// 0〜15分のランダムな揺らぎ（ミリ秒）
+function getJitter(): number {
+  return Math.floor(Math.random() * 15 * 60 * 1000)
+}
+
 // 日本時間で現在の曜日と時刻を取得
 function getJapanTime(): { dayOfWeek: number; time: string; date: Date } {
   const now = new Date()
@@ -205,8 +210,8 @@ export async function GET(request: NextRequest) {
         console.log(`Result: price=${price}, stock=${stock}, mode=${mode}, error=${error}`)
         
         if (error) {
-          // エラー：30分後にリトライ
-          let nextCheck = new Date(Date.now() + 30 * 60 * 1000)
+          // エラー：30分後にリトライ（+揺らぎ）
+          let nextCheck = new Date(Date.now() + 30 * 60 * 1000 + getJitter())
           nextCheck = await adjustForRestTime(nextCheck)
           
           await supabase
@@ -237,7 +242,7 @@ export async function GET(request: NextRequest) {
           
           const currentInterval = saleUrl.check_interval || 30
           const nextInterval = getNextInterval(currentInterval, changed)
-          let nextCheck = new Date(Date.now() + nextInterval * 60 * 1000)
+          let nextCheck = new Date(Date.now() + nextInterval * 60 * 1000 + getJitter())
           nextCheck = await adjustForRestTime(nextCheck)
           
           await supabase
