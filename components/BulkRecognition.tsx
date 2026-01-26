@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { X, Check, AlertCircle, Loader2, Image, Search, Plus, Grid, Clock, Trash2, Inbox, Sparkles, Filter } from 'lucide-react';
 
@@ -117,6 +117,18 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, tweetTime
   
   // ホバー中のカードインデックス
   const [hoveredCardIndex, setHoveredCardIndex] = useState<number | null>(null);
+  
+  // Hydration Error対策：クライアントマウント確認
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // 重複リクエスト防止用
+  const inflightRef = useRef<AbortController | null>(null);
+  const lastUrlRef = useRef<string | null>(null);
+
+  // クライアントマウント確認
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 店舗一覧を取得
   useEffect(() => {
@@ -167,16 +179,21 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, tweetTime
     fetchFilters();
   }, []);
 
-  // 画像の読み込み
+  // 画像の読み込み（整理済み）
   useEffect(() => {
+    if (!imageUrl && !imageBase64) return;
+    
     if (imageBase64) {
       setImage(imageBase64);
       setImageForOverlay(imageBase64);
-    } else if (imageUrl) {
-      convertUrlToBase64(imageUrl);
-      setImageForOverlay(imageUrl);
+      return;
     }
-  }, [imageUrl, imageBase64]);
+    
+    if (imageUrl) {
+      setImageForOverlay(imageUrl);
+      convertUrlToBase64(imageUrl);
+    }
+  }, [imageUrl, imageBase64, convertUrlToBase64]);
 
   // shopが渡された場合
   useEffect(() => {
@@ -185,25 +202,39 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, tweetTime
     }
   }, [shop]);
 
-  // URLからBase64に変換
-  const convertUrlToBase64 = async (url: string) => {
+  // URLからBase64に変換（重複防止付き）
+  const convertUrlToBase64 = useCallback(async (url: string) => {
+    // 同じURLを連打しない
+    if (lastUrlRef.current === url) return;
+    lastUrlRef.current = url;
+
+    // 前のリクエストをキャンセル
+    inflightRef.current?.abort();
+    const ac = new AbortController();
+    inflightRef.current = ac;
+
     try {
       const response = await fetch('/api/image-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageUrl: url }),
+        signal: ac.signal,
       });
+      
+      if (!response.ok) throw new Error(`image-proxy failed: ${response.status}`);
       const data = await response.json();
+      
       if (data.success && data.base64) {
         setImage(data.base64);
       } else {
         throw new Error('Failed to load image');
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
       console.error('画像変換エラー:', err);
       setError('画像の読み込みに失敗しました');
     }
-  };
+  }, []);
 
   // Gemini認識
   const handleGeminiRecognize = async () => {
@@ -597,7 +628,7 @@ export default function BulkRecognition({ imageUrl, imageBase64, shop, tweetTime
               <Sparkles size={24} className="text-purple-500" />
               買取表認識
             </h2>
-            {tweetTime && (
+            {isMounted && tweetTime && (
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Clock size={16} />
                 <span>{new Date(tweetTime).toLocaleString('ja-JP')}</span>
