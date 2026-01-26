@@ -292,7 +292,7 @@ export default function BulkRecognition({
     setSaveResult(null);
     
     try {
-      const res = await fetch('/api/purchase-recognize', {
+      const res = await fetch('/api/recognize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
