@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { X, Check, AlertCircle, Loader2, Search, Clock, Sparkles, Filter } from 'lucide-react';
+import { X, Check, AlertCircle, Loader2, Search, Clock, Sparkles, Filter, Globe } from 'lucide-react';
 
 // =============================================================================
 // Constants & Types
@@ -31,6 +31,18 @@ interface CardCandidate {
   isExactMatch: boolean;
 }
 
+// Grounding情報の型定義
+interface GroundingInfo {
+  official_name?: string;
+  card_number?: string;
+  expansion?: string;
+  rarity?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  notes?: string;
+  search_queries?: string[];
+  sources?: { url: string; title: string }[];
+}
+
 interface RecognizedCard {
   index: number;
   price?: number;
@@ -42,6 +54,7 @@ interface RecognizedCard {
   needsReview: boolean;
   excluded?: boolean;
   condition: string;
+  grounding?: GroundingInfo | null;  // ← Grounding情報追加
 }
 
 interface Shop { id: string; name: string; }
@@ -90,6 +103,7 @@ export default function BulkRecognition({
   const [expansions, setExpansions] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
+  const [groundingStats, setGroundingStats] = useState<{ total: number; high_confidence: number; success_rate: number } | null>(null);
 
   // Refs
   const abortRef = useRef<AbortController | null>(null);
@@ -167,32 +181,97 @@ export default function BulkRecognition({
     }
   }, [filterRarity, filterExpansion]);
 
+  // Grounding情報を活用した改良版マッチング
   const autoMatchCards = useCallback(async (cards: RecognizedCard[]) => {
     setProgress('カードをマッチング中...');
     const updated = [...cards];
     
     for (const card of updated) {
-      if (!card.name) continue;
-      const { data } = await supabase
-        .from('cards')
-        .select('id, name, image_url, card_number, rarity, expansion')
-        .ilike('name', `%${card.name}%`)
-        .limit(5);
+      // 1. まずGrounding情報の型番で検索（最も精度が高い）
+      if (card.grounding?.card_number) {
+        const { data } = await supabase
+          .from('cards')
+          .select('id, name, image_url, card_number, rarity, expansion')
+          .ilike('card_number', `%${card.grounding.card_number}%`)
+          .limit(5);
 
-      if (data?.length) {
-        const candidates: CardCandidate[] = data.map(c => ({
-          id: c.id,
-          name: c.name,
-          cardNumber: c.card_number,
-          imageUrl: c.image_url,
-          rarity: c.rarity,
-          expansion: c.expansion,
-          similarity: c.name.toLowerCase() === card.name?.toLowerCase() ? 100 : 80,
-          isExactMatch: c.name.toLowerCase() === card.name?.toLowerCase(),
-        }));
-        card.candidates = candidates;
-        card.matchedCard = candidates[0].similarity >= 90 ? candidates[0] : null;
-        card.needsReview = candidates[0].similarity < 90;
+        if (data?.length) {
+          const candidates: CardCandidate[] = data.map(c => ({
+            id: c.id,
+            name: c.name,
+            cardNumber: c.card_number,
+            imageUrl: c.image_url,
+            rarity: c.rarity,
+            expansion: c.expansion,
+            similarity: c.card_number === card.grounding?.card_number ? 100 : 90,
+            isExactMatch: c.card_number === card.grounding?.card_number,
+          }));
+          card.candidates = candidates;
+          // 型番完全一致なら自動マッチ
+          const exactMatch = candidates.find(c => c.isExactMatch);
+          if (exactMatch) {
+            card.matchedCard = exactMatch;
+            card.needsReview = false;
+            continue;
+          }
+        }
+      }
+
+      // 2. Grounding情報の正式名称で検索
+      if (card.grounding?.official_name) {
+        const { data } = await supabase
+          .from('cards')
+          .select('id, name, image_url, card_number, rarity, expansion')
+          .ilike('name', `%${card.grounding.official_name}%`)
+          .limit(5);
+
+        if (data?.length) {
+          const candidates: CardCandidate[] = data.map(c => ({
+            id: c.id,
+            name: c.name,
+            cardNumber: c.card_number,
+            imageUrl: c.image_url,
+            rarity: c.rarity,
+            expansion: c.expansion,
+            similarity: c.name.toLowerCase() === card.grounding?.official_name?.toLowerCase() ? 100 : 85,
+            isExactMatch: c.name.toLowerCase() === card.grounding?.official_name?.toLowerCase(),
+          }));
+          // 既存候補とマージ
+          const existingIds = new Set(card.candidates.map(c => c.id));
+          card.candidates = [...card.candidates, ...candidates.filter(c => !existingIds.has(c.id))];
+          
+          if (!card.matchedCard && candidates[0]?.similarity >= 90) {
+            card.matchedCard = candidates[0];
+            card.needsReview = false;
+            continue;
+          }
+        }
+      }
+
+      // 3. 元の認識名で検索（フォールバック）
+      if (!card.matchedCard && card.name) {
+        const { data } = await supabase
+          .from('cards')
+          .select('id, name, image_url, card_number, rarity, expansion')
+          .ilike('name', `%${card.name}%`)
+          .limit(5);
+
+        if (data?.length) {
+          const candidates: CardCandidate[] = data.map(c => ({
+            id: c.id,
+            name: c.name,
+            cardNumber: c.card_number,
+            imageUrl: c.image_url,
+            rarity: c.rarity,
+            expansion: c.expansion,
+            similarity: c.name.toLowerCase() === card.name?.toLowerCase() ? 100 : 80,
+            isExactMatch: c.name.toLowerCase() === card.name?.toLowerCase(),
+          }));
+          const existingIds = new Set(card.candidates.map(c => c.id));
+          card.candidates = [...card.candidates, ...candidates.filter(c => !existingIds.has(c.id))];
+          card.matchedCard = candidates[0]?.similarity >= 90 ? candidates[0] : null;
+          card.needsReview = !card.matchedCard;
+        }
       }
     }
     setRecognizedCards(updated);
@@ -237,6 +316,15 @@ export default function BulkRecognition({
     return () => clearTimeout(timer);
   }, [searchQuery, searchModalIndex, handleSearch]);
 
+  // 検索モーダルを開くときにGrounding情報があれば初期値にセット
+  const openSearchModal = (idx: number) => {
+    const card = recognizedCards[idx];
+    // Grounding情報があれば型番や正式名称を初期クエリに
+    const initialQuery = card.grounding?.card_number || card.grounding?.official_name || card.name || '';
+    setSearchQuery(initialQuery);
+    setSearchModalIndex(idx);
+  };
+
   // Handlers
   const handleRecognize = async () => {
     if (!image && !imageUrl) return;
@@ -252,10 +340,16 @@ export default function BulkRecognition({
           imageBase64: image?.startsWith('data:') ? image.split(',')[1] : image,
           imageUrl,
           tweetText: tweetUrl || '',
+          enableGrounding: true,  // Grounding有効
         }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || '認識に失敗しました');
+
+      // Grounding統計を保存
+      if (data.data.grounding_stats) {
+        setGroundingStats(data.data.grounding_stats);
+      }
 
       const cards: RecognizedCard[] = data.data.cards.map((c: any, i: number) => ({
         index: i,
@@ -267,11 +361,12 @@ export default function BulkRecognition({
         candidates: [],
         needsReview: true,
         condition: data.data.is_psa ? 'psa' : 'normal',
+        grounding: c.grounding || null,  // ← Grounding情報を保存
       }));
 
       if (data.data.is_psa) setGlobalCondition('psa');
       setRecognizedCards(cards);
-      setProgress('');
+      setProgress('カード情報を検索中...');
       await autoMatchCards(cards);
     } catch (err) {
       setError(err instanceof Error ? err.message : '認識に失敗しました');
@@ -377,6 +472,15 @@ export default function BulkRecognition({
                 <span className="text-gray-600">{stats.total}件</span>
                 <span className="text-green-600">{stats.autoMatched}マッチ</span>
                 <span className="text-yellow-600">{stats.needsReview}要確認</span>
+              </div>
+            )}
+            {/* Grounding統計表示 */}
+            {groundingStats && (
+              <div className="flex items-center gap-2 text-sm bg-blue-50 px-3 py-1 rounded-full">
+                <Globe size={14} className="text-blue-500" />
+                <span className="text-blue-700">
+                  Grounding: {groundingStats.success_rate}% ({groundingStats.high_confidence}/{groundingStats.total})
+                </span>
               </div>
             )}
           </div>
@@ -498,6 +602,35 @@ export default function BulkRecognition({
                             <span className="font-medium text-sm truncate">{card.name || '不明'}</span>
                             {card.quantity && <span className="text-xs text-gray-500">{card.quantity}枚</span>}
                           </div>
+                          
+                          {/* Grounding情報表示 */}
+                          {card.grounding && card.grounding.confidence && (
+                            <div className={`mb-2 p-1.5 rounded text-xs ${
+                              card.grounding.confidence === 'high' 
+                                ? 'bg-blue-50 border border-blue-200' 
+                                : card.grounding.confidence === 'medium'
+                                ? 'bg-yellow-50 border border-yellow-200'
+                                : 'bg-gray-50 border border-gray-200'
+                            }`}>
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <Globe size={10} className={
+                                  card.grounding.confidence === 'high' ? 'text-blue-500' :
+                                  card.grounding.confidence === 'medium' ? 'text-yellow-500' : 'text-gray-400'
+                                } />
+                                <span className={`font-medium ${
+                                  card.grounding.confidence === 'high' ? 'text-blue-700' :
+                                  card.grounding.confidence === 'medium' ? 'text-yellow-700' : 'text-gray-600'
+                                }`}>
+                                  {card.grounding.official_name || card.name}
+                                </span>
+                              </div>
+                              <div className="text-gray-500 truncate">
+                                {[card.grounding.card_number, card.grounding.rarity, card.grounding.expansion]
+                                  .filter(Boolean).join(' / ')}
+                              </div>
+                            </div>
+                          )}
+
                           <div className="flex items-center gap-2 mb-2">
                             <span className="text-gray-500 text-sm">¥</span>
                             <input
@@ -537,7 +670,7 @@ export default function BulkRecognition({
                           ) : (
                             <div className="flex items-center gap-1 flex-wrap">
                               <button
-                                onClick={() => setSearchModalIndex(card.index)}
+                                onClick={() => openSearchModal(card.index)}
                                 className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                               >
                                 <Search size={12} />検索
@@ -629,10 +762,22 @@ export default function BulkRecognition({
                 </div>
               )}
 
-              {recognizedCards[searchModalIndex]?.name && (
+              {/* 認識結果 + Grounding情報 */}
+              {recognizedCards[searchModalIndex] && (
                 <div className="mb-3 p-2 bg-purple-50 rounded-lg text-sm">
-                  <span className="text-purple-600">認識結果: </span>
-                  <span className="font-medium">{recognizedCards[searchModalIndex].name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-purple-600">認識結果: </span>
+                    <span className="font-medium">{recognizedCards[searchModalIndex].name}</span>
+                  </div>
+                  {recognizedCards[searchModalIndex].grounding && (
+                    <div className="mt-1 flex items-center gap-2 text-xs text-blue-600">
+                      <Globe size={12} />
+                      <span>Grounding: {recognizedCards[searchModalIndex].grounding?.official_name}</span>
+                      {recognizedCards[searchModalIndex].grounding?.card_number && (
+                        <span className="text-gray-500">({recognizedCards[searchModalIndex].grounding?.card_number})</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
