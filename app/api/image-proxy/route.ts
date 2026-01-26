@@ -8,18 +8,19 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Twitter/X の画像URLの場合、Bearer Tokenを使う
-    const headers: HeadersInit = {}
-    
-    if (imageUrl.includes('pbs.twimg.com') || imageUrl.includes('ton.twitter.com')) {
-      const bearerToken = process.env.X_BEARER_TOKEN
-      if (bearerToken) {
-        headers['Authorization'] = `Bearer ${bearerToken}`
-      }
+    // ブラウザっぽいヘッダーを設定（403対策）
+    const headers: HeadersInit = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+      'Referer': 'https://twitter.com/',
     }
 
     // 画像を取得
-    const response = await fetch(imageUrl, { headers })
+    const response = await fetch(imageUrl, { 
+      headers,
+      cache: 'no-store',  // キャッシュ問題を回避
+    })
     
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.status}`)
