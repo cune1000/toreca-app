@@ -10,7 +10,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 // Gemini API呼び出し
 async function callGemini(imageBase64: string, mimeType: string, additionalContext?: string) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-pro:generateContent?key=${GEMINI_API_KEY}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`
   
   const prompt = `この画像はトレーディングカードの買取価格表です。
 画像から以下の情報を抽出してJSON形式で返してください。
