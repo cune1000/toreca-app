@@ -20,13 +20,21 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   const expansionInputRef = useRef<HTMLInputElement>(null)
   const rarityInputRef = useRef<HTMLInputElement>(null)
   
+  // rarityがオブジェクトの場合は文字列に変換
+  const getRarityString = (rarity: any): string => {
+    if (!rarity) return ''
+    if (typeof rarity === 'string') return rarity
+    if (typeof rarity === 'object' && rarity.name) return rarity.name
+    return ''
+  }
+
   const [form, setForm] = useState({
     name: card?.name || '',
     card_number: card?.card_number || '',
     category_large_id: card?.category_large_id || '',
     category_medium_id: card?.category_medium_id || '',
     rarity_id: card?.rarity_id || '',
-    rarity: card?.rarity || '',
+    rarity: getRarityString(card?.rarity),
     expansion: card?.expansion || '',
     image_url: card?.image_url || ''
   })
@@ -136,12 +144,12 @@ export default function CardEditForm({ card, onClose, onSaved }) {
 
   // 収録弾のフィルタリング
   const filteredExpansions = expansionSuggestions.filter(exp =>
-    exp.toLowerCase().includes(form.expansion.toLowerCase())
+    exp.toLowerCase().includes((form.expansion || '').toLowerCase())
   )
 
   // レアリティのフィルタリング
   const filteredRarities = raritySuggestions.filter(r =>
-    r.toLowerCase().includes(form.rarity.toLowerCase())
+    r.toLowerCase().includes((form.rarity || '').toLowerCase())
   )
 
   // 保存

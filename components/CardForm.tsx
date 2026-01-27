@@ -157,12 +157,12 @@ export default function CardForm({ onClose, onSaved }: Props) {
 
   // 収録弾のフィルタリング
   const filteredExpansions = expansionSuggestions.filter(exp =>
-    exp.toLowerCase().includes(form.expansion.toLowerCase())
+    exp.toLowerCase().includes((form.expansion || '').toLowerCase())
   )
 
   // レアリティのフィルタリング
   const filteredRarities = raritySuggestions.filter(r =>
-    r.toLowerCase().includes(form.rarity.toLowerCase())
+    r.toLowerCase().includes((form.rarity || '').toLowerCase())
   )
 
   const handleSubmit = async (e: React.FormEvent) => {
