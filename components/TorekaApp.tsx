@@ -51,13 +51,17 @@ const TorekaApp = () => {
   
   // 選択状態
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null)
-  const [editingShop, setEditingShop] = useState<any>(null)  // ShopFormの型と互換性のためany
+  const [editingShop, setEditingShop] = useState<any>(null)
   const [selectedCard, setSelectedCard] = useState<CardWithRelations | null>(null)
+  
+  // ★ 修正: pendingImageIdとaiResultを追加
   const [bulkRecognitionImage, setBulkRecognitionImage] = useState<{
     url?: string
     base64?: string
     tweetTime?: string
     tweetUrl?: string
+    pendingImageId?: string    // ← 追加
+    aiResult?: any             // ← 追加
   } | null>(null)
   
   // データ
@@ -110,12 +114,15 @@ const TorekaApp = () => {
     setShowTwitterFeed(true)
   }
 
+  // ★ 修正: pending.idとpending.ai_resultを渡す
   const handleProcessPendingImage = (pending: PendingImage) => {
     setBulkRecognitionImage({
       url: pending.image_url,
       base64: pending.image_base64,
       tweetTime: pending.tweet_time,
-      tweetUrl: pending.tweet_url
+      tweetUrl: pending.tweet_url,
+      pendingImageId: pending.id,        // ← 追加
+      aiResult: pending.ai_result        // ← 追加
     })
     setSelectedShop(shops.find(s => s.id === pending.shop_id) || null)
     setShowBulkRecognition(true)
@@ -392,6 +399,7 @@ const TorekaApp = () => {
         />
       )}
 
+      {/* ★ 修正: pendingImageIdとinitialAiResultを追加 */}
       {showBulkRecognition && (
         <BulkRecognition
           imageUrl={bulkRecognitionImage?.url}
@@ -399,6 +407,8 @@ const TorekaApp = () => {
           shop={selectedShop}
           tweetTime={bulkRecognitionImage?.tweetTime}
           tweetUrl={bulkRecognitionImage?.tweetUrl}
+          pendingImageId={bulkRecognitionImage?.pendingImageId}    // ← 追加
+          initialAiResult={bulkRecognitionImage?.aiResult}          // ← 追加
           onClose={() => { setShowBulkRecognition(false); setBulkRecognitionImage(null); handleRefresh(); }}
           onCompleted={() => { setShowBulkRecognition(false); setBulkRecognitionImage(null); handleRefresh(); }}
         />
