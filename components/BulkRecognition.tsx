@@ -368,6 +368,12 @@ export default function BulkRecognition({
     ));
   };
 
+  const handleUnmatch = (idx: number) => {
+    setRecognizedCards(prev => prev.map((c, i) =>
+      i === idx ? { ...c, matchedCard: null, needsReview: true } : c
+    ));
+  };
+
   const handleConditionChange = (idx: number, condition: string) => {
     setRecognizedCards(prev => prev.map((c, i) =>
       i === idx ? { ...c, condition: condition as CardCondition } : c
@@ -695,6 +701,14 @@ export default function BulkRecognition({
                               <Search size={12} />
                               検索
                             </button>
+                            {card.matchedCard && (
+                              <button
+                                onClick={() => handleUnmatch(card.index)}
+                                className="px-2 py-1 text-orange-500 text-xs hover:bg-orange-50 rounded"
+                              >
+                                保留に戻す
+                              </button>
+                            )}
                             <button
                               onClick={() => handleExclude(card.index)}
                               className="px-2 py-1 text-red-500 text-xs hover:bg-red-50 rounded"
