@@ -269,9 +269,10 @@ export async function GET(request: NextRequest) {
           // 価格または在庫が変動した場合のみ履歴に追加
           if (priceChanged || stockChanged) {
             await supabase
-              .from('price_history')
+              .from('sale_prices')
               .insert({
-                card_sale_url_id: site.id,
+                card_id: site.card_id,
+                site_id: site.site_id,
                 price: newPrice,
                 stock: newStock
               })
@@ -503,9 +504,10 @@ export async function POST(request: NextRequest) {
 
           if (priceChanged || stockChanged) {
             await supabase
-              .from('price_history')
+              .from('sale_prices')
               .insert({
-                card_sale_url_id: site.id,
+                card_id: site.card_id,
+                site_id: site.site_id,
                 price: newPrice,
                 stock: newStock
               })
