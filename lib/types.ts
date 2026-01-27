@@ -91,6 +91,7 @@ export interface PendingImage {
   tweet_time?: string
   status: PendingImageStatus
   created_at?: string
+  ai_result?: any    // ← 追加: AI解析結果
   // リレーション
   shop?: Shop
 }
