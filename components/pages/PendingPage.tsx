@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Eye, Clock, Inbox, X, Search } from 'lucide-react'
+import { Eye, Clock, Inbox, X, Search, Sparkles } from 'lucide-react'
 import { 
   getPendingImages, 
   getPendingCards, 
@@ -64,7 +64,7 @@ export default function PendingPage({
   // =============================================================================
 
   const handleProcessImage = async (pending: PendingImage) => {
-    await updatePendingImageStatus(pending.id, 'processing')
+    // ★ 修正: statusを変更しない（×で閉じても保留に残るように）
     onProcessImage(pending)
   }
 
@@ -148,6 +148,9 @@ export default function PendingPage({
   }
 
   const matchedCount = pendingCards.filter(c => c.status === 'matched').length
+  
+  // ★ 追加: 解析済みの数をカウント
+  const analyzedCount = pendingImages.filter(p => p.ai_result && !p.ai_result.error).length
 
   // =============================================================================
   // Render
@@ -166,6 +169,12 @@ export default function PendingPage({
           }`}
         >
           📷 画像 ({pendingImages.length})
+          {/* ★ 追加: 解析済み数を表示 */}
+          {analyzedCount > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-green-400 text-white text-xs rounded-full">
+              {analyzedCount}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('cards')}
@@ -191,7 +200,7 @@ export default function PendingPage({
             <div className="divide-y divide-gray-50">
               {pendingImages.map((pending) => (
                 <div key={pending.id} className="p-4 flex items-center gap-4 hover:bg-gray-50">
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 relative">
                     {pending.image_url ? (
                       <img
                         src={pending.image_url}
@@ -209,6 +218,14 @@ export default function PendingPage({
                         <Inbox size={32} className="text-gray-400" />
                       </div>
                     )}
+                    
+                    {/* ★ 追加: 解析済みバッジ */}
+                    {pending.ai_result && !pending.ai_result.error && (
+                      <div className="absolute -top-2 -right-2 bg-green-500 text-white px-2 py-0.5 rounded-full text-xs flex items-center gap-1">
+                        <Sparkles size={12} />
+                        解析済
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex-1">
@@ -216,6 +233,12 @@ export default function PendingPage({
                       <span className="font-medium text-gray-800">
                         {pending.shop?.name || getShopName(pending.shop_id)}
                       </span>
+                      {/* ★ 追加: カード数表示 */}
+                      {pending.ai_result?.cards && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                          {pending.ai_result.cards.length}枚検出
+                        </span>
+                      )}
                     </div>
                     
                     {pending.tweet_time && (
@@ -229,10 +252,14 @@ export default function PendingPage({
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleProcessImage(pending)}
-                      className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
+                      className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
+                        pending.ai_result && !pending.ai_result.error
+                          ? 'bg-green-500 text-white hover:bg-green-600'
+                          : 'bg-purple-500 text-white hover:bg-purple-600'
+                      }`}
                     >
                       <Eye size={18} />
-                      認識
+                      {pending.ai_result && !pending.ai_result.error ? '確認' : '認識'}
                     </button>
                     <button
                       onClick={() => handleDeletePending(pending.id)}
