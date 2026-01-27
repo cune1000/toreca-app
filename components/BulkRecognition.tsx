@@ -36,6 +36,8 @@ interface Props {
   shop?: Shop | null;
   tweetTime?: string;
   tweetUrl?: string;
+  pendingImageId?: string;
+  initialAiResult?: any;
   onClose?: () => void;
   onCompleted?: () => void;
 }
@@ -56,6 +58,8 @@ export default function BulkRecognition({
   shop,
   tweetTime,
   tweetUrl,
+  pendingImageId,
+  initialAiResult,
   onClose,
   onCompleted,
 }: Props) {
@@ -113,6 +117,37 @@ export default function BulkRecognition({
     fetchShops();
     fetchFilters();
   }, []);
+
+  // initialAiResultがあれば自動でカードを設定
+  useEffect(() => {
+    if (initialAiResult?.cards && initialAiResult.cards.length > 0) {
+      const cards: RecognizedCard[] = initialAiResult.cards.map((c: any, i: number) => ({
+        index: i,
+        price: c.price,
+        quantity: c.quantity,
+        name: c.name,
+        ocrText: c.raw_text,
+        matchedCard: null,
+        candidates: [],
+        needsReview: true,
+        excluded: false,
+        condition: initialAiResult.is_psa ? 'psa' : 'normal',
+        grounding: c.grounding || null,
+      }));
+
+      if (initialAiResult.is_psa) {
+        setGlobalCondition('psa');
+      }
+
+      if (initialAiResult.grounding_stats) {
+        setGroundingStats(initialAiResult.grounding_stats);
+      }
+
+      setRecognizedCards(cards);
+      // 自動マッチング開始
+      autoMatchCards(cards);
+    }
+  }, [initialAiResult]);
 
   useEffect(() => {
     if (imageBase64) {

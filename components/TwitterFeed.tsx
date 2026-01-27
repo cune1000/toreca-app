@@ -102,8 +102,17 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: Props) {
         throw new Error(error)
       }
 
-      alert('保留リストに追加しました')
+      alert('保留リストに追加しました（バックグラウンドでAI解析中...）')
       setSelectedImage(null)
+
+      // バックグラウンドでAI解析を開始（awaitしない）
+      if (data?.id) {
+        fetch('/api/pending-images/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pendingImageId: data.id }),
+        }).catch(err => console.error('Background analysis error:', err))
+      }
     } catch (err: any) {
       console.error('Failed to add to pending:', err)
       alert('保存に失敗しました: ' + (err.message || JSON.stringify(err)))
