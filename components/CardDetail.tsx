@@ -17,6 +17,14 @@ const SITE_COLORS = [
   '#ec4899', // pink
 ]
 
+// 買取価格の状態別カラー
+const PURCHASE_CONDITION_COLORS: Record<string, { color: string; label: string }> = {
+  normal: { color: '#3b82f6', label: '素体' },
+  psa: { color: '#8b5cf6', label: 'PSA' },
+  sealed: { color: '#06b6d4', label: '未開封' },
+  opened: { color: '#f97316', label: '開封済み' },
+}
+
 // 期間フィルタオプション
 const PERIOD_OPTIONS = [
   { label: '本日', days: 1 },
@@ -188,7 +196,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     
     const dataMap = new Map<number, any>()
 
-    // 買取価格
+    // 買取価格（状態別）
     filteredPurchase.forEach((p: any) => {
       const dateStr = p.tweet_time || p.recorded_at || p.created_at
       const date = formatDate(dateStr)
@@ -199,7 +207,11 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         timestamp,
         date: date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
       }
-      existing.purchase = p.price
+      
+      // 状態別に価格を分ける
+      const condition = p.condition || (p.is_psa ? 'psa' : 'normal')
+      existing[`purchase_${condition}`] = p.price
+      
       dataMap.set(timestamp, existing)
     })
 
@@ -245,6 +257,16 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const hasStockData = useMemo(() => {
     return salePrices.some((p: any) => p.stock !== null && p.stock !== undefined)
   }, [salePrices])
+
+  // 買取価格のユニークな状態リスト
+  const purchaseConditions = useMemo(() => {
+    const conditions = new Set<string>()
+    purchasePrices.forEach((p: any) => {
+      const condition = p.condition || (p.is_psa ? 'psa' : 'normal')
+      conditions.add(condition)
+    })
+    return Array.from(conditions)
+  }, [purchasePrices])
 
   // サイト表示切り替え
   const toggleSitePrice = (siteId: string) => {
@@ -519,19 +541,23 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                       )}
                       <Tooltip content={<CustomTooltip />} />
                       
-                      {/* 買取価格 */}
-                      {showPurchase && (
-                        <Line 
-                          yAxisId="price"
-                          type="monotone" 
-                          dataKey="purchase" 
-                          stroke="#3b82f6" 
-                          strokeWidth={2} 
-                          name="買取価格"
-                          dot={{ r: 3 }}
-                          connectNulls
-                        />
-                      )}
+                      {/* 買取価格（状態別） */}
+                      {showPurchase && purchaseConditions.map((condition) => {
+                        const config = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
+                        return (
+                          <Line 
+                            key={`purchase_${condition}`}
+                            yAxisId="price"
+                            type="monotone" 
+                            dataKey={`purchase_${condition}`} 
+                            stroke={config.color} 
+                            strokeWidth={2} 
+                            name={`買取(${config.label})`}
+                            dot={{ r: 3 }}
+                            connectNulls
+                          />
+                        )
+                      })}
                       
                       {/* サイト別価格 */}
                       {siteList
@@ -656,6 +682,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         <thead className="bg-gray-50 sticky top-0">
                           <tr>
                             <th className="text-left px-3 py-2">店舗</th>
+                            <th className="text-center px-3 py-2">状態</th>
                             <th className="text-right px-3 py-2">価格</th>
                             <th className="text-right px-3 py-2">日時</th>
                           </tr>
@@ -664,9 +691,19 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                           {filterByPeriod(purchasePrices).slice(0, 20).map((p: any, i) => {
                             const dateStr = p.tweet_time || p.recorded_at || p.created_at
                             const date = formatDate(dateStr)
+                            const condition = p.condition || (p.is_psa ? 'psa' : 'normal')
+                            const conditionConfig = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
                             return (
                               <tr key={i} className="hover:bg-gray-50">
                                 <td className="px-3 py-2">{p.shop?.name || '-'}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <span 
+                                    className="px-2 py-0.5 rounded text-xs font-medium"
+                                    style={{ backgroundColor: `${conditionConfig.color}20`, color: conditionConfig.color }}
+                                  >
+                                    {conditionConfig.label}
+                                  </span>
+                                </td>
                                 <td className="px-3 py-2 text-right font-medium">¥{p.price.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-right text-gray-500">
                                   {date ? date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
