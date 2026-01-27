@@ -450,6 +450,15 @@ export default function BulkRecognition({
       }));
       const { error: err } = await supabase.from('purchase_prices').insert(records);
       if (err) throw err;
+      
+      // ★ 追加: 保留画像のstatusをcompletedに更新
+      if (pendingImageId) {
+        await supabase
+          .from('pending_images')
+          .update({ status: 'completed', processed_at: new Date().toISOString() })
+          .eq('id', pendingImageId);
+      }
+      
       setSaveResult(`${records.length}件の買取価格を保存しました`);
       if (onCompleted) setTimeout(onCompleted, 1500);
     } catch (err) {
