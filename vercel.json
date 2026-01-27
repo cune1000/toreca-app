@@ -2,12 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/update-prices",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/10 * * * *"
     }
-  ],
-  "functions": {
-    "app/api/pokemon-card-import/route.ts": {
-      "maxDuration": 300
-    }
-  }
+  ]
 }
