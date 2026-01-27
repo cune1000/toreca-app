@@ -23,6 +23,8 @@ interface FormData {
   category_large_id: string
   category_medium_id: string
   rarity_id: string
+  rarity: string
+  expansion: string
   image_url: string
 }
 
@@ -38,7 +40,13 @@ export default function CardForm({ onClose, onSaved }: Props) {
   const [rarities, setRarities] = useState<Rarity[]>([])
   const [mediumCategories, setMediumCategories] = useState<Category[]>([])
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [expansionSuggestions, setExpansionSuggestions] = useState<string[]>([])
+  const [raritySuggestions, setRaritySuggestions] = useState<string[]>([])
+  const [showExpansionDropdown, setShowExpansionDropdown] = useState(false)
+  const [showRarityDropdown, setShowRarityDropdown] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const expansionInputRef = useRef<HTMLInputElement>(null)
+  const rarityInputRef = useRef<HTMLInputElement>(null)
   
   // フォームデータ
   const [form, setForm] = useState<FormData>({
@@ -47,6 +55,8 @@ export default function CardForm({ onClose, onSaved }: Props) {
     category_large_id: '',
     category_medium_id: '',
     rarity_id: '',
+    rarity: '',
+    expansion: '',
     image_url: ''
   })
 
@@ -57,6 +67,36 @@ export default function CardForm({ onClose, onSaved }: Props) {
       setCategories(data)
     }
     fetchCategories()
+  }, [])
+
+  // 過去の収録弾・レアリティを取得（サジェスト用）
+  useEffect(() => {
+    async function fetchSuggestions() {
+      // 収録弾のユニーク値を取得
+      const { data: expansionData } = await supabase
+        .from('cards')
+        .select('expansion')
+        .not('expansion', 'is', null)
+        .order('expansion')
+      
+      if (expansionData) {
+        const uniqueExpansions = [...new Set(expansionData.map(d => d.expansion).filter(Boolean))]
+        setExpansionSuggestions(uniqueExpansions as string[])
+      }
+
+      // レアリティのユニーク値を取得（テキスト入力用）
+      const { data: rarityData } = await supabase
+        .from('cards')
+        .select('rarity')
+        .not('rarity', 'is', null)
+        .order('rarity')
+      
+      if (rarityData) {
+        const uniqueRarities = [...new Set(rarityData.map(d => d.rarity).filter(Boolean))]
+        setRaritySuggestions(uniqueRarities as string[])
+      }
+    }
+    fetchSuggestions()
   }, [])
 
   // 大カテゴリが変わったらレアリティと中カテゴリを取得
@@ -115,6 +155,16 @@ export default function CardForm({ onClose, onSaved }: Props) {
     reader.readAsDataURL(file)
   }
 
+  // 収録弾のフィルタリング
+  const filteredExpansions = expansionSuggestions.filter(exp =>
+    exp.toLowerCase().includes(form.expansion.toLowerCase())
+  )
+
+  // レアリティのフィルタリング
+  const filteredRarities = raritySuggestions.filter(r =>
+    r.toLowerCase().includes(form.rarity.toLowerCase())
+  )
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -125,6 +175,8 @@ export default function CardForm({ onClose, onSaved }: Props) {
       category_large_id: form.category_large_id || undefined,
       category_medium_id: form.category_medium_id || undefined,
       rarity_id: form.rarity_id || undefined,
+      rarity: form.rarity || undefined,
+      expansion: form.expansion || undefined,
       image_url: form.image_url || undefined
     })
 
@@ -207,7 +259,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
           {/* カード番号 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              カード番号
+              カード番号（型番）
             </label>
             <input
               type="text"
@@ -216,6 +268,74 @@ export default function CardForm({ onClose, onSaved }: Props) {
               placeholder="例: 246/193"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {/* 収録弾 */}
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              収録弾
+            </label>
+            <input
+              ref={expansionInputRef}
+              type="text"
+              value={form.expansion}
+              onChange={(e) => setForm({ ...form, expansion: e.target.value })}
+              onFocus={() => setShowExpansionDropdown(true)}
+              onBlur={() => setTimeout(() => setShowExpansionDropdown(false), 200)}
+              placeholder="例: バイオレットex"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {showExpansionDropdown && filteredExpansions.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
+                {filteredExpansions.slice(0, 10).map((exp, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setForm({ ...form, expansion: exp })
+                      setShowExpansionDropdown(false)
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-blue-50 text-sm"
+                  >
+                    {exp}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* レアリティ（テキスト入力） */}
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              レアリティ
+            </label>
+            <input
+              ref={rarityInputRef}
+              type="text"
+              value={form.rarity}
+              onChange={(e) => setForm({ ...form, rarity: e.target.value })}
+              onFocus={() => setShowRarityDropdown(true)}
+              onBlur={() => setTimeout(() => setShowRarityDropdown(false), 200)}
+              placeholder="例: SAR, SR, RR"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {showRarityDropdown && filteredRarities.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
+                {filteredRarities.slice(0, 10).map((r, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setForm({ ...form, rarity: r })
+                      setShowRarityDropdown(false)
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-purple-50 text-sm"
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 大カテゴリ */}
@@ -254,11 +374,11 @@ export default function CardForm({ onClose, onSaved }: Props) {
             </div>
           )}
 
-          {/* レアリティ */}
+          {/* レアリティ（ボタン選択）- カテゴリに紐づくもの */}
           {rarities.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                レアリティ
+                レアリティ（カテゴリ別）
               </label>
               <div className="flex flex-wrap gap-2">
                 {rarities.map((rarity) => (

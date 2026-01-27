@@ -329,11 +329,20 @@ export default function CardDetail({ card, onClose, onUpdated }) {
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-800">{card?.name}</h2>
-                <div className="flex items-center gap-2 mt-2">
-                  {card?.card_number && <span className="text-gray-500">{card.card_number}</span>}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {card?.card_number && (
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-sm">
+                      {card.card_number}
+                    </span>
+                  )}
                   {card?.rarity && (
-                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium">
-                      {card.rarity.name || card.rarity}
+                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
+                      {typeof card.rarity === 'object' ? card.rarity.name : card.rarity}
+                    </span>
+                  )}
+                  {card?.expansion && (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
+                      {card.expansion}
                     </span>
                   )}
                 </div>
@@ -350,6 +359,36 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 </button>
               </div>
             </div>
+            
+            {/* 最新価格サマリー */}
+            <div className="flex gap-4 mt-4">
+              <div className="bg-blue-50 rounded-xl p-4 flex-1">
+                <div className="flex items-center gap-2 text-blue-600 text-sm mb-1">
+                  <Store size={16} />
+                  最新買取価格
+                </div>
+                <p className="text-2xl font-bold text-blue-700">
+                  {latestPurchase ? `¥${latestPurchase.toLocaleString()}` : '-'}
+                </p>
+              </div>
+              {Object.entries(latestPrices).slice(0, 1).map(([siteId, data]) => (
+                <div key={siteId} className="bg-green-50 rounded-xl p-4 flex-1">
+                  <div className="flex items-center gap-2 text-green-600 text-sm mb-1">
+                    <Globe size={16} />
+                    {data.siteName}
+                  </div>
+                  <p className="text-2xl font-bold text-green-700">
+                    ¥{data.price.toLocaleString()}
+                  </p>
+                  {data.stock !== null && (
+                    <p className="text-sm text-green-600 flex items-center gap-1">
+                      <Package size={14} />
+                      在庫: {data.stock}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -357,41 +396,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         <div className="p-6 space-y-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <RefreshCw className="animate-spin text-gray-400" size={32} />
+              <RefreshCw className="animate-spin text-blue-500" size={32} />
             </div>
           ) : (
             <>
-              {/* 最新価格サマリー */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-blue-50 rounded-xl p-4">
-                  <div className="flex items-center gap-2 text-blue-600 mb-1">
-                    <Store size={16} />
-                    <span className="text-sm">最新買取価格</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-700">
-                    {latestPurchase ? `¥${latestPurchase.toLocaleString()}` : '-'}
-                  </p>
-                </div>
-                
-                {Object.entries(latestPrices).map(([siteId, data]) => (
-                  <div key={siteId} className="bg-green-50 rounded-xl p-4">
-                    <div className="flex items-center gap-2 text-green-600 mb-1">
-                      <Globe size={16} />
-                      <span className="text-sm">{data.siteName}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <p className="text-2xl font-bold text-green-700">¥{data.price.toLocaleString()}</p>
-                      {data.stock !== null && (
-                        <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-sm">
-                          <Package size={14} />
-                          在庫: {data.stock}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
               {/* 期間フィルタ */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">期間:</span>
@@ -399,8 +407,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   <button
                     key={option.label}
                     onClick={() => setSelectedPeriod(option.days)}
-                    className={`px-3 py-1 rounded-lg text-sm ${
-                      selectedPeriod === option.days ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                      selectedPeriod === option.days
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     {option.label}
@@ -408,98 +418,101 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 ))}
               </div>
 
-              {/* 表示切り替えコントロール */}
+              {/* グラフ表示設定 */}
               <div className="bg-gray-50 rounded-xl p-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">グラフ表示設定</h4>
-                <div className="flex flex-wrap gap-4">
+                <p className="text-sm font-medium text-gray-700 mb-3">グラフ表示設定</p>
+                <div className="flex flex-wrap gap-3">
                   {/* 買取価格 */}
-                  <div className={`flex items-center gap-2 px-3 py-1 rounded-lg border ${!showPurchase ? 'bg-gray-100' : 'bg-white'}`}>
-                    <span 
-                      className="text-sm font-medium cursor-pointer hover:opacity-70 select-none"
-                      style={{ 
-                        color: !showPurchase ? '#9ca3af' : '#3b82f6',
-                        textDecoration: !showPurchase ? 'line-through' : 'none'
-                      }}
-                      onClick={() => setShowPurchase(!showPurchase)}
-                      title="クリックで表示/非表示"
-                    >
-                      買取価格
+                  <button
+                    onClick={() => setShowPurchase(!showPurchase)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                      showPurchase 
+                        ? 'bg-blue-100 border-blue-300 text-blue-700' 
+                        : 'bg-white border-gray-200 text-gray-400'
+                    }`}
+                  >
+                    <span className={`w-3 h-3 rounded-full ${showPurchase ? 'bg-blue-500' : 'bg-gray-300'}`}></span>
+                    買取価格
+                    <span className="flex items-center gap-0.5">
+                      <input 
+                        type="checkbox" 
+                        checked={showPurchase} 
+                        onChange={() => setShowPurchase(!showPurchase)}
+                        className="w-4 h-4 accent-blue-500"
+                      />
                     </span>
-                    <input
-                      type="checkbox"
-                      checked={showPurchase}
-                      onChange={() => setShowPurchase(!showPurchase)}
-                      className="w-3 h-3 rounded text-blue-500"
-                    />
-                  </div>
-
-                  {/* サイト別価格・在庫 */}
+                  </button>
+                  
+                  {/* サイト別 */}
                   {siteList.map((site, index) => {
                     const color = SITE_COLORS[index % SITE_COLORS.length]
-                    const visibility = visibleSites[site.id] || { price: true, stock: true }
                     const hidden = isSiteHidden(site.id)
+                    const v = visibleSites[site.id] || { price: true, stock: true }
                     return (
-                      <div key={site.id} className={`flex items-center gap-3 px-3 py-1 rounded-lg border ${hidden ? 'bg-gray-100' : 'bg-white'}`}>
+                      <div
+                        key={site.id}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                          hidden
+                            ? 'bg-white border-gray-200 text-gray-400'
+                            : 'bg-green-50 border-green-200 text-green-700'
+                        }`}
+                      >
                         <span 
-                          className="text-sm font-medium cursor-pointer hover:opacity-70 select-none"
-                          style={{ 
-                            color: hidden ? '#9ca3af' : color,
-                            textDecoration: hidden ? 'line-through' : 'none'
-                          }}
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: hidden ? '#d1d5db' : color }}
+                        ></span>
+                        <span 
+                          className="cursor-pointer"
                           onClick={() => toggleSiteAll(site.id)}
-                          title="クリックで表示/非表示"
                         >
                           {site.name}
                         </span>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={visibility.price !== false}
-                            onChange={() => toggleSitePrice(site.id)}
-                            className="w-3 h-3 rounded"
-                          />
-                          <span className="text-xs text-gray-600">●価格</span>
-                        </label>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={visibility.stock !== false}
-                            onChange={() => toggleSiteStock(site.id)}
-                            className="w-3 h-3 rounded"
-                          />
-                          <span className="text-xs text-gray-600">◇在庫</span>
-                        </label>
+                        <span className="flex items-center gap-1 ml-1 text-xs">
+                          <label className="flex items-center gap-0.5 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={v.price !== false} 
+                              onChange={() => toggleSitePrice(site.id)}
+                              className="w-3 h-3 accent-green-500"
+                            />
+                            <span>●価格</span>
+                          </label>
+                          <label className="flex items-center gap-0.5 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={v.stock !== false} 
+                              onChange={() => toggleSiteStock(site.id)}
+                              className="w-3 h-3 accent-green-500"
+                            />
+                            <span>◇在庫</span>
+                          </label>
+                        </span>
                       </div>
                     )
                   })}
                 </div>
               </div>
 
-              {/* 価格・在庫推移グラフ */}
+              {/* グラフ */}
               {chartData.length > 0 ? (
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <div className="bg-white border rounded-xl p-4">
                   <h3 className="font-bold text-gray-800 mb-4">価格・在庫推移</h3>
                   <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={chartData}>
+                    <LineChart data={chartData} margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
-                        tick={{ fontSize: 10 }} 
-                        angle={-45}
-                        textAnchor="end"
-                        height={60}
-                      />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                       <YAxis 
                         yAxisId="price"
-                        tick={{ fontSize: 12 }} 
-                        tickFormatter={(v) => `¥${(v/1000).toFixed(0)}k`}
+                        orientation="left"
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
                         domain={['auto', 'auto']}
                       />
                       {hasStockData && (
                         <YAxis 
                           yAxisId="stock"
                           orientation="right"
-                          tick={{ fontSize: 12 }}
+                          tick={{ fontSize: 11 }}
                           tickFormatter={(v) => `${v}個`}
                           domain={[0, 'auto']}
                         />
@@ -514,7 +527,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                           dataKey="purchase" 
                           stroke="#3b82f6" 
                           strokeWidth={2} 
-                          name="買取価格" 
+                          name="買取価格"
                           dot={{ r: 3 }}
                           connectNulls
                         />
