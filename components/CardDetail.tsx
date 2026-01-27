@@ -159,6 +159,14 @@ export default function CardDetail({ card, onClose, onUpdated }) {
           price: data.priceNumber || data.price,
           stock: stock
         })
+
+        // card_sale_urlsのlast_price, last_stockも更新
+        await supabase.from('card_sale_urls').update({
+          last_price: data.priceNumber || data.price,
+          last_stock: stock,
+          last_checked_at: new Date().toISOString()
+        }).eq('id', saleUrl.id)
+
         alert(`更新完了: ¥${(data.priceNumber || data.price).toLocaleString()}${stock !== null ? ` (在庫: ${stock})` : ''}`)
         fetchPrices()
       } else {
