@@ -68,41 +68,19 @@ async function scrapePokemonCard(url: string) {
   }
 }
 
-// カードリストページからカード一覧を取得（offset対応）
-async function scrapeCardList(listUrl: string, limit: number = 20, offset: number = 0) {
+// カードリストページからカード一覧を取得
+async function scrapeCardList(listUrl: string, limit: number = 20) {
   let browser = null
   
   try {
     browser = await chromium.launch({ headless: true })
     const page = await browser.newPage()
     
-    // offsetをページ番号に変換（公式サイトは1ページ20件）
-    const pageNum = Math.floor(offset / 20) + 1
-    
-    // URLにページ番号を追加
-    let urlWithPage = listUrl
-    if (pageNum > 1) {
-      // 既存のページパラメータを削除
-      urlWithPage = listUrl.replace(/&pg=\d+/, '').replace(/\?pg=\d+&?/, '?')
-      // 新しいページ番号を追加
-      urlWithPage += (urlWithPage.includes('?') ? '&' : '?') + `pg=${pageNum}`
-    }
-    
-    console.log(`[Scrape] Fetching page ${pageNum}: ${urlWithPage}`)
-    
-    await page.goto(urlWithPage, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await page.waitForTimeout(3000)
     
-    // 総件数とカードリンクを取得
-    const result = await page.evaluate(() => {
-      // 総件数を取得
-      let totalFound = 0
-      const totalText = document.body.innerText
-      const totalMatch = totalText.match(/(\d+)件/)
-      if (totalMatch) {
-        totalFound = parseInt(totalMatch[1], 10)
-      }
-      
+    // カードリンクを取得
+    const cardLinks = await page.evaluate(() => {
       const links: { name: string; url: string; imageUrl: string }[] = []
       
       // カードリストのリンクを取得
@@ -127,19 +105,15 @@ async function scrapeCardList(listUrl: string, limit: number = 20, offset: numbe
         }
       })
       
-      return { totalFound, links }
+      return links
     })
     
     await browser.close()
     
-    // limitに応じてカードを返す
-    const cards = result.links.slice(0, limit)
-    
     return {
       success: true,
-      totalFound: result.totalFound,
-      page: pageNum,
-      cards: cards
+      totalFound: cardLinks.length,
+      cards: cardLinks.slice(0, limit)
     }
     
   } catch (error: any) {
@@ -153,14 +127,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const url = searchParams.get('url')
   const limit = parseInt(searchParams.get('limit') || '20')
-  const offset = parseInt(searchParams.get('offset') || '0')
   
   if (!url) {
     return NextResponse.json({
       message: 'Pokemon Card Scrape API',
       usage: {
         single: 'GET ?url=https://www.pokemon-card.com/card-search/details.php/card/12345',
-        list: 'GET ?url=https://www.pokemon-card.com/card-search/index.php?...&limit=20&offset=0'
+        list: 'GET ?url=https://www.pokemon-card.com/card-search/index.php?...&limit=20'
       }
     })
   }
@@ -170,7 +143,7 @@ export async function GET(request: NextRequest) {
     const isListPage = url.includes('index.php') || url.includes('card-search/?')
     
     if (isListPage) {
-      const result = await scrapeCardList(url, limit, offset)
+      const result = await scrapeCardList(url, limit)
       return NextResponse.json(result)
     } else {
       const result = await scrapePokemonCard(url)
@@ -188,19 +161,28 @@ export async function GET(request: NextRequest) {
 
 // POST: スクレイピングしてDBに保存
 export async function POST(request: NextRequest) {
-  const { url, limit = 20, offset = 0, skipExisting = true } = await request.json()
+  const { url, limit = 20, saveToDb = true } = await request.json()
   
   if (!url) {
     return NextResponse.json({ error: 'url is required' }, { status: 400 })
   }
   
   try {
-    // リストページからカード一覧を取得（offset対応）
-    const listResult = await scrapeCardList(url, limit, offset)
+    // リストページからカード一覧を取得
+    const listResult = await scrapeCardList(url, limit)
     
     if (!listResult.success) {
       return NextResponse.json(listResult, { status: 500 })
     }
+    
+    if (!saveToDb) {
+      return NextResponse.json(listResult)
+    }
+    
+    // 各カードの詳細を取得してDBに保存
+    let savedCount = 0
+    let errorCount = 0
+    const errors: string[] = []
     
     // ポケモンカードのカテゴリIDを取得
     const { data: category } = await supabase
@@ -209,84 +191,46 @@ export async function POST(request: NextRequest) {
       .eq('name', 'ポケモンカード')
       .single()
     
-    let newCount = 0
-    let updateCount = 0
-    let skipCount = 0
-    let errorCount = 0
-    const errors: string[] = []
-    
     for (const card of listResult.cards) {
       try {
-        if (!card.imageUrl) {
-          errorCount++
-          continue
-        }
-        
-        // 既存チェック（画像URLで判定）
-        const { data: existingList } = await supabase
+        // 既存チェック
+        const { data: existing } = await supabase
           .from('cards')
           .select('id')
           .eq('image_url', card.imageUrl)
-        
-        const existing = existingList?.[0]
+          .single()
         
         if (existing) {
-          if (skipExisting) {
-            skipCount++
-          } else {
-            // 詳細ページをスクレイピングして更新
-            try {
-              const detail = await scrapePokemonCard(card.url)
-              await supabase
-                .from('cards')
-                .update({
-                  name: detail.name || card.name,
-                  card_number: detail.cardNumber,
-                  rarity: detail.rarity,
-                  illustrator: detail.illustrator,
-                  expansion: detail.expansion,
-                  regulation: detail.regulation
-                })
-                .eq('id', existing.id)
-              updateCount++
-            } catch (err) {
-              skipCount++
-            }
-          }
-        } else {
-          // 詳細ページをスクレイピング
-          try {
-            const detail = await scrapePokemonCard(card.url)
-            
-            // DBに保存
-            await supabase
-              .from('cards')
-              .insert([{
-                name: detail.name || card.name,
-                image_url: detail.imageUrl || card.imageUrl,
-                card_number: detail.cardNumber,
-                rarity: detail.rarity,
-                illustrator: detail.illustrator,
-                expansion: detail.expansion,
-                regulation: detail.regulation,
-                category_large_id: category?.id || null
-              }])
-            newCount++
-          } catch (err: any) {
-            // 詳細取得失敗でもリストの情報で保存
-            await supabase
-              .from('cards')
-              .insert([{
-                name: card.name,
-                image_url: card.imageUrl,
-                category_large_id: category?.id || null
-              }])
-            newCount++
-          }
+          continue // 既に存在する場合はスキップ
         }
         
+        // 詳細ページをスクレイピング
+        const detail = await scrapePokemonCard(card.url)
+        
+        if (!detail.success) {
+          errorCount++
+          errors.push(`${card.name}: Scrape failed`)
+          continue
+        }
+        
+        // DBに保存
+        await supabase
+          .from('cards')
+          .insert({
+            name: detail.name || card.name,
+            image_url: detail.imageUrl || card.imageUrl,
+            card_number: detail.cardNumber,
+            rarity: detail.rarity,
+            illustrator: detail.illustrator,
+            expansion: detail.expansion,
+            regulation: detail.regulation,
+            category_large_id: category?.id || null
+          })
+        
+        savedCount++
+        
         // レート制限対策
-        await new Promise(resolve => setTimeout(resolve, 1500))
+        await new Promise(resolve => setTimeout(resolve, 2000))
         
       } catch (err: any) {
         errorCount++
@@ -298,9 +242,7 @@ export async function POST(request: NextRequest) {
       success: true,
       totalFound: listResult.totalFound,
       processed: listResult.cards.length,
-      newCount,
-      updateCount,
-      skipCount,
+      savedCount,
       errorCount,
       errors: errors.slice(0, 10)
     })
