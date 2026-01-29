@@ -45,7 +45,7 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
   const [customUrl, setCustomUrl] = useState('')
   const [useCustomUrl, setUseCustomUrl] = useState(false)
   const [selectedPreset, setSelectedPreset] = useState(DEFAULT_URLS[0].url)
-  const [limit, setLimit] = useState(20)
+  const [limit, setLimit] = useState(40)
   const [skipExisting, setSkipExisting] = useState(true)
   const [saveResult, setSaveResult] = useState<any>(null)
 
@@ -244,11 +244,9 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
                     onChange={(e) => setLimit(Number(e.target.value))}
                     className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   >
-                    <option value={5}>5件</option>
-                    <option value={10}>10件</option>
-                    <option value={20}>20件</option>
-                    <option value={50}>50件</option>
-                    <option value={100}>100件</option>
+                    <option value={40}>40件</option>
+                    <option value={80}>80件</option>
+                    <option value={-1}>全件</option>
                   </select>
                 </div>
               </div>
