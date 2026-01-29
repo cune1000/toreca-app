@@ -8,18 +8,19 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const listUrl = searchParams.get('url')
   const limit = searchParams.get('limit') || '20'
+  const offset = searchParams.get('offset') || '0'
   
   if (!listUrl) {
     return NextResponse.json({
       message: 'Pokemon Card Import API (via Railway)',
-      usage: 'GET ?url=<list_url>&limit=20',
-      example: '/api/pokemon-card-import?url=https://www.pokemon-card.com/card-search/index.php?sc_rare_sar=1&limit=10'
+      usage: 'GET ?url=<list_url>&limit=20&offset=0',
+      example: '/api/pokemon-card-import?url=https://www.pokemon-card.com/card-search/index.php?sc_rare_sar=1&limit=20&offset=0'
     })
   }
   
   try {
-    // Railwayに転送
-    const railwayUrl = `${RAILWAY_URL}/pokemon-import?url=${encodeURIComponent(listUrl)}&limit=${limit}`
+    // Railwayに転送（offset対応）
+    const railwayUrl = `${RAILWAY_URL}/pokemon-import?url=${encodeURIComponent(listUrl)}&limit=${limit}&offset=${offset}`
     console.log('Calling Railway:', railwayUrl)
     
     const res = await fetch(railwayUrl, { 
@@ -41,21 +42,21 @@ export async function GET(request: NextRequest) {
 
 // POST: DBに保存
 export async function POST(request: NextRequest) {
-  const { url: listUrl, limit = 100, skipExisting = true } = await request.json()
+  const { url: listUrl, limit = 100, offset = 0, skipExisting = true } = await request.json()
   
   if (!listUrl) {
     return NextResponse.json({ error: 'url is required' }, { status: 400 })
   }
   
   try {
-    // Railwayからカードデータ取得
+    // Railwayからカードデータ取得（offset対応）
     const railwayUrl = `${RAILWAY_URL}/pokemon-import`
     console.log('Calling Railway POST:', railwayUrl)
     
     const railwayRes = await fetch(railwayUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: listUrl, limit })
+      body: JSON.stringify({ url: listUrl, limit, offset })
     })
     
     const railwayData = await railwayRes.json()
