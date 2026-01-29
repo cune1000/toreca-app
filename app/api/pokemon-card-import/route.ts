@@ -7,13 +7,16 @@ const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL || 'https://skillful-love-pr
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const listUrl = searchParams.get('url')
-  const limit = searchParams.get('limit') || '20'
+  const limitParam = searchParams.get('limit')
+  // limit=-1 または limit=all で全件取得
+  const limit = (limitParam === 'all' || limitParam === '-1') ? '-1' : (limitParam || '20')
   const offset = searchParams.get('offset') || '0'
   
   if (!listUrl) {
     return NextResponse.json({
       message: 'Pokemon Card Import API (via Railway)',
       usage: 'GET ?url=<list_url>&limit=20&offset=0',
+      note: 'Use limit=-1 or limit=all to fetch all cards',
       example: '/api/pokemon-card-import?url=https://www.pokemon-card.com/card-search/index.php?sc_rare_sar=1&limit=20&offset=0'
     })
   }
