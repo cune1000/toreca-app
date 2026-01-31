@@ -136,7 +136,8 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const scrapeSnkrdunk = async () => {
     const snkrdunkUrl = saleUrls.find((url: any) =>
       url.site?.name?.toLowerCase().includes('スニダン') ||
-      url.site?.name?.toLowerCase().includes('snkrdunk')
+      url.site?.name?.toLowerCase().includes('snkrdunk') ||
+      url.product_url?.toLowerCase().includes('snkrdunk')
     )
 
     if (!snkrdunkUrl) {
@@ -811,7 +812,8 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 {(() => {
                   const snkrdunkUrl = saleUrls.find((url: any) =>
                     url.site?.name?.toLowerCase().includes('スニダン') ||
-                    url.site?.name?.toLowerCase().includes('snkrdunk')
+                    url.site?.name?.toLowerCase().includes('snkrdunk') ||
+                    url.product_url?.toLowerCase().includes('snkrdunk')
                   )
 
                   return (
