@@ -6,7 +6,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 // Gemini API呼び出し（画像認識用）
 async function callGemini(imageBase64: string, mimeType: string, additionalContext?: string) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`
   
   const prompt = `この画像はトレーディングカードの買取価格表です。
 
@@ -93,7 +93,7 @@ ${additionalContext ? `追加情報: ${additionalContext}` : ''}
 
 // Gemini Grounding（Google検索連携）でカード情報を補完
 async function enrichWithGrounding(card: any, isPsa: boolean): Promise<any> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`
   
   const priceStr = card.price ? `${card.price.toLocaleString()}円` : ''
   const psaStr = isPsa ? 'PSA鑑定' : ''
@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     message: 'Purchase Price Recognition API',
-    version: '2.0 (with Grounding)',
+    version: '2.1 (Gemini 1.5 Pro with Grounding)',
     usage: {
       method: 'POST',
       body: {
