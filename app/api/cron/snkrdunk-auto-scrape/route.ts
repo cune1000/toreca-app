@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { chromium } from 'playwright'
 import { supabase } from '@/lib/supabase'
 
 /**
@@ -167,116 +166,108 @@ async function calculateAdaptiveInterval(cardId: string): Promise<number> {
 }
 
 /**
- * スニダン売買履歴をスクレイピング
+ * スニダン売買履歴をスクレイピング（toreca-scraper経由）
  */
 async function scrapeSnkrdunkHistory(cardId: string, url: string) {
-    const browser = await chromium.launch({ headless: true })
+    const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://toreca-scraper-production.up.railway.app'
 
-    try {
-        const page = await browser.newPage()
-        await page.setExtraHTTPHeaders({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    // toreca-scraperを呼び出してスクレイピング
+    const scrapeResponse = await fetch(`${TORECA_SCRAPER_URL}/api/snkrdunk-scrape`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+    })
+
+    if (!scrapeResponse.ok) {
+        throw new Error(`Scraper failed: ${scrapeResponse.statusText}`)
+    }
+
+    const scrapeData = await scrapeResponse.json()
+
+    if (!scrapeData.success) {
+        throw new Error(scrapeData.error || 'Scraping failed')
+    }
+
+    const salesHistory = scrapeData.data || []
+
+    // データを整形
+    const now = new Date()
+    const scrapedData: Array<{ grade: string; price: number; sold_at: string }> = []
+
+    salesHistory.forEach((item: any) => {
+        const soldAt = parseRelativeTime(item.dateText, now)
+        if (!soldAt) return
+
+        const grade = normalizeGrade(item.gradeText)
+        if (!grade) return
+
+        const price = parsePrice(item.priceText)
+        if (!price) return
+
+        scrapedData.push({ grade, price, sold_at: soldAt.toISOString() })
+    })
+
+    // 既存データを取得
+    const { data: existingData } = await supabase
+        .from('snkrdunk_sales_history')
+        .select('grade, price, sold_at, sequence_number')
+        .eq('card_id', cardId)
+        .order('sold_at', { ascending: false })
+        .limit(100)
+
+    // 既存データをMapに変換
+    const existingMap = new Map<string, Set<number>>()
+    existingData?.forEach(item => {
+        const key = `${item.grade}_${item.price}_${item.sold_at}`
+        if (!existingMap.has(key)) {
+            existingMap.set(key, new Set())
+        }
+        existingMap.get(key)!.add(item.sequence_number)
+    })
+
+    // 新規データのみを抽出 & sequence_number を割り当て
+    const newData: any[] = []
+    scrapedData.forEach(sale => {
+        const key = `${sale.grade}_${sale.price}_${sale.sold_at}`
+        const existingSeqs = existingMap.get(key) || new Set()
+
+        let seq = 0
+        while (existingSeqs.has(seq)) {
+            seq++
+        }
+
+        newData.push({
+            card_id: cardId,
+            grade: sale.grade,
+            price: sale.price,
+            sold_at: sale.sold_at,
+            sequence_number: seq,
+            scraped_at: new Date().toISOString()
         })
 
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
+        existingSeqs.add(seq)
+        existingMap.set(key, existingSeqs)
+    })
 
-        // 売買履歴を取得
-        const salesHistory = await page.$$eval(
-            'ul.sales-history.item-list > li',
-            (items) => {
-                return items.map(item => {
-                    const dateText = item.querySelector('p.date')?.textContent?.trim() || ''
-                    const gradeText = item.querySelector('p.size')?.textContent?.trim() || ''
-                    const priceText = item.querySelector('p.price')?.textContent?.trim() || ''
-                    return { dateText, gradeText, priceText }
-                })
-            }
-        )
-
-        await browser.close()
-
-        // データを整形
-        const now = new Date()
-        const scrapedData: Array<{ grade: string; price: number; sold_at: string }> = []
-
-        salesHistory.forEach(item => {
-            const soldAt = parseRelativeTime(item.dateText, now)
-            if (!soldAt) return
-
-            const grade = normalizeGrade(item.gradeText)
-            if (!grade) return
-
-            const price = parsePrice(item.priceText)
-            if (!price) return
-
-            scrapedData.push({ grade, price, sold_at: soldAt.toISOString() })
-        })
-
-        // 既存データを取得
-        const { data: existingData } = await supabase
+    // 新規データのみ挿入
+    let insertedCount = 0
+    if (newData.length > 0) {
+        const { data, error } = await supabase
             .from('snkrdunk_sales_history')
-            .select('grade, price, sold_at, sequence_number')
-            .eq('card_id', cardId)
-            .order('sold_at', { ascending: false })
-            .limit(100)
+            .insert(newData)
+            .select()
 
-        // 既存データをMapに変換
-        const existingMap = new Map<string, Set<number>>()
-        existingData?.forEach(item => {
-            const key = `${item.grade}_${item.price}_${item.sold_at}`
-            if (!existingMap.has(key)) {
-                existingMap.set(key, new Set())
-            }
-            existingMap.get(key)!.add(item.sequence_number)
-        })
-
-        // 新規データのみを抽出 & sequence_number を割り当て
-        const newData: any[] = []
-        scrapedData.forEach(sale => {
-            const key = `${sale.grade}_${sale.price}_${sale.sold_at}`
-            const existingSeqs = existingMap.get(key) || new Set()
-
-            let seq = 0
-            while (existingSeqs.has(seq)) {
-                seq++
-            }
-
-            newData.push({
-                card_id: cardId,
-                grade: sale.grade,
-                price: sale.price,
-                sold_at: sale.sold_at,
-                sequence_number: seq,
-                scraped_at: new Date().toISOString()
-            })
-
-            existingSeqs.add(seq)
-            existingMap.set(key, existingSeqs)
-        })
-
-        // 新規データのみ挿入
-        let insertedCount = 0
-        if (newData.length > 0) {
-            const { data, error } = await supabase
-                .from('snkrdunk_sales_history')
-                .insert(newData)
-                .select()
-
-            if (error) {
-                throw new Error(`Database insert error: ${error.message}`)
-            }
-
-            insertedCount = data?.length || 0
+        if (error) {
+            throw new Error(`Database insert error: ${error.message}`)
         }
 
-        return {
-            total: scrapedData.length,
-            inserted: insertedCount,
-            skipped: scrapedData.length - insertedCount
-        }
-    } catch (error) {
-        await browser.close()
-        throw error
+        insertedCount = data?.length || 0
+    }
+
+    return {
+        total: scrapedData.length,
+        inserted: insertedCount,
+        skipped: scrapedData.length - insertedCount
     }
 }
 

@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
-import { chromium } from 'playwright'
 import { supabase } from '@/lib/supabase'
+
+const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://toreca-scraper-production.up.railway.app'
 
 /**
  * スニーカーダンクの売買履歴をスクレイピング
+ * toreca-scraper（Railway）を呼び出してスクレイピング
  */
 export async function POST(req: Request) {
     try {
@@ -16,10 +18,29 @@ export async function POST(req: Request) {
             )
         }
 
-        // スクレイピング実行
-        const scrapedData = await scrapeSnkrdunkSalesHistory(url)
+        console.log(`[Snkrdunk] Scraping via toreca-scraper: ${url}`)
 
-        if (scrapedData.length === 0) {
+        // toreca-scraperを呼び出してスクレイピング
+        const scrapeResponse = await fetch(`${TORECA_SCRAPER_URL}/api/snkrdunk-scrape`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        })
+
+        if (!scrapeResponse.ok) {
+            throw new Error(`Scraper failed: ${scrapeResponse.statusText}`)
+        }
+
+        const scrapeData = await scrapeResponse.json()
+
+        if (!scrapeData.success) {
+            throw new Error(scrapeData.error || 'Scraping failed')
+        }
+
+        const salesHistory = scrapeData.data || []
+        console.log(`[Snkrdunk] Received ${salesHistory.length} sales from scraper`)
+
+        if (salesHistory.length === 0) {
             return NextResponse.json({
                 success: true,
                 total: 0,
@@ -28,6 +49,30 @@ export async function POST(req: Request) {
                 message: 'No sales history found'
             })
         }
+
+        // データを整形
+        const now = new Date()
+        const scrapedData: Array<{ grade: string; price: number; sold_at: string }> = []
+
+        salesHistory.forEach((item: any) => {
+            // 時間をパース
+            const soldAt = parseRelativeTime(item.dateText, now)
+            if (!soldAt) return
+
+            // グレードを正規化
+            const grade = normalizeGrade(item.gradeText)
+            if (!grade) return
+
+            // 価格を抽出
+            const price = parsePrice(item.priceText)
+            if (!price) return
+
+            scrapedData.push({
+                grade,
+                price,
+                sold_at: soldAt.toISOString()
+            })
+        })
 
         // 既存データを取得（最新100件）
         const { data: existingData } = await supabase
@@ -104,73 +149,6 @@ export async function POST(req: Request) {
             { success: false, error: error.message },
             { status: 500 }
         )
-    }
-}
-
-/**
- * スニーカーダンクの売買履歴をスクレイピング
- */
-async function scrapeSnkrdunkSalesHistory(url: string) {
-    const browser = await chromium.launch({
-        headless: true
-    })
-
-    try {
-        const page = await browser.newPage()
-        await page.setExtraHTTPHeaders({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
-
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
-
-        // 売買履歴を取得
-        const salesHistory = await page.$$eval(
-            'ul.sales-history.item-list > li',
-            (items) => {
-                return items.map(item => {
-                    const dateText = item.querySelector('p.date')?.textContent?.trim() || ''
-                    const gradeText = item.querySelector('p.size')?.textContent?.trim() || ''
-                    const priceText = item.querySelector('p.price')?.textContent?.trim() || ''
-
-                    return {
-                        dateText,
-                        gradeText,
-                        priceText
-                    }
-                })
-            }
-        )
-
-        await browser.close()
-
-        // データを整形
-        const now = new Date()
-        const results: Array<{ grade: string; price: number; sold_at: string }> = []
-
-        salesHistory.forEach(item => {
-            // 時間をパース
-            const soldAt = parseRelativeTime(item.dateText, now)
-            if (!soldAt) return
-
-            // グレードを正規化
-            const grade = normalizeGrade(item.gradeText)
-            if (!grade) return
-
-            // 価格を抽出
-            const price = parsePrice(item.priceText)
-            if (!price) return
-
-            results.push({
-                grade,
-                price,
-                sold_at: soldAt.toISOString()
-            })
-        })
-
-        return results
-    } catch (error) {
-        await browser.close()
-        throw error
     }
 }
 
