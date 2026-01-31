@@ -25,6 +25,25 @@ const PURCHASE_CONDITION_COLORS: Record<string, { color: string; label: string }
   opened: { color: '#f97316', label: '開封済み' },
 }
 
+// スニダン売買履歴のグレード別カラー
+const SNKRDUNK_GRADE_COLORS: Record<string, string> = {
+  PSA10: '#8b5cf6',    // purple
+  PSA9: '#06b6d4',     // cyan
+  'PSA8以下': '#64748b', // slate
+  'BGS10BL': '#a855f7', // purple-500
+  'BGS10GL': '#8b5cf6', // violet
+  'BGS9.5': '#0ea5e9',  // sky
+  'BGS9以下': '#6b7280', // gray
+  'ARS10+': '#d946ef',  // fuchsia
+  'ARS10': '#c026d3',   // fuchsia-600
+  'ARS9': '#0891b2',    // cyan-600
+  'ARS8以下': '#71717a', // zinc
+  A: '#10b981',        // green
+  B: '#f59e0b',        // amber
+  C: '#ef4444',        // red
+  D: '#dc2626',        // red-600
+}
+
 // 期間フィルタオプション
 const PERIOD_OPTIONS = [
   { label: '本日', days: 1 },
@@ -44,14 +63,27 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [showEditForm, setShowEditForm] = useState(false)
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState(30)
-  
+
   // 表示切り替え用state
   const [showPurchase, setShowPurchase] = useState(true)
   const [visibleSites, setVisibleSites] = useState<Record<string, { price: boolean; stock: boolean }>>({})
 
+  // スニダン売買履歴用state
+  const [snkrdunkSales, setSnkrdunkSales] = useState([])
+  const [snkrdunkLoading, setSnkrdunkLoading] = useState(false)
+  const [snkrdunkScraping, setSnkrdunkScraping] = useState(false)
+  const [visibleGrades, setVisibleGrades] = useState({
+    PSA10: true,
+    PSA9: true,
+    A: true,
+    B: true,
+    C: true
+  })
+
   useEffect(() => {
     if (card?.id) {
       fetchPrices()
+      fetchSnkrdunkSales()
     }
   }, [card?.id])
 
@@ -81,6 +113,101 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     setSaleUrls(urlData || [])
 
     setLoading(false)
+  }
+
+  // スニダン売買履歴を取得
+  const fetchSnkrdunkSales = async () => {
+    setSnkrdunkLoading(true)
+    try {
+      const days = selectedPeriod || 365
+      const res = await fetch(`/api/snkrdunk-sales?cardId=${card.id}&days=${days}`)
+      const data = await res.json()
+      if (data.success) {
+        setSnkrdunkSales(data.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch snkrdunk sales:', error)
+    } finally {
+      setSnkrdunkLoading(false)
+    }
+  }
+
+  // スニダンスクレイピング実行
+  const scrapeSnkrdunk = async () => {
+    const snkrdunkUrl = saleUrls.find((url: any) =>
+      url.site?.name?.toLowerCase().includes('スニダン') ||
+      url.site?.name?.toLowerCase().includes('snkrdunk')
+    )
+
+    if (!snkrdunkUrl) {
+      alert('スニダンのURLが設定されていません。販売サイトからURLを追加してください。')
+      return
+    }
+
+    setSnkrdunkScraping(true)
+    try {
+      const res = await fetch('/api/snkrdunk-scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId: card.id, url: snkrdunkUrl.product_url })
+      })
+      const data = await res.json()
+      if (data.success) {
+        alert(`スクレイピング完了\n取得: ${data.total}件\n新規: ${data.inserted}件\nスキップ: ${data.skipped}件`)
+        fetchSnkrdunkSales()
+        fetchPrices() // saleUrlsを再取得
+      } else {
+        alert('エラー: ' + data.error)
+      }
+    } catch (error: any) {
+      alert('エラー: ' + error.message)
+    } finally {
+      setSnkrdunkScraping(false)
+    }
+  }
+
+  // 自動更新モードを変更
+  const updateAutoScrapeMode = async (saleUrlId: string, mode: string) => {
+    try {
+      const { error } = await supabase
+        .from('card_sale_urls')
+        .update({ auto_scrape_mode: mode })
+        .eq('id', saleUrlId)
+
+      if (error) throw error
+      fetchPrices() // saleUrlsを再取得
+    } catch (error: any) {
+      alert('エラー: ' + error.message)
+    }
+  }
+
+  // 自動更新間隔を変更
+  const updateScrapeInterval = async (saleUrlId: string, intervalMinutes: number) => {
+    try {
+      const { error } = await supabase
+        .from('card_sale_urls')
+        .update({ auto_scrape_interval_minutes: intervalMinutes })
+        .eq('id', saleUrlId)
+
+      if (error) throw error
+      fetchPrices() // saleUrlsを再取得
+    } catch (error: any) {
+      alert('エラー: ' + error.message)
+    }
+  }
+
+  // 相対時間を表示
+  const formatRelativeTime = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+
+    if (diffMins < 60) return `${diffMins}分前`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}時間前`
+    const diffDays = Math.floor(diffHours / 24)
+    return `${diffDays}日前`
   }
 
   // サイト一覧を取得（販売URL登録済み + 価格履歴あり）
@@ -201,7 +328,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const chartData = useMemo(() => {
     const filteredPurchase = filterByPeriod(purchasePrices)
     const filteredSale = filterByPeriod(salePrices)
-    
+
     const dataMap = new Map<number, any>()
 
     // 買取価格（状態別）
@@ -215,11 +342,11 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         timestamp,
         date: date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
       }
-      
+
       // 状態別に価格を分ける
       const condition = p.condition || (p.is_psa ? 'psa' : 'normal')
       existing[`purchase_${condition}`] = p.price
-      
+
       dataMap.set(timestamp, existing)
     })
 
@@ -234,7 +361,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         timestamp,
         date: date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
       }
-      
+
       const siteId = p.site?.id || 'other'
       existing[`price_${siteId}`] = p.price
       if (p.stock !== null && p.stock !== undefined) {
@@ -276,6 +403,55 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     return Array.from(conditions)
   }, [purchasePrices])
 
+  // スニダン売買履歴のグラフデータ
+  const snkrdunkChartData = useMemo(() => {
+    const dataMap = new Map<number, any>()
+
+    snkrdunkSales.forEach((sale: any) => {
+      const timestamp = new Date(sale.sold_at).getTime()
+      const existing = dataMap.get(timestamp) || {
+        timestamp,
+        date: new Date(sale.sold_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        count: {}
+      }
+
+      // 同じ時刻・同じグレードの価格を配列で保持
+      const gradeKey = `grade_${sale.grade}`
+      if (!existing[gradeKey]) {
+        existing[gradeKey] = []
+      }
+      existing[gradeKey].push(sale.price)
+
+      // 件数をカウント
+      existing.count[sale.grade] = (existing.count[sale.grade] || 0) + 1
+
+      dataMap.set(timestamp, existing)
+    })
+
+    // 平均価格を計算
+    return Array.from(dataMap.values()).map(item => {
+      const result = { ...item }
+      Object.keys(item).forEach(key => {
+        if (key.startsWith('grade_') && Array.isArray(item[key])) {
+          // 平均価格を計算
+          result[key] = Math.round(
+            item[key].reduce((sum: number, p: number) => sum + p, 0) / item[key].length
+          )
+        }
+      })
+      return result
+    }).sort((a, b) => a.timestamp - b.timestamp).slice(-100)
+  }, [snkrdunkSales])
+
+  // スニダンのユニークなグレードリスト
+  const snkrdunkGrades = useMemo(() => {
+    const grades = new Set<string>()
+    snkrdunkSales.forEach((sale: any) => {
+      grades.add(sale.grade)
+    })
+    return Array.from(grades).sort()
+  }, [snkrdunkSales])
+
   // サイト表示切り替え
   const toggleSitePrice = (siteId: string) => {
     setVisibleSites(prev => ({
@@ -310,6 +486,14 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     return v?.price === false && v?.stock === false
   }
 
+  // グレード表示切り替え
+  const toggleGrade = (grade: string) => {
+    setVisibleGrades(prev => ({
+      ...prev,
+      [grade]: !prev[grade]
+    }))
+  }
+
   // カスタムドット（◇ダイヤモンド型）
   const DiamondDot = (props: any) => {
     const { cx, cy, stroke, fill } = props
@@ -328,7 +512,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   // カスタムツールチップ
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null
-    
+
     return (
       <div className="bg-white border rounded-lg shadow-lg p-3 text-sm">
         <p className="font-medium text-gray-700 mb-2">{label}</p>
@@ -389,7 +573,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 </button>
               </div>
             </div>
-            
+
             {/* 最新価格サマリー */}
             <div className="flex gap-4 mt-4">
               <div className="bg-blue-50 rounded-xl p-4 flex-1">
@@ -437,11 +621,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   <button
                     key={option.label}
                     onClick={() => setSelectedPeriod(option.days)}
-                    className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                      selectedPeriod === option.days
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-sm transition-colors ${selectedPeriod === option.days
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
                   >
                     {option.label}
                   </button>
@@ -455,24 +638,23 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   {/* 買取価格 */}
                   <button
                     onClick={() => setShowPurchase(!showPurchase)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                      showPurchase 
-                        ? 'bg-blue-100 border-blue-300 text-blue-700' 
-                        : 'bg-white border-gray-200 text-gray-400'
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showPurchase
+                      ? 'bg-blue-100 border-blue-300 text-blue-700'
+                      : 'bg-white border-gray-200 text-gray-400'
+                      }`}
                   >
                     <span className={`w-3 h-3 rounded-full ${showPurchase ? 'bg-blue-500' : 'bg-gray-300'}`}></span>
                     買取価格
                     <span className="flex items-center gap-0.5">
-                      <input 
-                        type="checkbox" 
-                        checked={showPurchase} 
+                      <input
+                        type="checkbox"
+                        checked={showPurchase}
                         onChange={() => setShowPurchase(!showPurchase)}
                         className="w-4 h-4 accent-blue-500"
                       />
                     </span>
                   </button>
-                  
+
                   {/* サイト別 */}
                   {siteList.map((site, index) => {
                     const color = SITE_COLORS[index % SITE_COLORS.length]
@@ -481,17 +663,16 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                     return (
                       <div
                         key={site.id}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                          hidden
-                            ? 'bg-white border-gray-200 text-gray-400'
-                            : 'bg-green-50 border-green-200 text-green-700'
-                        }`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${hidden
+                          ? 'bg-white border-gray-200 text-gray-400'
+                          : 'bg-green-50 border-green-200 text-green-700'
+                          }`}
                       >
-                        <span 
-                          className="w-3 h-3 rounded-full" 
+                        <span
+                          className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: hidden ? '#d1d5db' : color }}
                         ></span>
-                        <span 
+                        <span
                           className="cursor-pointer"
                           onClick={() => toggleSiteAll(site.id)}
                         >
@@ -499,18 +680,18 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         </span>
                         <span className="flex items-center gap-1 ml-1 text-xs">
                           <label className="flex items-center gap-0.5 cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={v.price !== false} 
+                            <input
+                              type="checkbox"
+                              checked={v.price !== false}
                               onChange={() => toggleSitePrice(site.id)}
                               className="w-3 h-3 accent-green-500"
                             />
                             <span>●価格</span>
                           </label>
                           <label className="flex items-center gap-0.5 cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={v.stock !== false} 
+                            <input
+                              type="checkbox"
+                              checked={v.stock !== false}
                               onChange={() => toggleSiteStock(site.id)}
                               className="w-3 h-3 accent-green-500"
                             />
@@ -531,7 +712,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                     <LineChart data={chartData} margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                      <YAxis 
+                      <YAxis
                         yAxisId="price"
                         orientation="left"
                         tick={{ fontSize: 11 }}
@@ -539,7 +720,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         domain={['auto', 'auto']}
                       />
                       {hasStockData && (
-                        <YAxis 
+                        <YAxis
                           yAxisId="stock"
                           orientation="right"
                           tick={{ fontSize: 11 }}
@@ -548,25 +729,25 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         />
                       )}
                       <Tooltip content={<CustomTooltip />} />
-                      
+
                       {/* 買取価格（状態別） */}
                       {showPurchase && purchaseConditions.map((condition) => {
                         const config = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
                         return (
-                          <Line 
+                          <Line
                             key={`purchase_${condition}`}
                             yAxisId="price"
-                            type="monotone" 
-                            dataKey={`purchase_${condition}`} 
-                            stroke={config.color} 
-                            strokeWidth={2} 
+                            type="monotone"
+                            dataKey={`purchase_${condition}`}
+                            stroke={config.color}
+                            strokeWidth={2}
                             name={`買取(${config.label})`}
                             dot={{ r: 3 }}
                             connectNulls
                           />
                         )
                       })}
-                      
+
                       {/* サイト別価格 */}
                       {siteList
                         .filter(site => visibleSites[site.id]?.price !== false)
@@ -574,20 +755,20 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                           const colorIndex = siteList.findIndex(s => s.id === site.id)
                           const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
                           return (
-                            <Line 
+                            <Line
                               key={`price_${site.id}`}
                               yAxisId="price"
-                              type="monotone" 
-                              dataKey={`price_${site.id}`} 
-                              stroke={color} 
-                              strokeWidth={2} 
+                              type="monotone"
+                              dataKey={`price_${site.id}`}
+                              stroke={color}
+                              strokeWidth={2}
                               name={`${site.name}(価格)`}
                               dot={{ r: 3 }}
                               connectNulls
                             />
                           )
                         })}
-                      
+
                       {/* サイト別在庫 */}
                       {hasStockData && siteList
                         .filter(site => visibleSites[site.id]?.stock !== false)
@@ -595,13 +776,13 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                           const colorIndex = siteList.findIndex(s => s.id === site.id)
                           const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
                           return (
-                            <Line 
+                            <Line
                               key={`stock_${site.id}`}
                               yAxisId="stock"
-                              type="stepAfter" 
-                              dataKey={`stock_${site.id}`} 
-                              stroke={color} 
-                              strokeWidth={1.5} 
+                              type="stepAfter"
+                              dataKey={`stock_${site.id}`}
+                              stroke={color}
+                              strokeWidth={1.5}
                               strokeDasharray="5 5"
                               name={`${site.name}(在庫)`}
                               dot={<DiamondDot stroke={color} />}
@@ -621,6 +802,184 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   <p>価格データがまだありません</p>
                 </div>
               )}
+
+              {/* スニダン売買履歴グラフ */}
+              <div className="bg-white border rounded-xl p-4">
+                <h3 className="font-bold text-gray-800 mb-4">スニダン売買履歴（グレード別）</h3>
+
+                {/* 自動更新設定 */}
+                {(() => {
+                  const snkrdunkUrl = saleUrls.find((url: any) =>
+                    url.site?.name?.toLowerCase().includes('スニダン') ||
+                    url.site?.name?.toLowerCase().includes('snkrdunk')
+                  )
+
+                  return (
+                    <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                      <h4 className="font-bold text-sm mb-3">🤖 自動更新設定</h4>
+
+                      {/* URL表示 */}
+                      {snkrdunkUrl ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs text-gray-600">🔗 スニダンURL:</span>
+                            <a
+                              href={snkrdunkUrl.product_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:underline flex items-center gap-1 truncate max-w-xs"
+                            >
+                              {snkrdunkUrl.product_url}
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
+
+                          {/* モード選択 */}
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs text-gray-600">🔄 自動更新:</span>
+                            <select
+                              value={snkrdunkUrl.auto_scrape_mode || 'off'}
+                              onChange={(e) => updateAutoScrapeMode(snkrdunkUrl.id, e.target.value)}
+                              className="px-2 py-1 border rounded text-xs"
+                            >
+                              <option value="off">停止</option>
+                              <option value="auto">オートメーション（30分～6時間）</option>
+                              <option value="manual">手動設定</option>
+                            </select>
+                          </div>
+
+                          {/* 手動設定時の間隔選択 */}
+                          {snkrdunkUrl.auto_scrape_mode === 'manual' && (
+                            <div className="flex items-center gap-2 mb-3 ml-4">
+                              <span className="text-xs text-gray-600">⏱️ 更新間隔:</span>
+                              <select
+                                value={snkrdunkUrl.auto_scrape_interval_minutes || 360}
+                                onChange={(e) => updateScrapeInterval(snkrdunkUrl.id, parseInt(e.target.value))}
+                                className="px-2 py-1 border rounded text-xs"
+                              >
+                                <option value="30">30分</option>
+                                <option value="60">1時間</option>
+                                <option value="120">2時間</option>
+                                <option value="180">3時間</option>
+                                <option value="240">4時間</option>
+                                <option value="360">6時間</option>
+                              </select>
+                            </div>
+                          )}
+
+                          {/* 最終更新情報 */}
+                          {snkrdunkUrl.last_scraped_at && (
+                            <div className="text-xs text-gray-500 mb-2">
+                              📊 最終更新: {new Date(snkrdunkUrl.last_scraped_at).toLocaleString('ja-JP')}
+                              {' '}({formatRelativeTime(snkrdunkUrl.last_scraped_at)})
+                            </div>
+                          )}
+
+                          {/* 次回更新予定 */}
+                          {snkrdunkUrl.next_scrape_at && snkrdunkUrl.auto_scrape_mode !== 'off' && (
+                            <div className="text-xs text-gray-500 mb-2">
+                              ⏰ 次回更新: {new Date(snkrdunkUrl.next_scrape_at).toLocaleString('ja-JP')}
+                              {' '}({formatRelativeTime(snkrdunkUrl.next_scrape_at)})
+                            </div>
+                          )}
+
+                          {/* エラー表示 */}
+                          {snkrdunkUrl.last_scrape_status === 'error' && (
+                            <div className="bg-red-50 border border-red-200 rounded p-2 mb-2">
+                              <p className="text-xs text-red-700">⚠️ エラーが発生しました</p>
+                              <p className="text-xs text-red-600 mt-1">{snkrdunkUrl.last_scrape_error}</p>
+                            </div>
+                          )}
+
+                          {/* 手動更新ボタン */}
+                          <button
+                            onClick={scrapeSnkrdunk}
+                            disabled={snkrdunkScraping}
+                            className="px-3 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {snkrdunkScraping ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                            今すぐ更新
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-xs text-gray-500">
+                          ⚠️ スニダンURLが未設定です。販売サイトからURLを追加してください。
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* グレード表示切り替え */}
+                {snkrdunkGrades.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {snkrdunkGrades.map(grade => {
+                      const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
+                      const isVisible = visibleGrades[grade] !== false
+                      return (
+                        <button
+                          key={grade}
+                          onClick={() => toggleGrade(grade)}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${isVisible
+                            ? 'bg-purple-50 border-purple-200 text-purple-700'
+                            : 'bg-white border-gray-200 text-gray-400'
+                            }`}
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: isVisible ? color : '#d1d5db' }}
+                          ></span>
+                          {grade}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* グラフ */}
+                {snkrdunkLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <RefreshCw className="animate-spin text-purple-500" size={32} />
+                  </div>
+                ) : snkrdunkChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={snkrdunkChartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
+                        domain={['auto', 'auto']}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+
+                      {/* グレード別ライン */}
+                      {snkrdunkGrades
+                        .filter(grade => visibleGrades[grade] !== false)
+                        .map(grade => {
+                          const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
+                          return (
+                            <Line
+                              key={grade}
+                              type="monotone"
+                              dataKey={`grade_${grade}`}
+                              stroke={color}
+                              strokeWidth={2}
+                              name={grade}
+                              dot={{ r: 3 }}
+                              connectNulls
+                            />
+                          )
+                        })}
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
+                    <p>売買履歴データがありません</p>
+                    <p className="text-sm mt-2">「履歴更新」ボタンからスクレイピングを実行してください</p>
+                  </div>
+                )}
+              </div>
 
               {/* 販売URL一覧 */}
               <div>
@@ -705,7 +1064,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                               <tr key={i} className="hover:bg-gray-50">
                                 <td className="px-3 py-2">{p.shop?.name || '-'}</td>
                                 <td className="px-3 py-2 text-center">
-                                  <span 
+                                  <span
                                     className="px-2 py-0.5 rounded text-xs font-medium"
                                     style={{ backgroundColor: `${conditionConfig.color}20`, color: conditionConfig.color }}
                                   >

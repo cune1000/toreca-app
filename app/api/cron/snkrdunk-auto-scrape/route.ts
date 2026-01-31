@@ -1,0 +1,336 @@
+import { NextResponse } from 'next/server'
+import { chromium } from 'playwright'
+import { supabase } from '@/lib/supabase'
+
+/**
+ * Vercel Cron Job: スニダン自動スクレイピング
+ * 10分ごとに実行され、設定に応じて各カードをスクレイピング
+ */
+export async function GET(req: Request) {
+    try {
+        // 認証チェック
+        const authHeader = req.headers.get('authorization')
+        if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+            return new Response('Unauthorized', { status: 401 })
+        }
+
+        const now = new Date()
+        const MAX_SCRAPES_PER_RUN = 10 // 1回の実行で最大10件まで
+
+        // スニダンのURLを持つカードを取得
+        const { data: saleUrls, error: fetchError } = await supabase
+            .from('card_sale_urls')
+            .select('*, site:site_id(id, name), card:card_id(id, name)')
+            .neq('auto_scrape_mode', 'off')
+            .or('next_scrape_at.is.null,next_scrape_at.lte.' + now.toISOString())
+            .order('next_scrape_at', { ascending: true, nullsFirst: true })
+            .limit(MAX_SCRAPES_PER_RUN)
+
+        if (fetchError) {
+            console.error('Failed to fetch sale URLs:', fetchError)
+            return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
+        }
+
+        // スニダンのURLのみフィルタ
+        const snkrdunkUrls = (saleUrls || []).filter((url: any) =>
+            url.site?.name?.toLowerCase().includes('スニダン') ||
+            url.site?.name?.toLowerCase().includes('snkrdunk')
+        )
+
+        if (snkrdunkUrls.length === 0) {
+            return NextResponse.json({ success: true, processed: 0, message: 'No URLs to scrape' })
+        }
+
+        const results = []
+
+        for (const saleUrl of snkrdunkUrls) {
+            try {
+                // 間隔を計算
+                let intervalMinutes: number
+
+                if (saleUrl.auto_scrape_mode === 'auto') {
+                    // オートメーション: アダプティブアルゴリズム
+                    intervalMinutes = await calculateAdaptiveInterval(saleUrl.card_id)
+                } else if (saleUrl.auto_scrape_mode === 'manual') {
+                    // 手動設定: ユーザー指定の間隔
+                    intervalMinutes = saleUrl.auto_scrape_interval_minutes || 360
+                } else {
+                    continue
+                }
+
+                // スクレイピング実行
+                const scrapeResult = await scrapeSnkrdunkHistory(saleUrl.card_id, saleUrl.product_url)
+
+                // 次回スクレイピング時刻を計算
+                const nextScrapeAt = new Date(now.getTime() + intervalMinutes * 60 * 1000)
+
+                // 更新
+                await supabase
+                    .from('card_sale_urls')
+                    .update({
+                        last_scraped_at: now.toISOString(),
+                        last_scrape_status: 'success',
+                        last_scrape_error: null,
+                        next_scrape_at: nextScrapeAt.toISOString()
+                    })
+                    .eq('id', saleUrl.id)
+
+                results.push({
+                    cardId: saleUrl.card_id,
+                    cardName: saleUrl.card?.name,
+                    status: 'success',
+                    inserted: scrapeResult.inserted,
+                    skipped: scrapeResult.skipped,
+                    nextScrapeAt: nextScrapeAt.toISOString(),
+                    intervalMinutes
+                })
+            } catch (error: any) {
+                console.error(`Failed to scrape card ${saleUrl.card_id}:`, error)
+
+                // エラー時は間隔を2倍に延長
+                const intervalMinutes = saleUrl.auto_scrape_mode === 'manual'
+                    ? saleUrl.auto_scrape_interval_minutes || 360
+                    : 360
+                const nextScrapeAt = new Date(now.getTime() + intervalMinutes * 2 * 60 * 1000)
+
+                await supabase
+                    .from('card_sale_urls')
+                    .update({
+                        last_scraped_at: now.toISOString(),
+                        last_scrape_status: 'error',
+                        last_scrape_error: error.message,
+                        next_scrape_at: nextScrapeAt.toISOString()
+                    })
+                    .eq('id', saleUrl.id)
+
+                results.push({
+                    cardId: saleUrl.card_id,
+                    cardName: saleUrl.card?.name,
+                    status: 'error',
+                    error: error.message
+                })
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            processed: results.length,
+            results
+        })
+    } catch (error: any) {
+        console.error('Cron job error:', error)
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+}
+
+/**
+ * アダプティブアルゴリズム: 売買頻度に応じて間隔を調整
+ */
+async function calculateAdaptiveInterval(cardId: string): Promise<number> {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+    const { data: recentSales } = await supabase
+        .from('snkrdunk_sales_history')
+        .select('id')
+        .eq('card_id', cardId)
+        .gte('sold_at', twentyFourHoursAgo.toISOString())
+
+    const salesPerHour = (recentSales?.length || 0) / 24
+
+    let intervalMinutes: number
+
+    if (salesPerHour >= 5) {
+        // 非常に活発: 5件/時間以上 → 30分
+        intervalMinutes = 30
+    } else if (salesPerHour >= 2) {
+        // 活発: 2-5件/時間 → 1時間
+        intervalMinutes = 60
+    } else if (salesPerHour >= 1) {
+        // 中程度: 1-2件/時間 → 2時間
+        intervalMinutes = 120
+    } else if (salesPerHour >= 0.5) {
+        // やや静か: 0.5-1件/時間 → 3時間
+        intervalMinutes = 180
+    } else if (salesPerHour >= 0.2) {
+        // 静か: 0.2-0.5件/時間 → 4時間
+        intervalMinutes = 240
+    } else {
+        // 非常に静か: 0.2件/時間未満 → 6時間
+        intervalMinutes = 360
+    }
+
+    // ランダム化（±10%）
+    const randomOffset = Math.floor(intervalMinutes * 0.1 * (Math.random() * 2 - 1))
+    intervalMinutes += randomOffset
+
+    return intervalMinutes
+}
+
+/**
+ * スニダン売買履歴をスクレイピング
+ */
+async function scrapeSnkrdunkHistory(cardId: string, url: string) {
+    const browser = await chromium.launch({ headless: true })
+
+    try {
+        const page = await browser.newPage()
+        await page.setExtraHTTPHeaders({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
+
+        // 売買履歴を取得
+        const salesHistory = await page.$$eval(
+            'ul.sales-history.item-list > li',
+            (items) => {
+                return items.map(item => {
+                    const dateText = item.querySelector('p.date')?.textContent?.trim() || ''
+                    const gradeText = item.querySelector('p.size')?.textContent?.trim() || ''
+                    const priceText = item.querySelector('p.price')?.textContent?.trim() || ''
+                    return { dateText, gradeText, priceText }
+                })
+            }
+        )
+
+        await browser.close()
+
+        // データを整形
+        const now = new Date()
+        const scrapedData: Array<{ grade: string; price: number; sold_at: string }> = []
+
+        salesHistory.forEach(item => {
+            const soldAt = parseRelativeTime(item.dateText, now)
+            if (!soldAt) return
+
+            const grade = normalizeGrade(item.gradeText)
+            if (!grade) return
+
+            const price = parsePrice(item.priceText)
+            if (!price) return
+
+            scrapedData.push({ grade, price, sold_at: soldAt.toISOString() })
+        })
+
+        // 既存データを取得
+        const { data: existingData } = await supabase
+            .from('snkrdunk_sales_history')
+            .select('grade, price, sold_at, sequence_number')
+            .eq('card_id', cardId)
+            .order('sold_at', { ascending: false })
+            .limit(100)
+
+        // 既存データをMapに変換
+        const existingMap = new Map<string, Set<number>>()
+        existingData?.forEach(item => {
+            const key = `${item.grade}_${item.price}_${item.sold_at}`
+            if (!existingMap.has(key)) {
+                existingMap.set(key, new Set())
+            }
+            existingMap.get(key)!.add(item.sequence_number)
+        })
+
+        // 新規データのみを抽出 & sequence_number を割り当て
+        const newData: any[] = []
+        scrapedData.forEach(sale => {
+            const key = `${sale.grade}_${sale.price}_${sale.sold_at}`
+            const existingSeqs = existingMap.get(key) || new Set()
+
+            let seq = 0
+            while (existingSeqs.has(seq)) {
+                seq++
+            }
+
+            newData.push({
+                card_id: cardId,
+                grade: sale.grade,
+                price: sale.price,
+                sold_at: sale.sold_at,
+                sequence_number: seq,
+                scraped_at: new Date().toISOString()
+            })
+
+            existingSeqs.add(seq)
+            existingMap.set(key, existingSeqs)
+        })
+
+        // 新規データのみ挿入
+        let insertedCount = 0
+        if (newData.length > 0) {
+            const { data, error } = await supabase
+                .from('snkrdunk_sales_history')
+                .insert(newData)
+                .select()
+
+            if (error) {
+                throw new Error(`Database insert error: ${error.message}`)
+            }
+
+            insertedCount = data?.length || 0
+        }
+
+        return {
+            total: scrapedData.length,
+            inserted: insertedCount,
+            skipped: scrapedData.length - insertedCount
+        }
+    } catch (error) {
+        await browser.close()
+        throw error
+    }
+}
+
+// ヘルパー関数（既存のsnkrdunk-scrape/route.tsと同じ）
+function parseRelativeTime(timeStr: string, baseTime: Date): Date | null {
+    const pattern = /(\d+)(分|時間|日)前/
+    const match = timeStr.match(pattern)
+    if (!match) return null
+
+    const value = parseInt(match[1], 10)
+    const unit = match[2]
+    const result = new Date(baseTime)
+
+    switch (unit) {
+        case '分':
+            result.setMinutes(result.getMinutes() - value)
+            break
+        case '時間':
+            result.setHours(result.getHours() - value)
+            break
+        case '日':
+            result.setDate(result.getDate() - value)
+            break
+        default:
+            return null
+    }
+
+    return result
+}
+
+function normalizeGrade(gradeText: string): string | null {
+    const cleaned = gradeText.replace(/\s+/g, '').toUpperCase()
+
+    if (cleaned.includes('PSA10')) return 'PSA10'
+    if (cleaned.includes('PSA9')) return 'PSA9'
+    if (cleaned.includes('PSA8') || cleaned.includes('PSA7') || cleaned.includes('PSA6')) return 'PSA8以下'
+    if (cleaned.includes('BGS10BL')) return 'BGS10BL'
+    if (cleaned.includes('BGS10GL')) return 'BGS10GL'
+    if (cleaned.includes('BGS9.5')) return 'BGS9.5'
+    if (cleaned.includes('BGS9')) return 'BGS9以下'
+    if (cleaned.includes('ARS10+')) return 'ARS10+'
+    if (cleaned.includes('ARS10')) return 'ARS10'
+    if (cleaned.includes('ARS9')) return 'ARS9'
+    if (cleaned.includes('ARS8')) return 'ARS8以下'
+    if (cleaned.includes('A') || cleaned === 'A') return 'A'
+    if (cleaned.includes('B') || cleaned === 'B') return 'B'
+    if (cleaned.includes('C') || cleaned === 'C') return 'C'
+    if (cleaned.includes('D') || cleaned === 'D') return 'D'
+
+    return null
+}
+
+function parsePrice(priceText: string): number | null {
+    const cleaned = priceText.replace(/[¥,]/g, '')
+    const price = parseInt(cleaned, 10)
+    return isNaN(price) ? null : price
+}
