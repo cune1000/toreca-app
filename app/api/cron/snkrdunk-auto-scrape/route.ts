@@ -213,15 +213,11 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         .select('grade, price, sold_at, sequence_number')
         .eq('card_id', cardId)
 
-    // 既存データをSetに変換（高速検索用）
-    const existingSet = new Set<string>()
+    // 既存データをMapに変換（高速検索用）
     const existingMap = new Map<string, Set<number>>()
 
     existingData?.forEach(item => {
         const key = `${item.grade}_${item.price}_${item.sold_at}`
-        const fullKey = `${key}_${item.sequence_number}`
-        existingSet.add(fullKey)
-
         if (!existingMap.has(key)) {
             existingMap.set(key, new Set())
         }
@@ -239,13 +235,6 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
             seq++
         }
 
-        const fullKey = `${key}_${seq}`
-
-        // 既に存在する場合はスキップ
-        if (existingSet.has(fullKey)) {
-            return
-        }
-
         newData.push({
             card_id: cardId,
             grade: sale.grade,
@@ -257,7 +246,6 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
 
         existingSeqs.add(seq)
         existingMap.set(key, existingSeqs)
-        existingSet.add(fullKey)
     })
 
     // 新規データのみ挿入
