@@ -80,10 +80,15 @@ export async function POST(req: Request) {
             .select('grade, price, sold_at, sequence_number')
             .eq('card_id', cardId)
 
-        // 既存データをMapに変換（高速検索用）
+        // 既存データをSetに変換（高速検索用）
+        const existingSet = new Set<string>()
         const existingMap = new Map<string, Set<number>>()
+
         existingData?.forEach(item => {
             const key = `${item.grade}_${item.price}_${item.sold_at}`
+            const fullKey = `${key}_${item.sequence_number}`
+            existingSet.add(fullKey)
+
             if (!existingMap.has(key)) {
                 existingMap.set(key, new Set())
             }
@@ -102,6 +107,13 @@ export async function POST(req: Request) {
                 seq++
             }
 
+            const fullKey = `${key}_${seq}`
+
+            // 既に存在する場合はスキップ
+            if (existingSet.has(fullKey)) {
+                return
+            }
+
             newData.push({
                 card_id: cardId,
                 grade: sale.grade,
@@ -114,17 +126,15 @@ export async function POST(req: Request) {
             // 次回のために追加
             existingSeqs.add(seq)
             existingMap.set(key, existingSeqs)
+            existingSet.add(fullKey)
         })
 
-        // 新規データのみ挿入（on_conflictで重複を無視）
+        // 新規データのみ挿入
         let insertedCount = 0
         if (newData.length > 0) {
             const { data, error } = await supabase
                 .from('snkrdunk_sales_history')
-                .upsert(newData, {
-                    onConflict: 'card_id,grade,sold_at,sequence_number',
-                    ignoreDuplicates: true
-                })
+                .insert(newData)
                 .select()
 
             if (error) {
