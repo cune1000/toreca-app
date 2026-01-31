@@ -169,7 +169,7 @@ async function calculateAdaptiveInterval(cardId: string): Promise<number> {
  * スニダン売買履歴をスクレイピング（toreca-scraper経由）
  */
 async function scrapeSnkrdunkHistory(cardId: string, url: string) {
-    const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://toreca-scraper-production.up.railway.app'
+    const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://skillful-love-production.up.railway.app'
 
     // toreca-scraperを呼び出してスクレイピング
     const scrapeResponse = await fetch(`${TORECA_SCRAPER_URL}/api/snkrdunk-scrape`, {

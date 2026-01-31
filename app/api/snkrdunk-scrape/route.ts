@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://toreca-scraper-production.up.railway.app'
+const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://skillful-love-production.up.railway.app'
 
 /**
  * スニーカーダンクの売買履歴をスクレイピング
