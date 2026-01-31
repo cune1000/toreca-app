@@ -79,7 +79,7 @@ ${additionalContext ? `追加情報: ${additionalContext}` : ''}
           { text: prompt }
         ]
       }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+      generationConfig: { temperature: 0.1, maxOutputTokens: 16384 }
     })
   })
 

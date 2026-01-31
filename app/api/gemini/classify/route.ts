@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
         const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg'
 
         // Gemini APIで判別
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
 
         const prompt = `この画像を分析して、トレーディングカードの「買取表」または「買取価格表」かどうかを判定してください。
 
