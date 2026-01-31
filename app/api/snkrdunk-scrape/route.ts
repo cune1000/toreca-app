@@ -74,13 +74,11 @@ export async function POST(req: Request) {
             })
         })
 
-        // 既存データを取得（最新100件）
+        // 既存データを取得（全件）
         const { data: existingData } = await supabase
             .from('snkrdunk_sales_history')
             .select('grade, price, sold_at, sequence_number')
             .eq('card_id', cardId)
-            .order('sold_at', { ascending: false })
-            .limit(100)
 
         // 既存データをMapに変換（高速検索用）
         const existingMap = new Map<string, Set<number>>()
@@ -118,12 +116,15 @@ export async function POST(req: Request) {
             existingMap.set(key, existingSeqs)
         })
 
-        // 新規データのみ挿入
+        // 新規データのみ挿入（on_conflictで重複を無視）
         let insertedCount = 0
         if (newData.length > 0) {
             const { data, error } = await supabase
                 .from('snkrdunk_sales_history')
-                .insert(newData)
+                .upsert(newData, {
+                    onConflict: 'card_id,grade,sold_at,sequence_number',
+                    ignoreDuplicates: true
+                })
                 .select()
 
             if (error) {

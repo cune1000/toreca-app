@@ -207,13 +207,11 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         scrapedData.push({ grade, price, sold_at: soldAt.toISOString() })
     })
 
-    // 既存データを取得
+    // 既存データを取得（全件）
     const { data: existingData } = await supabase
         .from('snkrdunk_sales_history')
         .select('grade, price, sold_at, sequence_number')
         .eq('card_id', cardId)
-        .order('sold_at', { ascending: false })
-        .limit(100)
 
     // 既存データをMapに変換
     const existingMap = new Map<string, Set<number>>()
@@ -249,12 +247,15 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         existingMap.set(key, existingSeqs)
     })
 
-    // 新規データのみ挿入
+    // 新規データのみ挿入（on_conflictで重複を無視）
     let insertedCount = 0
     if (newData.length > 0) {
         const { data, error } = await supabase
             .from('snkrdunk_sales_history')
-            .insert(newData)
+            .upsert(newData, {
+                onConflict: 'card_id,grade,sold_at,sequence_number',
+                ignoreDuplicates: true
+            })
             .select()
 
         if (error) {
