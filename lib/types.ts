@@ -275,3 +275,29 @@ export interface Rarity {
   name: string
   sort_order?: number
 }
+
+// =============================================================================
+// X自動監視システム関連
+// =============================================================================
+
+/** 取得済みツイート */
+export interface FetchedTweet {
+  id: string
+  tweet_id: string
+  shop_id: string
+  is_purchase_related: boolean
+  fetched_at: string
+  created_at: string
+}
+
+/** 店舗監視設定 */
+export interface ShopMonitorSetting {
+  shop_id: string
+  is_active: boolean
+  last_checked_at?: string
+  last_tweet_id?: string
+  created_at: string
+  updated_at: string
+  // リレーション
+  shop?: Shop
+}

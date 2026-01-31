@@ -52,11 +52,11 @@ export async function batchInsert<T extends Record<string, any>>(
   batchSize: number = 100
 ): Promise<{ success: number; failed: number; errors: string[] }> {
   const result = { success: 0, failed: 0, errors: [] as string[] }
-  
+
   for (let i = 0; i < records.length; i += batchSize) {
     const batch = records.slice(i, i + batchSize)
     const { error } = await supabase.from(table).insert(batch)
-    
+
     if (error) {
       result.failed += batch.length
       result.errors.push(`Batch ${i / batchSize + 1}: ${error.message}`)
@@ -64,7 +64,7 @@ export async function batchInsert<T extends Record<string, any>>(
       result.success += batch.length
     }
   }
-  
+
   return result
 }
 
@@ -75,13 +75,13 @@ export async function upsertRecord<T extends Record<string, any>>(
   conflictColumns: string | string[]
 ): Promise<{ data: T | null; error: string | null }> {
   const columns = Array.isArray(conflictColumns) ? conflictColumns.join(',') : conflictColumns
-  
+
   const { data, error } = await supabase
     .from(table)
     .upsert(record, { onConflict: columns })
     .select()
     .single()
-  
+
   if (error) {
     return { data: null, error: error.message }
   }
@@ -98,21 +98,25 @@ export const TABLES = {
   PURCHASE_PRICES: 'purchase_prices',
   SALE_PRICES: 'sale_prices',
   CARD_SALE_URLS: 'card_sale_urls',
-  
+
   // 店舗・サイト
   PURCHASE_SHOPS: 'purchase_shops',
   SALE_SITES: 'sale_sites',
-  
+
   // 保留
   PENDING_IMAGES: 'pending_images',
   PENDING_CARDS: 'pending_cards',
-  
+
   // カテゴリ
   CATEGORY_LARGE: 'category_large',
   CATEGORY_MEDIUM: 'category_medium',
   CATEGORY_SMALL: 'category_small',
   CATEGORY_DETAIL: 'category_detail',
   RARITIES: 'rarities',
+
+  // X自動監視システム
+  FETCHED_TWEETS: 'fetched_tweets',
+  SHOP_MONITOR_SETTINGS: 'shop_monitor_settings',
 } as const
 
 export type TableName = typeof TABLES[keyof typeof TABLES]

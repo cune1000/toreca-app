@@ -6,8 +6,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 // Gemini API呼び出し（画像認識用）
 async function callGemini(imageBase64: string, mimeType: string, additionalContext?: string) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${GEMINI_API_KEY}`
-  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`
+
   const prompt = `この画像はトレーディングカードの買取価格表です。
 
 ${additionalContext ? `追加情報: ${additionalContext}` : ''}
@@ -93,11 +93,11 @@ ${additionalContext ? `追加情報: ${additionalContext}` : ''}
 
 // Gemini Grounding（Google検索連携）でカード情報を補完
 async function enrichWithGrounding(card: any, isPsa: boolean): Promise<any> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${GEMINI_API_KEY}`
-  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`
+
   const priceStr = card.price ? `${card.price.toLocaleString()}円` : ''
   const psaStr = isPsa ? 'PSA鑑定' : ''
-  
+
   const prompt = `ポケモンカード「${card.name}」${priceStr} ${psaStr}について、正式なカード情報を教えてください。
 
 以下のJSON形式で返してください。必ずJSONのみを返し、他のテキストは含めないでください:
@@ -130,12 +130,12 @@ async function enrichWithGrounding(card: any, isPsa: boolean): Promise<any> {
 
     const data = await response.json()
     const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text
-    
+
     if (!responseText) return null
 
     const groundingResult = extractJSON(responseText)
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata
-    
+
     return {
       ...groundingResult,
       search_queries: groundingMetadata?.webSearchQueries || [],
@@ -154,11 +154,11 @@ async function enrichWithGrounding(card: any, isPsa: boolean): Promise<any> {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { 
-      imageBase64, 
-      imageUrl, 
-      mimeType = 'image/jpeg', 
-      tweetText, 
+    const {
+      imageBase64,
+      imageUrl,
+      mimeType = 'image/jpeg',
+      tweetText,
       shopId,
       enableGrounding = true,
       groundingConcurrency = 5
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
     // Step 2: Grounding で各カード情報を補完
     if (enableGrounding && result.cards && result.cards.length > 0) {
       console.log(`Step 2: Enriching ${result.cards.length} cards with Grounding...`)
-      
+
       const enrichedCards = []
       for (let i = 0; i < result.cards.length; i += groundingConcurrency) {
         const batch = result.cards.slice(i, i + groundingConcurrency)
@@ -228,21 +228,21 @@ export async function POST(request: NextRequest) {
           })
         )
         enrichedCards.push(...batchResults)
-        
+
         if (i + groundingConcurrency < result.cards.length) {
           await new Promise(resolve => setTimeout(resolve, 500))
         }
       }
-      
+
       result.cards = enrichedCards
-      
+
       const groundingSuccess = enrichedCards.filter((c: any) => c.grounding?.confidence === 'high').length
       result.grounding_stats = {
         total: enrichedCards.length,
         high_confidence: groundingSuccess,
         success_rate: Math.round((groundingSuccess / enrichedCards.length) * 100)
       }
-      
+
       console.log(`Grounding complete: ${groundingSuccess}/${enrichedCards.length} high confidence`)
     }
 
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
         .select('name')
         .eq('id', shopId)
         .single()
-      
+
       if (shop) result.shop = { id: shopId, name: shop.name }
     }
 
