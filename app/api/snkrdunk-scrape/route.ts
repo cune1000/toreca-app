@@ -133,7 +133,7 @@ export async function POST(req: Request) {
                     price: sale.price,
                     sold_at: sale.sold_at,
                     user_icon_number: sale.user_icon_number,
-                    context_fingerprint: context,
+                    // context_fingerprint: context, // 一時的に無効化（スキーマキャッシュ問題）
                     sequence_number: 0, // 互換性のため残す
                     scraped_at: new Date().toISOString()
                 })
@@ -163,9 +163,10 @@ export async function POST(req: Request) {
             if (item.user_icon_number !== null && item.user_icon_number !== undefined) {
                 insertData.user_icon_number = item.user_icon_number
             }
-            if (item.context_fingerprint !== null && item.context_fingerprint !== undefined) {
-                insertData.context_fingerprint = item.context_fingerprint
-            }
+            // context_fingerprintは一時的に無効化
+            // if (item.context_fingerprint !== null && item.context_fingerprint !== undefined) {
+            //     insertData.context_fingerprint = item.context_fingerprint
+            // }
 
             const { error } = await supabase
                 .from('snkrdunk_sales_history')
