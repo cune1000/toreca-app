@@ -93,12 +93,19 @@ export async function POST(req: Request) {
 
         // 新規データのみを抽出 & sequence_number を割り当て
         const newData: any[] = []
+
+        // スクレイピングデータ内での重複もカウント
+        const scrapedCountMap = new Map<string, number>()
+
         scrapedData.forEach(sale => {
             const key = `${sale.grade}_${sale.price}_${sale.sold_at}`
             const existingSeqs = existingMap.get(key) || new Set()
 
+            // スクレイピングデータ内で既に処理した同じキーの数を取得
+            const scrapedCount = scrapedCountMap.get(key) || 0
+
             // 次の利用可能なsequence_numberを見つける
-            let seq = 0
+            let seq = scrapedCount
             while (existingSeqs.has(seq)) {
                 seq++
             }
@@ -115,6 +122,9 @@ export async function POST(req: Request) {
             // 次回のために追加（同一スクレイピング内の重複を防ぐ）
             existingSeqs.add(seq)
             existingMap.set(key, existingSeqs)
+
+            // スクレイピングデータ内でのカウントを更新
+            scrapedCountMap.set(key, scrapedCount + 1)
         })
 
         // 新規データのみ挿入（1件ずつ挿入して重複エラーを無視）
