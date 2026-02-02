@@ -283,9 +283,27 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
     // 新規データのみ挿入
     let insertedCount = 0
     for (const item of newData) {
+        // マイグレーション前の互換性: user_icon_numberとcontext_fingerprintがnullの場合は除外
+        const insertData: any = {
+            card_id: item.card_id,
+            grade: item.grade,
+            price: item.price,
+            sold_at: item.sold_at,
+            sequence_number: item.sequence_number,
+            scraped_at: item.scraped_at
+        }
+
+        // 新しいカラムは存在する場合のみ追加
+        if (item.user_icon_number !== null && item.user_icon_number !== undefined) {
+            insertData.user_icon_number = item.user_icon_number
+        }
+        if (item.context_fingerprint !== null && item.context_fingerprint !== undefined) {
+            insertData.context_fingerprint = item.context_fingerprint
+        }
+
         const { error } = await supabase
             .from('snkrdunk_sales_history')
-            .insert(item)
+            .insert(insertData)
 
         if (error) {
             // 重複エラー（23505）は無視、それ以外はログ出力
@@ -293,7 +311,7 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
                 console.log(`[DB duplicate] ${item.grade} ¥${item.price} icon:${item.user_icon_number}`)
                 skippedCount++
             } else {
-                console.error(`[Insert error] ${error.code}: ${error.message}`, item)
+                console.error(`[Insert error] ${error.code}: ${error.message}`, insertData)
             }
         } else {
             insertedCount++

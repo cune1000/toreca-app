@@ -87,6 +87,8 @@ export async function POST(req: Request) {
         const newData: any[] = []
         let skippedCount = 0
 
+        console.log(`[Debug] Total scraped: ${scrapedData.length}, Existing data: ${existingData?.length || 0}`)
+
         for (let i = 0; i < scrapedData.length; i++) {
             const sale = scrapedData[i]
 
@@ -135,18 +137,39 @@ export async function POST(req: Request) {
                     sequence_number: 0, // 互換性のため残す
                     scraped_at: new Date().toISOString()
                 })
+                console.log(`[Debug] Added to newData: ${sale.grade} ¥${sale.price} icon:${sale.user_icon_number}`)
             } else {
                 skippedCount++
                 console.log(`[Duplicate detected] ${sale.grade} ¥${sale.price} icon:${sale.user_icon_number}`)
             }
         }
 
+        console.log(`[Debug] newData count: ${newData.length}, skipped: ${skippedCount}`)
+
         // 新規データのみ挿入
         let insertedCount = 0
         for (const item of newData) {
+            // マイグレーション前の互換性: user_icon_numberとcontext_fingerprintがnullの場合は除外
+            const insertData: any = {
+                card_id: item.card_id,
+                grade: item.grade,
+                price: item.price,
+                sold_at: item.sold_at,
+                sequence_number: item.sequence_number,
+                scraped_at: item.scraped_at
+            }
+
+            // 新しいカラムは存在する場合のみ追加
+            if (item.user_icon_number !== null && item.user_icon_number !== undefined) {
+                insertData.user_icon_number = item.user_icon_number
+            }
+            if (item.context_fingerprint !== null && item.context_fingerprint !== undefined) {
+                insertData.context_fingerprint = item.context_fingerprint
+            }
+
             const { error } = await supabase
                 .from('snkrdunk_sales_history')
-                .insert(item)
+                .insert(insertData)
 
             if (error) {
                 // 重複エラー（23505）は無視、それ以外はログ出力
@@ -154,7 +177,7 @@ export async function POST(req: Request) {
                     console.log(`[DB duplicate] ${item.grade} ¥${item.price} icon:${item.user_icon_number}`)
                     skippedCount++
                 } else {
-                    console.error(`[Insert error] ${error.code}: ${error.message}`, item)
+                    console.error(`[Insert error] ${error.code}: ${error.message}`, insertData)
                 }
             } else {
                 insertedCount++
