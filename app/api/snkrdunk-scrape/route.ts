@@ -50,84 +50,98 @@ export async function POST(req: Request) {
             })
         }
 
-        // データを整形
+        // データを整形（アイコン番号も含む）
         const now = new Date()
-        const scrapedData: Array<{ grade: string; price: number; sold_at: string }> = []
+        const scrapedData: Array<{
+            grade: string
+            price: number
+            sold_at: string
+            user_icon_number: number | null
+        }> = []
 
         salesHistory.forEach((item: any) => {
-            // 時間をパース
             const soldAt = parseRelativeTime(item.dateText, now)
             if (!soldAt) return
 
-            // グレードを正規化
             const grade = normalizeGrade(item.gradeText)
             if (!grade) return
 
-            // 価格を抽出
             const price = parsePrice(item.priceText)
             if (!price) return
 
             scrapedData.push({
                 grade,
                 price,
-                sold_at: soldAt.toISOString()
+                sold_at: soldAt.toISOString(),
+                user_icon_number: item.userIconNumber || null
             })
         })
 
-        // 既存データを取得（全件）
+        // 既存データを取得
         const { data: existingData } = await supabase
             .from('snkrdunk_sales_history')
-            .select('grade, price, sold_at, sequence_number')
+            .select('grade, price, sold_at, user_icon_number')
             .eq('card_id', cardId)
 
-        // 既存データをMapに変換（高速検索用）
-        const existingMap = new Map<string, Set<number>>()
-
-        existingData?.forEach(item => {
-            const key = `${item.grade}_${item.price}_${item.sold_at}`
-            if (!existingMap.has(key)) {
-                existingMap.set(key, new Set())
-            }
-            existingMap.get(key)!.add(item.sequence_number)
-        })
-
-        // 新規データのみを抽出 & sequence_number を割り当て
+        // 新規データのみを抽出（user_icon_numberベースの重複判定）
         const newData: any[] = []
+        let skippedCount = 0
 
-        // スクレイピングデータ内での重複もカウント
-        const scrapedCountMap = new Map<string, number>()
+        for (let i = 0; i < scrapedData.length; i++) {
+            const sale = scrapedData[i]
 
-        scrapedData.forEach(sale => {
-            const key = `${sale.grade}_${sale.price}_${sale.sold_at}`
-            const existingSeqs = existingMap.get(key) || new Set()
-
-            // スクレイピングデータ内で既に処理した同じキーの数を取得
-            const scrapedCount = scrapedCountMap.get(key) || 0
-
-            // 次の利用可能なsequence_numberを見つける
-            let seq = scrapedCount
-            while (existingSeqs.has(seq)) {
-                seq++
+            // 前後の取引情報（将来の拡張用）
+            const context = {
+                prev_1: i >= 1 ? {
+                    grade: scrapedData[i - 1].grade,
+                    price: scrapedData[i - 1].price,
+                    icon: scrapedData[i - 1].user_icon_number
+                } : null,
+                next_1: i < scrapedData.length - 1 ? {
+                    grade: scrapedData[i + 1].grade,
+                    price: scrapedData[i + 1].price,
+                    icon: scrapedData[i + 1].user_icon_number
+                } : null
             }
 
-            newData.push({
-                card_id: cardId,
-                grade: sale.grade,
-                price: sale.price,
-                sold_at: sale.sold_at,
-                sequence_number: seq,
-                scraped_at: new Date().toISOString()
-            })
+            // 重複チェック
+            let isDuplicate = false
 
-            // 次回のために追加（同一スクレイピング内の重複を防ぐ）
-            existingSeqs.add(seq)
-            existingMap.set(key, existingSeqs)
+            if (sale.user_icon_number) {
+                // アイコン番号がある場合: グレード・価格・アイコン番号で判定
+                isDuplicate = existingData?.some(existing =>
+                    existing.grade === sale.grade &&
+                    existing.price === sale.price &&
+                    existing.user_icon_number === sale.user_icon_number
+                ) || false
+            } else {
+                // アイコン番号がない場合: 従来通り時刻も含めて判定
+                isDuplicate = existingData?.some(existing =>
+                    existing.grade === sale.grade &&
+                    existing.price === sale.price &&
+                    existing.sold_at === sale.sold_at &&
+                    !existing.user_icon_number
+                ) || false
+            }
 
-            // スクレイピングデータ内でのカウントを更新
-            scrapedCountMap.set(key, scrapedCount + 1)
-        })
+            if (!isDuplicate) {
+                newData.push({
+                    card_id: cardId,
+                    grade: sale.grade,
+                    price: sale.price,
+                    sold_at: sale.sold_at,
+                    user_icon_number: sale.user_icon_number,
+                    context_fingerprint: context,
+                    sequence_number: 0, // 互換性のため残す
+                    scraped_at: new Date().toISOString()
+                })
+            } else {
+                skippedCount++
+                console.log(`[Duplicate detected] ${sale.grade} ¥${sale.price} icon:${sale.user_icon_number}`)
+            }
+        }
 
-        // 新規データのみ挿入（1件ずつ挿入して重複エラーを無視）
+        // 新規データのみ挿入
         let insertedCount = 0
         for (const item of newData) {
             const { error } = await supabase
@@ -137,7 +151,8 @@ export async function POST(req: Request) {
             if (error) {
                 // 重複エラー（23505）は無視、それ以外はログ出力
                 if (error.code === '23505') {
-                    console.log(`[Skipped duplicate] ${item.grade} ${item.price} ${item.sold_at} seq=${item.sequence_number}`)
+                    console.log(`[DB duplicate] ${item.grade} ¥${item.price} icon:${item.user_icon_number}`)
+                    skippedCount++
                 } else {
                     console.error(`[Insert error] ${error.code}: ${error.message}`, item)
                 }
@@ -150,7 +165,7 @@ export async function POST(req: Request) {
             success: true,
             total: scrapedData.length,
             inserted: insertedCount,
-            skipped: scrapedData.length - insertedCount
+            skipped: skippedCount
         })
     } catch (error: any) {
         console.error('Scraping error:', error)
