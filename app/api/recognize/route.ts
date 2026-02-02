@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
       mimeType = 'image/jpeg',
       tweetText,
       shopId,
-      enableGrounding = true,
+      enableGrounding = false,
       groundingConcurrency = 5
     } = body
 
@@ -287,7 +287,7 @@ export async function GET() {
         mimeType: 'image/jpeg or image/png (default: image/jpeg)',
         tweetText: 'Tweet text for PSA detection (optional)',
         shopId: 'Shop ID (optional)',
-        enableGrounding: 'Enable Google Search grounding (default: true)',
+        enableGrounding: 'Enable Google Search grounding (default: false)',
         groundingConcurrency: 'Parallel grounding requests (default: 5)'
       }
     }

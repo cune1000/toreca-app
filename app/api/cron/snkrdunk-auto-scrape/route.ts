@@ -248,19 +248,23 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         existingMap.set(key, existingSeqs)
     })
 
-    // 新規データのみ挿入
+    // 新規データのみ挿入（1件ずつ挿入して重複エラーを無視）
     let insertedCount = 0
-    if (newData.length > 0) {
-        const { data, error } = await supabase
+    for (const item of newData) {
+        const { error } = await supabase
             .from('snkrdunk_sales_history')
-            .insert(newData)
-            .select()
+            .insert(item)
 
         if (error) {
-            throw new Error(`Database insert error: ${error.message}`)
+            // 重複エラー（23505）は無視、それ以外はログ出力
+            if (error.code === '23505') {
+                console.log(`[Skipped duplicate] ${item.grade} ${item.price} ${item.sold_at} seq=${item.sequence_number}`)
+            } else {
+                console.error(`[Insert error] ${error.code}: ${error.message}`, item)
+            }
+        } else {
+            insertedCount++
         }
-
-        insertedCount = data?.length || 0
     }
 
     return {
