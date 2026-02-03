@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { 
-  Home, Database, Store, Settings, 
+import {
+  Home, Database, Store, Settings,
   ChevronLeft, ChevronRight, Plus,
   Globe, Layers, Tag, Inbox
 } from 'lucide-react'
@@ -39,7 +39,7 @@ const TorekaApp = () => {
     return 'dashboard'
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  
+
   // モーダル状態
   const [showCardForm, setShowCardForm] = useState(false)
   const [showShopForm, setShowShopForm] = useState(false)
@@ -48,12 +48,12 @@ const TorekaApp = () => {
   const [showCardDetail, setShowCardDetail] = useState(false)
   const [showCardImporter, setShowCardImporter] = useState(false)
   const [showBulkRecognition, setShowBulkRecognition] = useState(false)
-  
+
   // 選択状態
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null)
   const [editingShop, setEditingShop] = useState<any>(null)
   const [selectedCard, setSelectedCard] = useState<CardWithRelations | null>(null)
-  
+
   // ★ 修正: pendingImageIdとaiResultを追加
   const [bulkRecognitionImage, setBulkRecognitionImage] = useState<{
     url?: string
@@ -63,7 +63,7 @@ const TorekaApp = () => {
     pendingImageId?: string    // ← 追加
     aiResult?: any             // ← 追加
   } | null>(null)
-  
+
   // データ
   const [shops, setShops] = useState<Shop[]>([])
   const [sites, setSites] = useState<SaleSite[]>([])
@@ -137,7 +137,7 @@ const TorekaApp = () => {
   // =============================================================================
 
   const Sidebar = () => (
-    <aside className={`fixed left-0 top-0 h-full bg-slate-900 text-white transition-all duration-300 z-50 ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
+    <aside className={`fixed left-0 top-0 h-full bg-slate-900 text-white transition-all duration-300 z-50 overflow-y-auto ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
       <div className="p-4 border-b border-slate-700 flex items-center justify-between">
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2">
@@ -152,7 +152,7 @@ const TorekaApp = () => {
           {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>
       </div>
-      
+
       <nav className="p-2">
         <div className="mb-2 px-3 py-2 text-xs text-slate-400 uppercase">メイン</div>
         {[
@@ -162,11 +162,10 @@ const TorekaApp = () => {
           <button
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-              currentPage === item.id 
-                ? 'bg-blue-600 text-white' 
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
+                ? 'bg-blue-600 text-white'
                 : 'text-slate-300 hover:bg-slate-800'
-            }`}
+              }`}
           >
             <item.icon size={20} />
             {!sidebarCollapsed && <span>{item.label}</span>}
@@ -181,11 +180,10 @@ const TorekaApp = () => {
           <button
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-              currentPage === item.id 
-                ? 'bg-blue-600 text-white' 
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
+                ? 'bg-blue-600 text-white'
                 : 'text-slate-300 hover:bg-slate-800'
-            }`}
+              }`}
           >
             <item.icon size={20} />
             {!sidebarCollapsed && (
@@ -206,11 +204,10 @@ const TorekaApp = () => {
           <button
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-              currentPage === item.id 
-                ? 'bg-blue-600 text-white' 
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
+                ? 'bg-blue-600 text-white'
                 : 'text-slate-300 hover:bg-slate-800'
-            }`}
+              }`}
           >
             <item.icon size={20} />
             {!sidebarCollapsed && <span>{item.label}</span>}
@@ -225,11 +222,10 @@ const TorekaApp = () => {
           <button
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-              currentPage === item.id 
-                ? 'bg-blue-600 text-white' 
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
+                ? 'bg-blue-600 text-white'
                 : 'text-slate-300 hover:bg-slate-800'
-            }`}
+              }`}
           >
             <item.icon size={20} />
             {!sidebarCollapsed && <span>{item.label}</span>}
@@ -243,10 +239,10 @@ const TorekaApp = () => {
   // Header
   // =============================================================================
 
-  const Header = ({ title, subtitle, actions }: { 
+  const Header = ({ title, subtitle, actions }: {
     title: string
     subtitle?: string
-    actions?: React.ReactNode 
+    actions?: React.ReactNode
   }) => (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">

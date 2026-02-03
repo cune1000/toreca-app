@@ -532,7 +532,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl w-[950px] max-h-[90vh] overflow-auto">
+      <div className="bg-white rounded-2xl w-[90vw] max-w-[1400px] max-h-[90vh] flex flex-col">
         {/* ヘッダー */}
         <div className="p-6 border-b border-gray-100 flex items-start gap-6">
           {card?.image_url ? (
@@ -608,7 +608,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         </div>
 
         {/* コンテンツ */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="animate-spin text-blue-500" size={32} />
