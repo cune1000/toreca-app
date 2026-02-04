@@ -75,7 +75,7 @@ function ImageMagnifier({ src, alt }: ImageMagnifierProps) {
   };
 
   const magnifierSize = 200;
-  const zoomLevel = 5;
+  const zoomLevel = 4;
 
   return (
     <div className="relative">
