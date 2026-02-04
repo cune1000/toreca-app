@@ -416,40 +416,17 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
   // スニダン売買履歴のグラフデータ
   const snkrdunkChartData = useMemo(() => {
-    const dataMap = new Map<number, any>()
-
-    snkrdunkSales.forEach((sale: any) => {
-      const timestamp = new Date(sale.sold_at).getTime()
-      const existing = dataMap.get(timestamp) || {
-        timestamp,
+    // すべての売買データを個別の点として表示（平均化しない）
+    return snkrdunkSales.map((sale: any, index: number) => {
+      const result: any = {
+        id: `${sale.sold_at}_${index}`, // 一意のID
+        timestamp: new Date(sale.sold_at).getTime(),
         date: new Date(sale.sold_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        count: {}
       }
 
-      // 同じ時刻・同じグレードの価格を配列で保持
-      const gradeKey = `grade_${sale.grade}`
-      if (!existing[gradeKey]) {
-        existing[gradeKey] = []
-      }
-      existing[gradeKey].push(sale.price)
+      // グレードごとに価格を設定
+      result[`grade_${sale.grade}`] = sale.price
 
-      // 件数をカウント
-      existing.count[sale.grade] = (existing.count[sale.grade] || 0) + 1
-
-      dataMap.set(timestamp, existing)
-    })
-
-    // 平均価格を計算
-    return Array.from(dataMap.values()).map(item => {
-      const result = { ...item }
-      Object.keys(item).forEach(key => {
-        if (key.startsWith('grade_') && Array.isArray(item[key])) {
-          // 平均価格を計算
-          result[key] = Math.round(
-            item[key].reduce((sum: number, p: number) => sum + p, 0) / item[key].length
-          )
-        }
-      })
       return result
     }).sort((a, b) => a.timestamp - b.timestamp).slice(-100)
   }, [snkrdunkSales])
