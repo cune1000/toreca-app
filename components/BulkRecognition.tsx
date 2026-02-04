@@ -76,8 +76,6 @@ function ImageMagnifier({ src, alt }: ImageMagnifierProps) {
 
   const magnifierSize = 200;
   const zoomLevel = 5;
-  const offsetX = 20; // マウスの右側にオフセット
-  const offsetY = -20; // マウスの上側にオフセット
 
   return (
     <div className="relative">
@@ -97,8 +95,8 @@ function ImageMagnifier({ src, alt }: ImageMagnifierProps) {
           style={{
             width: `${magnifierSize}px`,
             height: `${magnifierSize}px`,
-            left: `${cursorPosition.x + offsetX}px`,
-            top: `${cursorPosition.y + offsetY}px`,
+            left: `${cursorPosition.x - magnifierSize / 2}px`,
+            top: `${cursorPosition.y - magnifierSize / 2}px`,
             backgroundImage: `url(${src})`,
             backgroundSize: `${imgRef.current.width * zoomLevel}px ${imgRef.current.height * zoomLevel}px`,
             backgroundPosition: `-${magnifierPosition.x * zoomLevel - magnifierSize / 2}px -${magnifierPosition.y * zoomLevel - magnifierSize / 2}px`,
