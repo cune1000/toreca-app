@@ -20,7 +20,7 @@ import BulkRecognition from './BulkRecognition'
 import CronDashboard from './CronDashboard'
 
 // Pages
-import { PendingPage, ShopsPage, SitesPage, CardsPage } from './pages'
+import { PendingPage, ShopsPage, SitesPage, CardsPage, SnkrdunkMonitorPage } from './pages'
 
 // API
 import { getShops, getSaleSites, getPendingImages } from '@/lib/api'
@@ -39,6 +39,7 @@ const TorekaApp = () => {
     return 'dashboard'
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'cron' | 'snkrdunk'>('cron')
 
   // モーダル状態
   const [showCardForm, setShowCardForm] = useState(false)
@@ -163,8 +164,8 @@ const TorekaApp = () => {
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-300 hover:bg-slate-800'
+              ? 'bg-blue-600 text-white'
+              : 'text-slate-300 hover:bg-slate-800'
               }`}
           >
             <item.icon size={20} />
@@ -181,8 +182,8 @@ const TorekaApp = () => {
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-300 hover:bg-slate-800'
+              ? 'bg-blue-600 text-white'
+              : 'text-slate-300 hover:bg-slate-800'
               }`}
           >
             <item.icon size={20} />
@@ -205,8 +206,8 @@ const TorekaApp = () => {
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-300 hover:bg-slate-800'
+              ? 'bg-blue-600 text-white'
+              : 'text-slate-300 hover:bg-slate-800'
               }`}
           >
             <item.icon size={20} />
@@ -223,8 +224,8 @@ const TorekaApp = () => {
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${currentPage === item.id
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-300 hover:bg-slate-800'
+              ? 'bg-blue-600 text-white'
+              : 'text-slate-300 hover:bg-slate-800'
               }`}
           >
             <item.icon size={20} />
@@ -322,7 +323,29 @@ const TorekaApp = () => {
         return (
           <>
             <Header title="設定" />
-            <CronDashboard />
+            <div className="p-6">
+              <div className="flex gap-2 mb-6 border-b">
+                <button
+                  onClick={() => setSettingsTab('cron')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${settingsTab === 'cron'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  Cron設定
+                </button>
+                <button
+                  onClick={() => setSettingsTab('snkrdunk')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${settingsTab === 'snkrdunk'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  監視状況（スニダン）
+                </button>
+              </div>
+              {settingsTab === 'cron' ? <CronDashboard /> : <SnkrdunkMonitorPage />}
+            </div>
           </>
         )
       default:

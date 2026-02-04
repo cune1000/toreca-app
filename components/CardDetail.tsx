@@ -175,10 +175,15 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         .update({ auto_scrape_mode: mode })
         .eq('id', saleUrlId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Failed to update auto_scrape_mode:', error)
+        throw error
+      }
+
+      alert('✅ 自動更新モードを変更しました')
       fetchPrices() // saleUrlsを再取得
     } catch (error: any) {
-      alert('エラー: ' + error.message)
+      alert('❌ エラー: ' + error.message)
     }
   }
 
@@ -190,10 +195,15 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         .update({ auto_scrape_interval_minutes: intervalMinutes })
         .eq('id', saleUrlId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Failed to update auto_scrape_interval_minutes:', error)
+        throw error
+      }
+
+      alert(`✅ 更新間隔を${intervalMinutes}分に変更しました`)
       fetchPrices() // saleUrlsを再取得
     } catch (error: any) {
-      alert('エラー: ' + error.message)
+      alert('❌ エラー: ' + error.message)
     }
   }
 
