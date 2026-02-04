@@ -13,20 +13,14 @@ async function callGemini(imageBase64: string, mimeType: string, additionalConte
 ${additionalContext ? `追加情報: ${additionalContext}` : ''}
 
 【指示】
-1. まず画像のレイアウト構造を分析してください（グリッド形式、リスト形式など）
-2. 左上から右へ、上から下へ順番にすべてのカードを読み取ってください
-3. 各カードの位置（bounding box）を0〜1000の相対座標で返してください
+以下の情報のみを抽出してください：
+1. カード名
+2. 型番（カードナンバー）
 
 各カードについて以下を抽出:
 - カード名: カード画像の近くに書かれた名前。読めない場合はイラストの特徴で記述
   （例：ポンチョピカチュウ、リザードンex、マオ＆スイレン、ナンジャモ等）
-- 買取枚数: 「○枚」と書かれた数字（あれば）
-- 買取価格: 金額（数値のみ、カンマなし）
-- bounding_box: カード画像と価格を含む領域の座標
-  - x: 左端のX座標（0-1000）
-  - y: 上端のY座標（0-1000）
-  - width: 幅（0-1000）
-  - height: 高さ（0-1000）
+- 型番: カードナンバー（例：001/078、SV1V 001/078等）
 
 以下のJSON形式で返してください。必ずJSONのみを返し、他のテキストは含めないでください:
 {
@@ -34,40 +28,20 @@ ${additionalContext ? `追加情報: ${additionalContext}` : ''}
     {
       "index": 1,
       "name": "カード名またはイラスト特徴",
-      "quantity": 20,
-      "price": 300000,
-      "bounding_box": {
-        "x": 10,
-        "y": 100,
-        "width": 120,
-        "height": 150
-      },
+      "card_number": "型番",
       "raw_text": "読み取れた元のテキスト"
     }
   ],
   "layout": {
     "type": "grid",
-    "rows": 6,
-    "cols": 8,
     "total_detected": 48
-  },
-  "shop_info": {
-    "name": "店舗名",
-    "date": "日付"
-  },
-  "is_psa": false,
-  "psa_info": {
-    "detected": false,
-    "grades_found": []
   }
 }
 
 重要:
-- PSA、BGS、CGC等の鑑定品の場合は is_psa を true に
-- 価格は数値のみ（例: 300000）
-- bounding_boxは画像全体を1000x1000とした相対座標で返してください
 - カード名が読めなくても、イラストの特徴（キャラクター、衣装、ポーズ）で識別
-- すべてのカードを漏れなく抽出してください`
+- すべてのカードを漏れなく抽出してください
+- 型番が見つからない場合は null を返してください`
 
   const response = await fetch(url, {
     method: 'POST',

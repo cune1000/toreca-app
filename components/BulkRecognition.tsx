@@ -6,13 +6,13 @@ import { supabase } from '@/lib/supabase';
 import { addPendingCardsFromRecognition, addPendingImage } from '@/lib/api/pending';
 import { searchCards, searchByCardNumber } from '@/lib/api/cards';
 import { getShops } from '@/lib/api/shops';
-import type { 
-  RecognizedCard, 
-  CardCandidate, 
-  GroundingInfo, 
+import type {
+  RecognizedCard,
+  CardCandidate,
+  GroundingInfo,
   Shop,
   CardCondition,
-  CONDITION_OPTIONS 
+  CONDITION_OPTIONS
 } from '@/lib/types';
 
 // =============================================================================
@@ -49,6 +49,68 @@ interface GroundingStats {
 }
 
 // =============================================================================
+// Image Magnifier Component
+// =============================================================================
+
+interface ImageMagnifierProps {
+  src: string;
+  alt: string;
+}
+
+function ImageMagnifier({ src, alt }: ImageMagnifierProps) {
+  const [showMagnifier, setShowMagnifier] = useState(false);
+  const [magnifierPosition, setMagnifierPosition] = useState({ x: 0, y: 0 });
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!imgRef.current) return;
+
+    const rect = imgRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setMagnifierPosition({ x, y });
+  };
+
+  const magnifierSize = 200;
+  const zoomLevel = 5;
+
+  return (
+    <div className="relative">
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        className="w-full rounded-lg border cursor-crosshair"
+        onMouseEnter={() => setShowMagnifier(true)}
+        onMouseLeave={() => setShowMagnifier(false)}
+        onMouseMove={handleMouseMove}
+      />
+
+      {showMagnifier && imgRef.current && (
+        <div
+          className="absolute border-4 border-blue-500 rounded-lg pointer-events-none shadow-2xl bg-white"
+          style={{
+            width: `${magnifierSize}px`,
+            height: `${magnifierSize}px`,
+            top: '10px',
+            right: '10px',
+            backgroundImage: `url(${src})`,
+            backgroundSize: `${imgRef.current.width * zoomLevel}px ${imgRef.current.height * zoomLevel}px`,
+            backgroundPosition: `-${magnifierPosition.x * zoomLevel - magnifierSize / 2}px -${magnifierPosition.y * zoomLevel - magnifierSize / 2}px`,
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          <div className="absolute top-0 left-0 right-0 bg-blue-500 text-white text-xs px-2 py-1 text-center">
+            {zoomLevel}x拡大
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
 // Component
 // =============================================================================
 
@@ -66,7 +128,7 @@ export default function BulkRecognition({
   // =============================================================================
   // State
   // =============================================================================
-  
+
   const [isMounted, setIsMounted] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +159,7 @@ export default function BulkRecognition({
   // =============================================================================
   // Computed
   // =============================================================================
-  
+
   const stats = useMemo(() => ({
     total: recognizedCards.length,
     autoMatched: recognizedCards.filter(c => c.matchedCard && !c.excluded).length,
@@ -179,7 +241,7 @@ export default function BulkRecognition({
       .from('cards')
       .select('rarity, expansion')
       .not('rarity', 'is', null);
-    
+
     if (cardData) {
       const uniqueRarities = [...new Set(cardData.map(c => c.rarity).filter(Boolean))];
       const uniqueExpansions = [...new Set(cardData.map(c => c.expansion).filter(Boolean))];
@@ -232,7 +294,7 @@ export default function BulkRecognition({
     setIsSearching(true);
     try {
       let results = await searchCards(query, 20);
-      
+
       // フィルタ適用
       if (filterRarity) {
         results = results.filter(c => c.rarity === filterRarity);
@@ -240,7 +302,7 @@ export default function BulkRecognition({
       if (filterExpansion) {
         results = results.filter(c => c.expansion === filterExpansion);
       }
-      
+
       setSearchResults(results);
     } catch (err) {
       console.error('Search error:', err);
@@ -256,15 +318,15 @@ export default function BulkRecognition({
   const autoMatchCards = useCallback(async (cards: RecognizedCard[]) => {
     setProgress('カードをマッチング中...');
     const updated = [...cards];
-    
+
     for (const card of updated) {
       // 既にマッチ済みならスキップ
       if (card.matchedCard) continue;
-      
+
       // 1. Grounding型番で検索（最高精度）
       if (card.grounding?.card_number) {
         const candidates = await searchByCardNumber(card.grounding.card_number);
-        
+
         if (candidates.length > 0) {
           card.candidates = candidates;
           const exactMatch = candidates.find(c => c.isExactMatch);
@@ -279,11 +341,11 @@ export default function BulkRecognition({
       // 2. Grounding正式名称で検索
       if (card.grounding?.official_name) {
         const candidates = await searchCards(card.grounding.official_name, 5);
-        
+
         if (candidates.length > 0) {
           const existingIds = new Set(card.candidates.map(c => c.id));
           card.candidates = [...card.candidates, ...candidates.filter(c => !existingIds.has(c.id))];
-          
+
           if (!card.matchedCard && candidates[0]?.similarity >= 90) {
             card.matchedCard = candidates[0];
             card.needsReview = false;
@@ -295,7 +357,7 @@ export default function BulkRecognition({
       // 3. 元の認識名で検索（フォールバック）
       if (!card.matchedCard && card.name) {
         const candidates = await searchCards(card.name, 5);
-        
+
         if (candidates.length > 0) {
           const existingIds = new Set(card.candidates.map(c => c.id));
           card.candidates = [...card.candidates, ...candidates.filter(c => !existingIds.has(c.id))];
@@ -303,13 +365,13 @@ export default function BulkRecognition({
           card.needsReview = !card.matchedCard;
         }
       }
-      
+
       // マッチしなかった場合
       if (!card.matchedCard) {
         card.needsReview = true;
       }
     }
-    
+
     setRecognizedCards(updated);
     setProgress('');
   }, []);
@@ -320,12 +382,12 @@ export default function BulkRecognition({
 
   const handleRecognize = async () => {
     if (!image && !imageUrl) return;
-    
+
     setIsRecognizing(true);
     setError(null);
     setProgress('画像を認識中...');
     setSaveResult(null);
-    
+
     try {
       const res = await fetch('/api/recognize', {
         method: 'POST',
@@ -450,7 +512,7 @@ export default function BulkRecognition({
       }));
       const { error: err } = await supabase.from('purchase_prices').insert(records);
       if (err) throw err;
-      
+
       // ★ 追加: 保留画像のstatusをcompletedに更新
       if (pendingImageId) {
         await supabase
@@ -458,7 +520,7 @@ export default function BulkRecognition({
           .update({ status: 'completed', processed_at: new Date().toISOString() })
           .eq('id', pendingImageId);
       }
-      
+
       setSaveResult(`${records.length}件の買取価格を保存しました`);
       if (onCompleted) setTimeout(onCompleted, 1500);
     } catch (err) {
@@ -471,7 +533,7 @@ export default function BulkRecognition({
   // 保留に追加
   const handleSaveToPending = async () => {
     if (!selectedShop) return setError('店舗を選択してください');
-    
+
     const unmatchedCards = recognizedCards.filter(c => !c.excluded && !c.matchedCard);
     if (!unmatchedCards.length) return setError('保留に追加するカードがありません');
 
@@ -483,11 +545,11 @@ export default function BulkRecognition({
         cards: unmatchedCards,
         tweet_time: tweetTime,
       });
-      
+
       if (success > 0) {
         setSaveResult(`${success}件を保留に追加しました`);
         // 保留に追加したカードを除外
-        setRecognizedCards(prev => prev.map(c => 
+        setRecognizedCards(prev => prev.map(c =>
           !c.excluded && !c.matchedCard ? { ...c, excluded: true } : c
         ));
       }
@@ -563,11 +625,10 @@ export default function BulkRecognition({
                   <button
                     key={opt.value}
                     onClick={() => setGlobalCondition(opt.value)}
-                    className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                      globalCondition === opt.value
-                        ? opt.color.replace('100', '500').replace('700', 'white') + ' text-white'
-                        : opt.color
-                    }`}
+                    className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${globalCondition === opt.value
+                      ? opt.color.replace('100', '500').replace('700', 'white') + ' text-white'
+                      : opt.color
+                      }`}
                   >
                     {opt.label}
                   </button>
@@ -575,13 +636,9 @@ export default function BulkRecognition({
               </div>
             </div>
 
-            {/* Image Display */}
+            {/* Image Display with Magnifier */}
             {displayImage ? (
-              <img
-                src={displayImage}
-                alt="買取表"
-                className="w-full rounded-lg border"
-              />
+              <ImageMagnifier src={displayImage} alt="買取表" />
             ) : (
               <div className="aspect-video bg-gray-200 rounded-lg flex items-center justify-center">
                 <span className="text-gray-400">画像なし</span>
@@ -622,7 +679,7 @@ export default function BulkRecognition({
                 <option value="">店舗を選択...</option>
                 {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-              
+
               {/* 保留に追加ボタン */}
               <button
                 onClick={handleSaveToPending}
@@ -632,7 +689,7 @@ export default function BulkRecognition({
                 {isSavingPending ? <Loader2 size={18} className="animate-spin" /> : <Inbox size={18} />}
                 保留 ({stats.pendingCount}件)
               </button>
-              
+
               {/* 保存ボタン */}
               <button
                 onClick={handleSave}
@@ -663,11 +720,10 @@ export default function BulkRecognition({
                   {recognizedCards.filter(c => !c.excluded).map(card => (
                     <div
                       key={card.index}
-                      className={`p-3 border rounded-lg ${
-                        card.matchedCard 
-                          ? 'border-green-300 bg-green-50' 
-                          : 'border-orange-300 bg-orange-50'
-                      }`}
+                      className={`p-3 border rounded-lg ${card.matchedCard
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-orange-300 bg-orange-50'
+                        }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className={`w-7 h-7 ${card.matchedCard ? 'bg-green-600' : 'bg-orange-500'} text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0`}>
@@ -676,13 +732,12 @@ export default function BulkRecognition({
                         <div className="flex-1 min-w-0">
                           {/* Grounding情報表示 */}
                           {card.grounding && card.grounding.confidence && (
-                            <div className={`mb-2 p-1.5 rounded text-xs ${
-                              card.grounding.confidence === 'high' 
-                                ? 'bg-blue-50 border border-blue-200' 
-                                : card.grounding.confidence === 'medium'
+                            <div className={`mb-2 p-1.5 rounded text-xs ${card.grounding.confidence === 'high'
+                              ? 'bg-blue-50 border border-blue-200'
+                              : card.grounding.confidence === 'medium'
                                 ? 'bg-yellow-50 border border-yellow-200'
                                 : 'bg-gray-50 border border-gray-200'
-                            }`}>
+                              }`}>
                               <div className="flex items-center gap-1">
                                 <Globe size={10} className="text-blue-500" />
                                 <span className="font-medium">{card.grounding.official_name || card.name}</span>
@@ -693,19 +748,19 @@ export default function BulkRecognition({
                               </div>
                             </div>
                           )}
-                          
+
                           {/* カード名 */}
                           <div className="font-medium text-gray-800 truncate">
                             {card.matchedCard?.name || card.name || '不明'}
                           </div>
-                          
+
                           {/* マッチしたカード情報 */}
                           {card.matchedCard && (
                             <div className="flex items-center gap-2 mt-1">
                               {card.matchedCard.imageUrl && (
-                                <img 
-                                  src={card.matchedCard.imageUrl} 
-                                  alt="" 
+                                <img
+                                  src={card.matchedCard.imageUrl}
+                                  alt=""
                                   className="w-10 h-14 object-cover rounded"
                                 />
                               )}
@@ -715,7 +770,7 @@ export default function BulkRecognition({
                               </div>
                             </div>
                           )}
-                          
+
                           {/* 価格・状態 */}
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-sm">¥</span>
@@ -735,7 +790,7 @@ export default function BulkRecognition({
                               ))}
                             </select>
                           </div>
-                          
+
                           {/* アクションボタン */}
                           <div className="flex gap-2 mt-2">
                             <button
