@@ -60,6 +60,7 @@ interface ImageMagnifierProps {
 function ImageMagnifier({ src, alt }: ImageMagnifierProps) {
   const [showMagnifier, setShowMagnifier] = useState(false);
   const [magnifierPosition, setMagnifierPosition] = useState({ x: 0, y: 0 });
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const imgRef = useRef<HTMLImageElement>(null);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
@@ -70,10 +71,13 @@ function ImageMagnifier({ src, alt }: ImageMagnifierProps) {
     const y = e.clientY - rect.top;
 
     setMagnifierPosition({ x, y });
+    setCursorPosition({ x: e.clientX, y: e.clientY });
   };
 
   const magnifierSize = 200;
   const zoomLevel = 5;
+  const offsetX = 20; // マウスの右側にオフセット
+  const offsetY = -20; // マウスの上側にオフセット
 
   return (
     <div className="relative">
@@ -89,19 +93,19 @@ function ImageMagnifier({ src, alt }: ImageMagnifierProps) {
 
       {showMagnifier && imgRef.current && (
         <div
-          className="absolute border-4 border-blue-500 rounded-lg pointer-events-none shadow-2xl bg-white"
+          className="fixed border-4 border-blue-500 rounded-full pointer-events-none shadow-2xl bg-white z-50"
           style={{
             width: `${magnifierSize}px`,
             height: `${magnifierSize}px`,
-            top: '10px',
-            right: '10px',
+            left: `${cursorPosition.x + offsetX}px`,
+            top: `${cursorPosition.y + offsetY}px`,
             backgroundImage: `url(${src})`,
             backgroundSize: `${imgRef.current.width * zoomLevel}px ${imgRef.current.height * zoomLevel}px`,
             backgroundPosition: `-${magnifierPosition.x * zoomLevel - magnifierSize / 2}px -${magnifierPosition.y * zoomLevel - magnifierSize / 2}px`,
             backgroundRepeat: 'no-repeat',
           }}
         >
-          <div className="absolute top-0 left-0 right-0 bg-blue-500 text-white text-xs px-2 py-1 text-center">
+          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
             {zoomLevel}x拡大
           </div>
         </div>
