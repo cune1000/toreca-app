@@ -188,7 +188,7 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         throw new Error(scrapeData.error || 'Scraping failed')
     }
 
-    const salesHistory = scrapeData.data || []
+    const salesHistory = scrapeData.sales || []
 
     // データを整形
     const now = new Date()
