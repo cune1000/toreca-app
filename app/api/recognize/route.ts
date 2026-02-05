@@ -51,21 +51,21 @@ export async function POST(request: NextRequest) {
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' })
 
-    const prompt = `この画像は買取価格表です。以下の情報を1行ずつ抽出してください：
+    const prompt = `この買取価格表の画像から、各カードの情報をJSON配列で返してください。
 
-要求事項:
-1. カード名を正確に読み取る
-2. 価格情報があれば抽出する
-3. カード番号があれば抽出する
-4. PSA10、PSA9などのグレード情報があれば抽出する
-5. 各行を個別に認識する
+各カードについて以下を抽出：
+- name: カード名
+- price: 価格（数値のみ、カンマなし）
+- grade: グレード（PSA10, PSA9など）
+- cardNumber: カード番号（あれば）
 
-出力形式:
-各行を以下の形式で出力してください（1行1カード）：
-[カード名] | [価格] | [番号] | [その他情報]
+**重要**: JSON配列のみを返してください。説明文は一切含めないでください。
 
-価格や番号がない場合は空欄で構いません。
-カード名は可能な限り正確に読み取ってください。`
+出力例:
+[
+  {"name": "ピカチュウ", "price": 12000, "grade": "PSA10", "cardNumber": null},
+  {"name": "リザードン", "price": 180000, "grade": "PSA10", "cardNumber": "006/165"}
+]`
 
     const result = await model.generateContent([
       {
@@ -80,20 +80,41 @@ export async function POST(request: NextRequest) {
     ])
 
     const response = await result.response
-    const fullText = response.text()
+    let fullText = response.text()
 
-    // Gemini の出力をパースしてカード候補を作成
-    const lines = fullText.split('\n').filter(line => line.trim())
-    const cards = lines.map((line, index) => {
-      // 「|」区切りでパース
-      const parts = line.split('|').map(p => p.trim())
+    // JSONの抽出（マークダウンのコードブロックを除去）
+    fullText = fullText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
+    // 余計なテキストを除去（「以下の通りです」などの説明文）
+    const jsonMatch = fullText.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      fullText = jsonMatch[0]
+    }
+
+    // JSONをパース
+    let cardsArray
+    try {
+      cardsArray = JSON.parse(fullText)
+    } catch (parseError) {
+      console.error('Failed to parse JSON:', fullText)
+      // フォールバック: テキストから行ごとに抽出
+      const lines = fullText.split('\n').filter(line => line.trim())
+      cardsArray = lines.map((line, index) => ({
+        name: line.trim(),
+        price: null,
+        grade: null,
+        cardNumber: null
+      }))
+    }
+
+    // Gemini の出力を既存のフォーマットに変換
+    const cards = cardsArray.map((card: any, index: number) => {
       return {
         index: index + 1,
-        name: parts[0] || line.trim(), // カード名
-        card_number: parts[2] || null, // カード番号
-        raw_text: line.trim(),
-        price: parts[1] || null, // 価格
+        name: card.name || '',
+        card_number: card.cardNumber || null,
+        raw_text: card.name || '',
+        price: card.price || null,
         quantity: null,
         grounding: null
       }
