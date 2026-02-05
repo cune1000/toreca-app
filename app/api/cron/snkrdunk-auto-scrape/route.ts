@@ -188,7 +188,47 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         throw new Error(scrapeData.error || 'Scraping failed')
     }
 
-    const salesHistory = scrapeData.sales || []
+    let salesHistory: any[]
+
+    // バックグラウンド処理の場合: ジョブIDを返す → ポーリングで結果を待つ
+    if (scrapeData.jobId) {
+        console.log(`[Snkrdunk Cron] Background job started: ${scrapeData.jobId}`)
+
+        // ポーリング処理
+        const pollInterval = 2000 // 2秒ごと
+        const maxAttempts = 60 // 最大2分
+        let attempts = 0
+
+        const pollJob = async (): Promise<any[]> => {
+            attempts++
+
+            const statusRes = await fetch(`${TORECA_SCRAPER_URL}/scrape/status/${scrapeData.jobId}`)
+            const statusData = await statusRes.json()
+
+            if (statusData.status === 'completed') {
+                // 成功: 結果を返す
+                const salesHistory = statusData.result?.sales || []
+                console.log(`[Snkrdunk Cron] Job completed: ${salesHistory.length} sales`)
+                return salesHistory
+            } else if (statusData.status === 'failed') {
+                // 失敗
+                throw new Error(statusData.error || 'Scraping failed')
+            } else if (attempts >= maxAttempts) {
+                // タイムアウト
+                throw new Error('Timeout: Job took too long')
+            }
+
+            // まだ処理中: 再度ポーリング
+            await new Promise(resolve => setTimeout(resolve, pollInterval))
+            return pollJob()
+        }
+
+        salesHistory = await pollJob()
+        // ポーリング完了後、既存のデータ処理ロジックへ続く
+    } else {
+        // 同期処理の場合（後方互換性）
+        salesHistory = scrapeData.sales || []
+    }
 
     // データを整形
     const now = new Date()
