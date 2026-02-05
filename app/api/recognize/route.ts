@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Gemini 3 Flash を使用して買取価格表を解析
     console.log('Calling Gemini 3 Flash for price list recognition...')
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' })
 
     const prompt = `この画像は買取価格表です。以下の情報を1行ずつ抽出してください：
 
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         isPsaFromTweet: isPsaFromText,
         tweetText: tweetText || null,
         groundingEnabled: false,
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-3-flash-preview',
         cardCount: cards.length
       }
     })
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     message: 'Purchase Price Recognition API',
-    version: '4.0 (Gemini 2.0 Flash)',
+    version: '4.0 (Gemini 3 Flash)',
     usage: {
       method: 'POST',
       body: {

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Gemini 3 Flash を使用してテキスト抽出
     console.log('Calling Gemini 3 Flash for OCR...')
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' })
 
     const result = await model.generateContent([
       {
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       ocrText: fullText,
       words,
       wordCount: words.length,
-      model: 'gemini-2.0-flash-exp'
+      model: 'gemini-3-flash-preview'
     })
 
   } catch (error) {
