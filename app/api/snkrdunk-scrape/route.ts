@@ -265,6 +265,9 @@ function parseRelativeTime(timeStr: string, baseTime: Date): Date | null {
 function normalizeGrade(gradeText: string): string | null {
     const cleaned = gradeText.replace(/\s+/g, '').toUpperCase()
 
+    // 個数表記 (BOX/パックなど)
+    if (cleaned.includes('個')) return cleaned
+
     // PSA10, PSA9, PSA8以下
     if (cleaned.includes('PSA10')) return 'PSA10'
     if (cleaned.includes('PSA9')) return 'PSA9'
