@@ -368,6 +368,7 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
 
 // ヘルパー関数（既存のsnkrdunk-scrape/route.tsと同じ）
 function parseRelativeTime(timeStr: string, baseTime: Date): Date | null {
+    if (!timeStr || typeof timeStr !== 'string') return null
     const pattern = /(\d+)(分|時間|日)前/
     const match = timeStr.match(pattern)
     if (!match) return null
