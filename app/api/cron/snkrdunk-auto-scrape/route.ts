@@ -394,6 +394,7 @@ function parseRelativeTime(timeStr: string, baseTime: Date): Date | null {
 }
 
 function normalizeGrade(gradeText: string): string | null {
+    if (!gradeText || typeof gradeText !== 'string') return null
     const cleaned = gradeText.replace(/\s+/g, '').toUpperCase()
 
     if (cleaned.includes('PSA10')) return 'PSA10'
@@ -416,6 +417,7 @@ function normalizeGrade(gradeText: string): string | null {
 }
 
 function parsePrice(priceText: string): number | null {
+    if (!priceText || typeof priceText !== 'string') return null
     const cleaned = priceText.replace(/[¥,]/g, '')
     const price = parseInt(cleaned, 10)
     return isNaN(price) ? null : price
