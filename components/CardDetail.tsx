@@ -147,18 +147,62 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
     setSnkrdunkScraping(true)
     try {
+      // バックグラウンド処理を開始
       const res = await fetch('/api/snkrdunk-scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cardId: card.id, url: snkrdunkUrl.product_url })
       })
       const data = await res.json()
-      if (data.success) {
+
+      if (!data.success) {
+        alert('エラー: ' + data.error)
+        return
+      }
+
+      // ジョブIDを受け取った場合、ポーリングして結果を取得
+      if (data.jobId) {
+        alert(`スクレイピングを開始しました (Job ID: ${data.jobId})\n結果を取得中...`)
+
+        // ポーリング処理
+        const pollInterval = 2000 // 2秒ごと
+        const maxAttempts = 60 // 最大2分
+        let attempts = 0
+
+        const pollJob = async (): Promise<boolean> => {
+          attempts++
+
+          const statusRes = await fetch(`${process.env.NEXT_PUBLIC_TORECA_SCRAPER_URL}/scrape/status/${data.jobId}`)
+          const statusData = await statusRes.json()
+
+          if (statusData.status === 'completed') {
+            // 成功: データベースに保存
+            const result = statusData.result
+            alert(`スクレイピング完了\n取得: ${result.count}件`)
+            fetchSnkrdunkSales()
+            fetchPrices()
+            return true
+          } else if (statusData.status === 'failed') {
+            // 失敗
+            alert('エラー: ' + (statusData.error || '不明なエラー'))
+            return true
+          } else if (attempts >= maxAttempts) {
+            // タイムアウト
+            alert('タイムアウト: 処理に時間がかかっています。後ほど確認してください。')
+            return true
+          }
+
+          // まだ処理中: 再度ポーリング
+          await new Promise(resolve => setTimeout(resolve, pollInterval))
+          return pollJob()
+        }
+
+        await pollJob()
+      } else {
+        // 同期処理の場合(後方互換性)
         alert(`スクレイピング完了\n取得: ${data.total}件\n新規: ${data.inserted}件\nスキップ: ${data.skipped}件`)
         fetchSnkrdunkSales()
-        fetchPrices() // saleUrlsを再取得
-      } else {
-        alert('エラー: ' + data.error)
+        fetchPrices()
       }
     } catch (error: any) {
       alert('エラー: ' + error.message)
