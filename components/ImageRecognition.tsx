@@ -51,7 +51,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
   const [result, setResult] = useState<RecognitionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardCandidate | null>(null);
-  
+
   // カード登録用
   const [isRegistering, setIsRegistering] = useState(false);
   const [categories, setCategories] = useState<{
@@ -68,7 +68,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
     categorySmallId: '',
     rarityId: ''
   });
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // カテゴリ・レアリティ取得
@@ -78,7 +78,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
         supabase.from('category_large').select('id, name').order('name'),
         supabase.from('rarities').select('id, name').order('name')
       ]);
-      
+
       if (largeRes.data) {
         setCategories(prev => ({ ...prev, large: largeRes.data }));
       }
@@ -91,13 +91,13 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
 
   // 大カテゴリ変更時
   const handleLargeCategoryChange = async (id: string) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      categoryLargeId: id, 
-      categoryMediumId: '', 
-      categorySmallId: '' 
+    setFormData(prev => ({
+      ...prev,
+      categoryLargeId: id,
+      categoryMediumId: '',
+      categorySmallId: ''
     }));
-    
+
     if (id) {
       const { data } = await supabase
         .from('category_medium')
@@ -113,7 +113,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
   // 中カテゴリ変更時
   const handleMediumCategoryChange = async (id: string) => {
     setFormData(prev => ({ ...prev, categoryMediumId: id, categorySmallId: '' }));
-    
+
     if (id) {
       const { data } = await supabase
         .from('category_small')
@@ -152,7 +152,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
       const response = await fetch('/api/recognize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, matchWithDb: true }),
+        body: JSON.stringify({ imageBase64: image, matchWithDb: true }),
       });
 
       const data = await response.json();
@@ -162,12 +162,12 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
       }
 
       setResult(data);
-      
+
       // 自動マッチした場合
       if (data.matchedCard) {
         setSelectedCard(data.matchedCard);
       }
-      
+
       // フォームに認識結果をセット
       setFormData(prev => ({
         ...prev,
@@ -177,7 +177,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
 
       // レアリティをマッチ
       if (data.rarity && rarities.length > 0) {
-        const matchedRarity = rarities.find(r => 
+        const matchedRarity = rarities.find(r =>
           r.name.toLowerCase() === data.rarity?.toLowerCase()
         );
         if (matchedRarity) {
@@ -213,9 +213,9 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
         const uploadRes = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            image, 
-            fileName: `card_${Date.now()}.jpg` 
+          body: JSON.stringify({
+            image,
+            fileName: `card_${Date.now()}.jpg`
           }),
         });
         const uploadData = await uploadRes.json();
@@ -238,7 +238,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
       if (insertError) throw insertError;
 
       alert('カードを登録しました');
-      
+
       // コールバック
       onRecognized?.();
       onClose();
@@ -277,7 +277,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
               onChange={handleImageSelect}
               className="hidden"
             />
-            
+
             {image ? (
               <div className="space-y-4">
                 <img
@@ -416,7 +416,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
               {!selectedCard && (
                 <div className="p-4 border rounded-lg space-y-4">
                   <h3 className="font-semibold">新規カード登録</h3>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">カード名 *</label>
