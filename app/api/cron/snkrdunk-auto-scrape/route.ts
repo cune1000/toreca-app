@@ -224,6 +224,7 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         }
 
         salesHistory = await pollJob()
+        console.log(`[Snkrdunk Cron] Polling completed, salesHistory length: ${salesHistory?.length || 0}`)
         // ポーリング完了後、既存のデータ処理ロジックへ続く
     } else {
         // 同期処理の場合（後方互換性）
@@ -256,6 +257,8 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
             user_icon_number: item.userIconNumber || null
         })
     })
+
+    console.log(`[Snkrdunk Cron] After processing: ${scrapedData.length} valid items from ${salesHistory.length} raw items`)
 
     // 既存データを取得
     const { data: existingData } = await supabase
@@ -358,6 +361,8 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
             insertedCount++
         }
     }
+
+    console.log(`[Snkrdunk Cron] DB write complete - Total: ${scrapedData.length}, Inserted: ${insertedCount}, Skipped: ${skippedCount}`)
 
     return {
         total: scrapedData.length,
