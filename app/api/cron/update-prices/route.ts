@@ -583,3 +583,180 @@ export async function POST(request: NextRequest) {
     }, { status: 500 })
   }
 }
+
+// ========================================
+// 履歴保存・ユーティリティ関数
+// ========================================
+
+/**
+ * 売買履歴をデータベースに保存
+ */
+async function processSalesHistory(cardId: string, salesHistory: any[]) {
+  if (!salesHistory || salesHistory.length === 0) return
+
+  const now = new Date()
+  const scrapedData: Array<{
+    grade: string
+    price: number
+    sold_at: string
+    user_icon_number: number | null
+  }> = []
+
+  salesHistory.forEach((item: any) => {
+    const soldAt = parseRelativeTime(item.date, now)
+    if (!soldAt) return
+
+    const grade = normalizeGrade(item.size)
+    if (!grade) return
+
+    const price = item.price
+    if (!price) return
+
+    scrapedData.push({
+      grade,
+      price,
+      sold_at: soldAt.toISOString(),
+      user_icon_number: item.userIconNumber || null
+    })
+  })
+
+  // 既存データを取得
+  const { data: existingData } = await supabase
+    .from('snkrdunk_sales_history')
+    .select('grade, price, sold_at, user_icon_number')
+    .eq('card_id', cardId)
+
+  // 新規データのみを抽出
+  const newData: any[] = []
+
+  for (const sale of scrapedData) {
+    // 重複チェック
+    let isDuplicate = false
+
+    if (sale.user_icon_number) {
+      isDuplicate = existingData?.some(existing =>
+        existing.grade === sale.grade &&
+        existing.price === sale.price &&
+        existing.user_icon_number === sale.user_icon_number
+      ) || false
+    } else {
+      isDuplicate = existingData?.some(existing =>
+        existing.grade === sale.grade &&
+        existing.price === sale.price &&
+        existing.sold_at === sale.sold_at &&
+        !existing.user_icon_number
+      ) || false
+    }
+
+    if (!isDuplicate) {
+      newData.push({
+        card_id: cardId,
+        grade: sale.grade,
+        price: sale.price,
+        sold_at: sale.sold_at,
+        user_icon_number: sale.user_icon_number,
+        sequence_number: 0,
+        scraped_at: new Date().toISOString()
+      })
+    }
+  }
+
+  // 新規データのみ挿入
+  for (const item of newData) {
+    const insertData: any = {
+      card_id: item.card_id,
+      grade: item.grade,
+      price: item.price,
+      sold_at: item.sold_at,
+      sequence_number: item.sequence_number,
+      scraped_at: item.scraped_at
+    }
+
+    if (item.user_icon_number !== null) {
+      insertData.user_icon_number = item.user_icon_number
+    }
+
+    await supabase
+      .from('snkrdunk_sales_history')
+      .insert(insertData)
+      .catch(err => {
+        if (err.code !== '23505') {
+          console.error('[Insert history error]', err)
+        }
+      })
+  }
+}
+
+/**
+ * 相対時間を絶対時間に変換
+ */
+function parseRelativeTime(timeStr: string, baseTime: Date): Date | null {
+  if (!timeStr) return null;
+  const pattern = /(\d+)(分|時間|日)前/
+  const match = timeStr.match(pattern)
+
+  if (!match) {
+    const d = new Date(timeStr)
+    return isNaN(d.getTime()) ? null : d
+  }
+
+  const value = parseInt(match[1], 10)
+  const unit = match[2]
+
+  const result = new Date(baseTime)
+
+  switch (unit) {
+    case '分':
+      result.setMinutes(result.getMinutes() - value)
+      break
+    case '時間':
+      result.setHours(result.getHours() - value)
+      break
+    case '日':
+      result.setDate(result.getDate() - value)
+      break
+  }
+
+  return result
+}
+
+/**
+ * グレードを正規化
+ */
+function normalizeGrade(gradeText: string): string | null {
+  if (!gradeText) return null
+  const cleaned = gradeText.replace(/\s+/g, '').toUpperCase()
+
+  if (cleaned.includes('個')) return cleaned
+
+  if (cleaned.includes('PSA10')) return 'PSA10'
+  if (cleaned.includes('PSA9')) return 'PSA9'
+  if (cleaned.includes('PSA8') || cleaned.includes('PSA7') || cleaned.includes('PSA6')) return 'PSA8以下'
+
+  if (cleaned.includes('BGS10BL')) return 'BGS10BL'
+  if (cleaned.includes('BGS10GL')) return 'BGS10GL'
+  if (cleaned.includes('BGS9.5')) return 'BGS9.5'
+  if (cleaned.includes('BGS9')) return 'BGS9以下'
+
+  if (cleaned.includes('ARS10+')) return 'ARS10+'
+  if (cleaned.includes('ARS10')) return 'ARS10'
+  if (cleaned.includes('ARS9')) return 'ARS9'
+  if (cleaned.includes('ARS8')) return 'ARS8以下'
+
+  if (cleaned.includes('A') || cleaned === 'A') return 'A'
+  if (cleaned.includes('B') || cleaned === 'B') return 'B'
+  if (cleaned.includes('C') || cleaned === 'C') return 'C'
+  if (cleaned.includes('D') || cleaned === 'D') return 'D'
+
+  return null
+}
+
+/**
+ * 価格を抽出
+ */
+function parsePrice(priceText: string): number | null {
+  if (!priceText) return null
+  const cleaned = priceText.replace(/[¥,]/g, '')
+  const price = parseInt(cleaned, 10)
+  return isNaN(price) ? null : price
+}
