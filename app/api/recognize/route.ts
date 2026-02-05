@@ -51,15 +51,21 @@ export async function POST(request: NextRequest) {
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' })
 
+
     const prompt = `この買取価格表の画像から、各カードの情報をJSON配列で返してください。
 
+**重要な指示**:
+- 画像に実際に書かれているテキストのみを読み取ってください（OCRのように）
+- カードのイラストや絵を見て推測しないでください
+- 必ずテキストとして書かれている文字だけを抽出してください
+
 各カードについて以下を抽出：
-- name: カード名
+- name: カード名（画像に書かれているテキストのみ）
 - price: 価格（数値のみ、カンマなし）
 - grade: グレード（PSA10, PSA9など）
 - cardNumber: カード番号（あれば）
 
-**重要**: JSON配列のみを返してください。説明文は一切含めないでください。
+**出力形式**: JSON配列のみを返してください。説明文は一切含めないでください。
 
 出力例:
 [
