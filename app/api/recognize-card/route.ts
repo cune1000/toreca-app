@@ -24,10 +24,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'API設定エラー' }, { status: 500 })
     }
 
-    // Gemini 3 Flash を使用してテキスト抽出
-    console.log('Calling Gemini 3 Flash for OCR...')
+    // Gemini 3 Flash を使用してカード情報を抽出
+    console.log('Calling Gemini 3 Flash for card recognition...')
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' })
+
+    const prompt = `このポケモンカードの画像から以下の情報を正確に抽出してください：
+
+1. **カード名**: カードに大きく書かれているポケモンの名前
+2. **カード番号**: カード下部に記載されている番号（例: 025/187, SV4a 025/190 など）
+3. **レアリティ**: カードのレアリティマーク
+   - ◆（コモン）
+   - ◆◆（アンコモン）
+   - ★（レア）
+   - RR, RRR, SR, UR, SAR などのレアリティ記号
+4. **HP**: ポケモンのHP（右上の数字）
+5. **タイプ**: カードのタイプ（炎、水、雷、草など）
+
+**必須**: 以下のJSON形式で返してください。他のテキストは一切含めないでください：
+{
+  "name": "カード名",
+  "number": "カード番号",
+  "rarity": "レアリティ",
+  "hp": "HP値",
+  "type": "タイプ",
+  "confidence": 0.95
+}
+
+カード番号が見つからない場合は "number": null としてください。
+レアリティが不明な場合は "rarity": null としてください。`
 
     const result = await model.generateContent([
       {
@@ -37,28 +62,47 @@ export async function POST(request: NextRequest) {
         }
       },
       {
-        text: `この画像に含まれるすべてのテキストを正確に抽出してください。
-レイアウトを保持し、行ごとに分けて出力してください。
-カード名、番号、価格などの情報を可能な限り正確に読み取ってください。`
+        text: prompt
       }
     ])
 
     const response = await result.response
-    const fullText = response.text()
+    let fullText = response.text()
 
-    // テキストを行ごとに分割して単語リストを作成
-    const lines = fullText.split('\n').filter(line => line.trim())
-    const words = lines.map((line, index) => ({
-      text: line.trim(),
-      boundingBox: null // Gemini APIはbounding boxを提供しないため
-    }))
+    // JSONの抽出（マークダウンのコードブロックを除去）
+    fullText = fullText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+
+    // JSONをパース
+    let cardData
+    try {
+      cardData = JSON.parse(fullText)
+    } catch (parseError) {
+      console.error('Failed to parse JSON:', fullText)
+      // フォールバック: テキストから情報を抽出
+      return NextResponse.json({
+        success: true,
+        ocrText: fullText,
+        words: [],
+        wordCount: 0,
+        model: 'gemini-3-flash-preview',
+        cardData: null
+      })
+    }
 
     return NextResponse.json({
       success: true,
       ocrText: fullText,
-      words,
-      wordCount: words.length,
-      model: 'gemini-3-flash-preview'
+      words: [],
+      wordCount: 0,
+      model: 'gemini-3-flash-preview',
+      cardData: {
+        name: cardData.name || null,
+        number: cardData.number || null,
+        rarity: cardData.rarity || null,
+        hp: cardData.hp || null,
+        type: cardData.type || null,
+        confidence: cardData.confidence || 0.8
+      }
     })
 
   } catch (error) {

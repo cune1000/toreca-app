@@ -149,10 +149,10 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
     setError(null);
 
     try {
-      const response = await fetch('/api/recognize', {
+      const response = await fetch('/api/recognize-card', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: image, matchWithDb: true }),
+        body: JSON.stringify({ image }),
       });
 
       const data = await response.json();
@@ -161,28 +161,39 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
         throw new Error(data.error || '認識に失敗しました');
       }
 
-      setResult(data);
+      // cardDataの構造化データを使用
+      if (data.cardData) {
+        setResult({
+          name: data.cardData.name || '',
+          cardNumber: data.cardData.number || '',
+          rarity: data.cardData.rarity || '',
+          confidence: Math.round((data.cardData.confidence || 0.8) * 100)
+        });
 
-      // 自動マッチした場合
-      if (data.matchedCard) {
-        setSelectedCard(data.matchedCard);
-      }
+        // フォームに認識結果をセット
+        setFormData(prev => ({
+          ...prev,
+          name: data.cardData.name || '',
+          cardNumber: data.cardData.number || ''
+        }));
 
-      // フォームに認識結果をセット
-      setFormData(prev => ({
-        ...prev,
-        name: data.name || '',
-        cardNumber: data.cardNumber || ''
-      }));
-
-      // レアリティをマッチ
-      if (data.rarity && rarities.length > 0) {
-        const matchedRarity = rarities.find(r =>
-          r.name.toLowerCase() === data.rarity?.toLowerCase()
-        );
-        if (matchedRarity) {
-          setFormData(prev => ({ ...prev, rarityId: matchedRarity.id }));
+        // レアリティをマッチ
+        if (data.cardData.rarity && rarities.length > 0) {
+          const matchedRarity = rarities.find(r =>
+            r.name.toLowerCase() === data.cardData.rarity?.toLowerCase()
+          );
+          if (matchedRarity) {
+            setFormData(prev => ({ ...prev, rarityId: matchedRarity.id }));
+          }
         }
+      } else {
+        // フォールバック: OCRテキストのみの場合
+        setResult({
+          name: data.ocrText?.split('\n')[0] || '',
+          cardNumber: '',
+          rarity: '',
+          confidence: 50
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '認識に失敗しました');
