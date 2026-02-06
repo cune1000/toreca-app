@@ -42,6 +42,27 @@ const SNKRDUNK_GRADE_COLORS: Record<string, string> = {
   B: '#f59e0b',        // amber
   C: '#ef4444',        // red
   D: '#dc2626',        // red-600
+  // BOX個数
+  '1個': '#3b82f6',     // blue
+  '2個': '#06b6d4',     // cyan
+  '3個': '#10b981',     // green
+  '4個': '#22c55e',     // green-500
+  '5個': '#84cc16',     // lime
+  '6個': '#eab308',     // yellow
+  '7個': '#f59e0b',     // amber
+  '8個': '#f97316',     // orange
+  '9個': '#ef4444',     // red
+  '10個': '#dc2626',    // red-600
+}
+
+// グレードソート順序
+const GRADE_SORT_ORDER: Record<string, number> = {
+  PSA10: 1, PSA9: 2, 'PSA8以下': 3,
+  'BGS10BL': 10, 'BGS10GL': 11, 'BGS9.5': 12, 'BGS9以下': 13,
+  'ARS10+': 20, 'ARS10': 21, 'ARS9': 22, 'ARS8以下': 23,
+  A: 30, B: 31, C: 32, D: 33,
+  '1個': 100, '2個': 101, '3個': 102, '4個': 103, '5個': 104,
+  '6個': 105, '7個': 106, '8個': 107, '9個': 108, '10個': 109,
 }
 
 // 期間フィルタオプション
@@ -72,13 +93,31 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [snkrdunkSales, setSnkrdunkSales] = useState([])
   const [snkrdunkLoading, setSnkrdunkLoading] = useState(false)
   const [snkrdunkScraping, setSnkrdunkScraping] = useState(false)
-  const [visibleGrades, setVisibleGrades] = useState({
-    PSA10: true,
-    PSA9: true,
-    A: true,
-    B: true,
-    C: true
+  const [visibleGrades, setVisibleGrades] = useState<Record<string, boolean>>(() => {
+    // localStorageから初期値を取得
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('visibleGrades')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch { }
+      }
+    }
+    return {
+      PSA10: true,
+      PSA9: true,
+      A: true,
+      B: true,
+      C: true
+    }
   })
+
+  // visibleGradesが変更されたらlocalStorageに保存
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('visibleGrades', JSON.stringify(visibleGrades))
+    }
+  }, [visibleGrades])
 
   useEffect(() => {
     if (card?.id) {
@@ -475,13 +514,17 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     }).sort((a, b) => a.timestamp - b.timestamp).slice(-100)
   }, [snkrdunkSales])
 
-  // スニダンのユニークなグレードリスト
+  // スニダンのユニークなグレードリスト（ソート済み）
   const snkrdunkGrades = useMemo(() => {
     const grades = new Set<string>()
     snkrdunkSales.forEach((sale: any) => {
       grades.add(sale.grade)
     })
-    return Array.from(grades).sort()
+    return Array.from(grades).sort((a, b) => {
+      const orderA = GRADE_SORT_ORDER[a] ?? 999
+      const orderB = GRADE_SORT_ORDER[b] ?? 999
+      return orderA - orderB
+    })
   }, [snkrdunkSales])
 
   // サイト表示切り替え
@@ -617,23 +660,32 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   {latestPurchase ? `¥${latestPurchase.toLocaleString()}` : '-'}
                 </p>
               </div>
-              {Object.entries(latestPrices).slice(0, 1).map(([siteId, data]) => (
-                <div key={siteId} className="bg-green-50 rounded-xl p-4 flex-1">
-                  <div className="flex items-center gap-2 text-green-600 text-sm mb-1">
-                    <Globe size={16} />
-                    {data.siteName}
-                  </div>
-                  <p className="text-2xl font-bold text-green-700">
-                    ¥{data.price.toLocaleString()}
-                  </p>
-                  {data.stock !== null && (
-                    <p className="text-sm text-green-600 flex items-center gap-1">
-                      <Package size={14} />
-                      在庫: {data.stock}
+              {/* 上位3サイト（在庫0除外、価格順） */}
+              {Object.entries(latestPrices)
+                .filter(([, data]) => data.stock !== 0) // 在庫0を除外
+                .sort((a, b) => a[1].price - b[1].price) // 価格の安い順
+                .slice(0, 3)
+                .map(([siteId, data], index) => (
+                  <div key={siteId} className={`rounded-xl p-4 flex-1 ${index === 0 ? 'bg-green-50' : index === 1 ? 'bg-emerald-50' : 'bg-teal-50'
+                    }`}>
+                    <div className={`flex items-center gap-2 text-sm mb-1 ${index === 0 ? 'text-green-600' : index === 1 ? 'text-emerald-600' : 'text-teal-600'
+                      }`}>
+                      <Globe size={16} />
+                      {data.siteName}
+                    </div>
+                    <p className={`text-2xl font-bold ${index === 0 ? 'text-green-700' : index === 1 ? 'text-emerald-700' : 'text-teal-700'
+                      }`}>
+                      ¥{data.price.toLocaleString()}
                     </p>
-                  )}
-                </div>
-              ))}
+                    {data.stock !== null && (
+                      <p className={`text-sm flex items-center gap-1 ${index === 0 ? 'text-green-600' : index === 1 ? 'text-emerald-600' : 'text-teal-600'
+                        }`}>
+                        <Package size={14} />
+                        在庫: {data.stock}
+                      </p>
+                    )}
+                  </div>
+                ))}
             </div>
           </div>
         </div>
@@ -1072,7 +1124,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
               </div>
 
               {/* 価格履歴テーブル */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-3 gap-6">
                 {/* 買取価格履歴 */}
                 <div>
                   <h3 className="font-bold text-gray-800 mb-3">買取価格履歴</h3>
@@ -1107,6 +1159,53 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                                 <td className="px-3 py-2 text-right font-medium">¥{p.price.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-right text-gray-500">
                                   {date ? date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">履歴なし</p>
+                  )}
+                </div>
+
+                {/* スニダン取引履歴 */}
+                <div>
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-purple-500">🔄</span>
+                    スニダン取引履歴
+                  </h3>
+                  {snkrdunkSales.length > 0 ? (
+                    <div className="max-h-[200px] overflow-auto border rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="bg-purple-50 sticky top-0">
+                          <tr>
+                            <th className="text-left px-3 py-2">日時</th>
+                            <th className="text-center px-3 py-2">グレード</th>
+                            <th className="text-right px-3 py-2">価格</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {snkrdunkSales.slice(0, 20).map((sale: any, i: number) => {
+                            const date = new Date(sale.sold_at)
+                            const gradeColor = SNKRDUNK_GRADE_COLORS[sale.grade] || '#6b7280'
+                            return (
+                              <tr key={i} className="hover:bg-purple-50">
+                                <td className="px-3 py-2 text-gray-600">
+                                  {date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  <span
+                                    className="px-2 py-0.5 rounded text-xs font-medium"
+                                    style={{ backgroundColor: `${gradeColor}20`, color: gradeColor }}
+                                  >
+                                    {sale.grade}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium">
+                                  ¥{sale.price.toLocaleString()}
                                 </td>
                               </tr>
                             )
