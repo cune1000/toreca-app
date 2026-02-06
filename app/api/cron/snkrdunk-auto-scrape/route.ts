@@ -246,21 +246,23 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
             console.log(`[DEBUG] Raw item 0:`, JSON.stringify(item))
         }
 
-        const soldAt = parseRelativeTime(item.dateText, now)
+        // スクレイパーが返すフィールド名: date, size, price, userIconNumber
+        const soldAt = parseRelativeTime(item.date, now)
         if (!soldAt) {
-            if (index === 0) console.log(`[DEBUG] soldAt is null for item 0, dateText=${item.dateText}`)
+            if (index === 0) console.log(`[DEBUG] soldAt is null for item 0, date=${item.date}`)
             return
         }
 
-        const grade = normalizeGrade(item.gradeText)
+        const grade = normalizeGrade(item.size)
         if (!grade) {
-            if (index === 0) console.log(`[DEBUG] grade is null for item 0, gradeText=${item.gradeText}`)
+            if (index === 0) console.log(`[DEBUG] grade is null for item 0, size=${item.size}`)
             return
         }
 
-        const price = parsePrice(item.priceText)
+        // priceは既に数値として返ってくる
+        const price = typeof item.price === 'number' ? item.price : parsePrice(String(item.price))
         if (!price) {
-            if (index === 0) console.log(`[DEBUG] price is null for item 0, priceText=${item.priceText}`)
+            if (index === 0) console.log(`[DEBUG] price is null for item 0, price=${item.price}`)
             return
         }
 
