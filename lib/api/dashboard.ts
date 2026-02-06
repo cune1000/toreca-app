@@ -108,7 +108,7 @@ export async function getCronStats(hours: number = 24): Promise<CronStats> {
   }
 }
 
-/** カード検索（最新価格付き） */
+/** カード検索（Aランク・PSA10価格付き） */
 export async function searchCardsForDashboard(
   query: string,
   limit: number = 10
@@ -117,8 +117,10 @@ export async function searchCardsForDashboard(
   name: string
   card_number?: string
   image_url?: string
-  latest_price?: number
-  latest_grade?: string
+  price_a?: number
+  price_a_date?: string
+  price_psa10?: number
+  price_psa10_date?: string
 }>> {
   if (!query || query.length < 2) return []
 
@@ -135,7 +137,7 @@ export async function searchCardsForDashboard(
 
   if (!data || data.length === 0) return []
 
-  // 各カードの最新スニダン価格を取得
+  // 各カードの最新スニダン価格を取得（Aランク・PSA10それぞれ）
   const cardIds = data.map(c => c.id)
   const { data: salesData } = await supabase
     .from('snkrdunk_sales_history')
@@ -143,18 +145,31 @@ export async function searchCardsForDashboard(
     .in('card_id', cardIds)
     .order('sold_at', { ascending: false })
 
-  // カードごとに最新の価格を取得
-  const latestPrices: Record<string, { price: number; grade: string }> = {}
+  // カードごとにAランク・PSA10の最新価格を取得
+  const pricesByCard: Record<string, {
+    a?: { price: number; date: string }
+    psa10?: { price: number; date: string }
+  }> = {}
+
   for (const sale of (salesData || [])) {
-    if (!latestPrices[sale.card_id]) {
-      latestPrices[sale.card_id] = { price: sale.price, grade: sale.grade }
+    if (!pricesByCard[sale.card_id]) {
+      pricesByCard[sale.card_id] = {}
+    }
+    const gradeUpper = (sale.grade || '').toUpperCase()
+    if (gradeUpper === 'A' && !pricesByCard[sale.card_id].a) {
+      pricesByCard[sale.card_id].a = { price: sale.price, date: sale.sold_at }
+    }
+    if (gradeUpper === 'PSA10' && !pricesByCard[sale.card_id].psa10) {
+      pricesByCard[sale.card_id].psa10 = { price: sale.price, date: sale.sold_at }
     }
   }
 
   return data.map(card => ({
     ...card,
-    latest_price: latestPrices[card.id]?.price,
-    latest_grade: latestPrices[card.id]?.grade
+    price_a: pricesByCard[card.id]?.a?.price,
+    price_a_date: pricesByCard[card.id]?.a?.date,
+    price_psa10: pricesByCard[card.id]?.psa10?.price,
+    price_psa10_date: pricesByCard[card.id]?.psa10?.date
   }))
 }
 

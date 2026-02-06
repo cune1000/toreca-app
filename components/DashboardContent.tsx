@@ -40,8 +40,10 @@ interface SearchResult {
   name: string
   card_number?: string
   image_url?: string
-  latest_price?: number
-  latest_grade?: string
+  price_a?: number
+  price_a_date?: string
+  price_psa10?: number
+  price_psa10_date?: string
 }
 
 // 価格変動閾値（10%以上 or 1000円以上）
@@ -322,33 +324,47 @@ export default function DashboardContent() {
           {isSearching && <RefreshCw size={18} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />}
         </div>
 
-        {/* 検索結果（価格付き） */}
+        {/* 検索結果（Aランク・PSA10価格付き） */}
         {searchResults.length > 0 && (
           <div className="mt-4 space-y-2 max-h-[400px] overflow-auto">
             {searchResults.map(card => (
               <div
                 key={card.id}
-                className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
                 onClick={() => window.location.href = `/cards?id=${card.id}`}
               >
                 {card.image_url && (
-                  <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow" />
+                  <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow flex-shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-800 truncate">{card.name}</p>
                   {card.card_number && (
-                    <p className="text-xs text-gray-500">{card.card_number}</p>
+                    <p className="text-xs text-gray-500 mb-1">{card.card_number}</p>
                   )}
-                </div>
-                <div className="text-right">
-                  {card.latest_price ? (
-                    <>
-                      <p className="font-bold text-blue-600">¥{card.latest_price.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">{card.latest_grade || '-'}</p>
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-400">価格なし</p>
-                  )}
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div className="text-xs">
+                      <span className="text-gray-500">A: </span>
+                      {card.price_a ? (
+                        <>
+                          <span className="font-bold text-blue-600">¥{card.price_a.toLocaleString()}</span>
+                          <span className="text-gray-400 ml-1">({card.price_a_date ? new Date(card.price_a_date).toLocaleDateString('ja-JP') : '-'})</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-gray-500">PSA10: </span>
+                      {card.price_psa10 ? (
+                        <>
+                          <span className="font-bold text-red-600">¥{card.price_psa10.toLocaleString()}</span>
+                          <span className="text-gray-400 ml-1">({card.price_psa10_date ? new Date(card.price_psa10_date).toLocaleDateString('ja-JP') : '-'})</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
