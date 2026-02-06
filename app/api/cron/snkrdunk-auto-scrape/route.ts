@@ -452,6 +452,12 @@ function normalizeGrade(gradeText: string): string | null {
     if (cleaned.includes('C') || cleaned === 'C') return 'C'
     if (cleaned.includes('D') || cleaned === 'D') return 'D'
 
+    // BOX/パック用: 数量パターン (1個, 2個, 3個, など)
+    const quantityMatch = gradeText.match(/(\d+)個/)
+    if (quantityMatch) {
+        return `${quantityMatch[1]}個`
+    }
+
     return null
 }
 
