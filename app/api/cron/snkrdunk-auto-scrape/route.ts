@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseRelativeTime, normalizeGrade, parsePrice } from '@/lib/scraping/helpers'
+import { TORECA_SCRAPER_URL } from '@/lib/config'
 
 /**
  * Vercel Cron Job: スニダン自動スクレイピング
@@ -170,8 +171,6 @@ async function calculateAdaptiveInterval(cardId: string): Promise<number> {
  * スニダン売買履歴をスクレイピング（toreca-scraper経由）
  */
 async function scrapeSnkrdunkHistory(cardId: string, url: string) {
-    const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://skillful-love-production.up.railway.app'
-
     // toreca-scraperを呼び出してスクレイピング
     const scrapeResponse = await fetch(`${TORECA_SCRAPER_URL}/api/snkrdunk-scrape`, {
         method: 'POST',
