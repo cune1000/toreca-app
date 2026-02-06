@@ -1198,7 +1198,9 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                           </tr>
                         </thead>
                         <tbody className="divide-y">
-                          {snkrdunkSales.slice(0, 20).map((sale: any, i: number) => {
+                          {[...snkrdunkSales].sort((a: any, b: any) =>
+                            new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime()
+                          ).slice(0, 20).map((sale: any, i: number) => {
                             const date = new Date(sale.sold_at)
                             const gradeColor = SNKRDUNK_GRADE_COLORS[sale.grade] || '#6b7280'
                             return (
