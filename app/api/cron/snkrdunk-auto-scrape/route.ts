@@ -240,15 +240,33 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         user_icon_number: number | null
     }> = []
 
-    salesHistory.forEach((item: any) => {
+    salesHistory.forEach((item: any, index: number) => {
+        // 最初の1件だけ詳細ログ
+        if (index === 0) {
+            console.log(`[DEBUG] Raw item 0:`, JSON.stringify(item))
+        }
+
         const soldAt = parseRelativeTime(item.dateText, now)
-        if (!soldAt) return
+        if (!soldAt) {
+            if (index === 0) console.log(`[DEBUG] soldAt is null for item 0, dateText=${item.dateText}`)
+            return
+        }
 
         const grade = normalizeGrade(item.gradeText)
-        if (!grade) return
+        if (!grade) {
+            if (index === 0) console.log(`[DEBUG] grade is null for item 0, gradeText=${item.gradeText}`)
+            return
+        }
 
         const price = parsePrice(item.priceText)
-        if (!price) return
+        if (!price) {
+            if (index === 0) console.log(`[DEBUG] price is null for item 0, priceText=${item.priceText}`)
+            return
+        }
+
+        if (index === 0) {
+            console.log(`[DEBUG] Parsed item 0: soldAt=${soldAt.toISOString()}, grade=${grade}, price=${price}`)
+        }
 
         scrapedData.push({
             grade,
