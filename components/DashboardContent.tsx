@@ -279,12 +279,19 @@ export default function DashboardContent() {
                   const diff = (change.new_price || 0) - (change.old_price || 0)
                   const isUp = diff > 0
                   return (
-                    <div key={i} className="p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer" onClick={() => change.card_id && (window.location.href = `/cards?id=${change.card_id}`)}>
-                      <p className="text-sm font-medium text-gray-800 truncate">{change.card_name}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">{change.site_name}</span>
+                    <div
+                      key={i}
+                      className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                      onClick={() => change.card_id && (window.location.href = `/cards?id=${change.card_id}`)}
+                    >
+                      <p className="text-sm font-medium text-gray-800 truncate mb-1">{change.card_name}</p>
+                      <p className="text-xs text-gray-500 mb-1">{change.site_name}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">¥{change.old_price?.toLocaleString()}</span>
+                        <span className="text-gray-400">→</span>
+                        <span className="text-sm font-medium text-gray-800">¥{change.new_price?.toLocaleString()}</span>
                         <span className={`text-sm font-bold ${isUp ? 'text-red-600' : 'text-green-600'}`}>
-                          {isUp ? '↑' : '↓'} ¥{Math.abs(diff).toLocaleString()}
+                          ({isUp ? '+' : ''}{diff.toLocaleString()})
                         </span>
                       </div>
                     </div>
