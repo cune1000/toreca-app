@@ -392,6 +392,19 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
 // ヘルパー関数（既存のsnkrdunk-scrape/route.tsと同じ）
 function parseRelativeTime(timeStr: string, baseTime: Date): Date | null {
     if (!timeStr || typeof timeStr !== 'string') return null
+
+    // 西暦表記のパターン（2026/01/17, 2025/11/25など）
+    const absoluteDatePattern = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/
+    const absoluteMatch = timeStr.match(absoluteDatePattern)
+    if (absoluteMatch) {
+        const year = parseInt(absoluteMatch[1], 10)
+        const month = parseInt(absoluteMatch[2], 10) - 1 // 月は0-indexed
+        const day = parseInt(absoluteMatch[3], 10)
+        const result = new Date(year, month, day, 0, 0, 0, 0)
+        return isNaN(result.getTime()) ? null : result
+    }
+
+    // 相対時刻のパターン（3日前、2時間前など）
     const pattern = /(\d+)(分|時間|日)前/
     const match = timeStr.match(pattern)
     if (!match) return null
