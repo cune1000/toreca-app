@@ -284,7 +284,11 @@ export default function DashboardContent() {
                     <div
                       key={i}
                       className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                      onClick={() => change.card_id && (window.location.href = `/cards?id=${change.card_id}`)}
+                      onClick={() => {
+                        // SPAナビゲーション: カード管理ページへ移動
+                        localStorage.setItem('toreca-currentPage', 'cards')
+                        window.location.reload()
+                      }}
                     >
                       <p className="text-sm font-medium text-gray-800 truncate mb-1">{change.card_name}</p>
                       <p className="text-xs text-gray-500 mb-1">{change.site_name}</p>
@@ -331,7 +335,11 @@ export default function DashboardContent() {
               <div
                 key={card.id}
                 className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => window.location.href = `/cards?id=${card.id}`}
+                onClick={() => {
+                  // SPAナビゲーション: カード管理ページへ移動
+                  localStorage.setItem('toreca-currentPage', 'cards')
+                  window.location.reload()
+                }}
               >
                 {card.image_url && (
                   <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow flex-shrink-0" />
