@@ -106,7 +106,12 @@ components/
 └── ...
 
 lib/
-└── supabase.ts                     # Supabaseクライアント
+├── config.ts                       # 環境変数・設定値集約
+├── supabase.ts                     # Supabaseクライアント
+├── scraping/
+│   └── helpers.ts                  # スクレイピング共通関数
+└── ai/
+    └── gemini.ts                   # Gemini AI共通関数
 ```
 
 #### データ種別の違い
