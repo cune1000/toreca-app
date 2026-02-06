@@ -14,15 +14,20 @@ export const maxDuration = 60
  */
 export async function GET(req: Request) {
     try {
-        // CRON_SECRET認証
-        const authHeader = req.headers.get('authorization')
-        const cronSecret = process.env.CRON_SECRET
+        const { searchParams } = new URL(req.url)
+        const isTestMode = searchParams.get('test') === '1'
 
-        if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-            return NextResponse.json(
-                { success: false, error: 'Unauthorized' },
-                { status: 401 }
-            )
+        // CRON_SECRET認証（テストモード以外）
+        if (!isTestMode) {
+            const authHeader = req.headers.get('authorization')
+            const cronSecret = process.env.CRON_SECRET
+
+            if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+                return NextResponse.json(
+                    { success: false, error: 'Unauthorized' },
+                    { status: 401 }
+                )
+            }
         }
 
         const supabase = createServiceClient()
