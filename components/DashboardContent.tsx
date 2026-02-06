@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { 
-  getDashboardStats, 
-  getRecentCards, 
-  getPriceChanges, 
+import {
+  getDashboardStats,
+  getRecentCards,
+  getPriceChanges,
   getCronStats,
   searchCardsForDashboard,
   getLargeCategories,
-  getAllSaleSites 
+  getAllSaleSites
 } from '@/lib/api/dashboard'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Database, Store, Globe, Clock, Search, RefreshCw, TrendingUp, AlertCircle } from 'lucide-react'
@@ -59,6 +59,8 @@ export default function DashboardContent() {
   const [priceChanges, setPriceChanges] = useState<PriceChange[]>([])
   const [cronStats, setCronStats] = useState<CronStats>({ success: 0, errors: 0, changes: 0 })
   const [loading, setLoading] = useState(true)
+  const [priceIndexData, setPriceIndexData] = useState<any[]>([])
+  const [indexDays, setIndexDays] = useState(7)
 
   useEffect(() => {
     fetchData()
@@ -66,7 +68,7 @@ export default function DashboardContent() {
 
   const fetchData = async () => {
     setLoading(true)
-    
+
     // 並列で全データ取得（lib/api使用）
     const [statsData, categoriesData, sitesData, cardsData, changesData, cronStatsData] = await Promise.all([
       getDashboardStats(),
@@ -84,8 +86,27 @@ export default function DashboardContent() {
     setPriceChanges(changesData)
     setCronStats(cronStatsData)
 
+    // 価格インデックス取得
+    await fetchPriceIndex(indexDays)
+
     setLoading(false)
   }
+
+  const fetchPriceIndex = async (days: number) => {
+    try {
+      const res = await fetch(`/api/price-index?category=ポケモン&days=${days}`)
+      const json = await res.json()
+      if (json.success && json.chart) {
+        setPriceIndexData(json.chart)
+      }
+    } catch (e) {
+      console.error('Price index fetch error:', e)
+    }
+  }
+
+  useEffect(() => {
+    if (!loading) fetchPriceIndex(indexDays)
+  }, [indexDays])
 
   // リアルタイム検索
   useEffect(() => {
@@ -104,16 +125,11 @@ export default function DashboardContent() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // サンプル価格推移データ
-  const priceHistory = [
-    { date: '1/14', purchase: 58000, sale: 64000 },
-    { date: '1/15', purchase: 59000, sale: 65000 },
-    { date: '1/16', purchase: 60000, sale: 66000 },
-    { date: '1/17', purchase: 61000, sale: 67000 },
-    { date: '1/18', purchase: 60000, sale: 66000 },
-    { date: '1/19', purchase: 62000, sale: 68000 },
-    { date: '1/20', purchase: 62000, sale: 68000 },
-  ]
+  // 価格インデックス用にデータを変換
+  const chartDataForDisplay = priceIndexData.map((row: any) => ({
+    date: row.date?.slice(5) || '',
+    ...row
+  }))
 
   if (loading) {
     return (
@@ -138,7 +154,7 @@ export default function DashboardContent() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -150,7 +166,7 @@ export default function DashboardContent() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -162,7 +178,7 @@ export default function DashboardContent() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -193,33 +209,54 @@ export default function DashboardContent() {
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* 価格推移グラフ */}
+        {/* 価格インデックスグラフ */}
         <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-gray-800">価格推移サンプル</h2>
-            <select className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
-              <option>過去7日間</option>
-              <option>過去30日間</option>
+            <h2 className="font-bold text-gray-800">📊 価格インデックス（ポケモン）</h2>
+            <select
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
+              value={indexDays}
+              onChange={(e) => setIndexDays(Number(e.target.value))}
+            >
+              <option value={7}>過去7日間</option>
+              <option value={30}>過去30日間</option>
+              <option value={90}>過去90日間</option>
             </select>
           </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={priceHistory}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `¥${(v/1000)}k`} />
-              <Tooltip formatter={(value: number) => `¥${value.toLocaleString()}`} />
-              <Area type="monotone" dataKey="sale" stroke="#10b981" fill="#10b98120" strokeWidth={2} name="販売価格" />
-              <Area type="monotone" dataKey="purchase" stroke="#3b82f6" fill="#3b82f620" strokeWidth={2} name="買取価格" />
-            </AreaChart>
-          </ResponsiveContainer>
-          <div className="flex justify-center gap-6 mt-2">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="text-xs text-gray-600">買取価格</span>
+          {chartDataForDisplay.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={chartDataForDisplay}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `¥${(v / 1000)}k`} />
+                <Tooltip formatter={(value: number) => `¥${value?.toLocaleString() || 0}`} />
+                <Area type="monotone" dataKey="SAR_PSA10_sale" stroke="#ef4444" fill="#ef444420" strokeWidth={2} name="SAR PSA10" />
+                <Area type="monotone" dataKey="SAR_A_sale" stroke="#f97316" fill="#f9731620" strokeWidth={2} name="SAR 状態A" />
+                <Area type="monotone" dataKey="AR_PSA10_sale" stroke="#3b82f6" fill="#3b82f620" strokeWidth={2} name="AR PSA10" />
+                <Area type="monotone" dataKey="SAR_ALL_purchase" stroke="#22c55e" fill="#22c55e20" strokeWidth={2} name="SAR 買取" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>データがありません（集計待ち）</p>
             </div>
-            <div className="flex items-center gap-2">
+          )}
+          <div className="flex justify-center gap-4 mt-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span className="text-xs text-gray-600">SAR PSA10</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+              <span className="text-xs text-gray-600">SAR 状態A</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <span className="text-xs text-gray-600">AR PSA10</span>
+            </div>
+            <div className="flex items-center gap-1">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-xs text-gray-600">販売価格</span>
+              <span className="text-xs text-gray-600">SAR 買取</span>
             </div>
           </div>
         </div>
@@ -259,7 +296,7 @@ export default function DashboardContent() {
             <h2 className="font-bold text-gray-800">カード検索・一覧</h2>
             <span className="text-sm text-gray-500">最新50件表示</span>
           </div>
-          
+
           {/* 検索ボックス */}
           <div className="relative">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -272,7 +309,7 @@ export default function DashboardContent() {
             />
             {isSearching && <RefreshCw size={18} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />}
           </div>
-          
+
           {/* 検索結果 */}
           {searchResults.length > 0 && (
             <div className="mt-3 p-3 bg-blue-50 rounded-lg">
@@ -291,7 +328,7 @@ export default function DashboardContent() {
             <p className="mt-3 text-sm text-gray-500">「{searchQuery}」に一致するカードが見つかりません</p>
           )}
         </div>
-        
+
         {/* 最近のカード一覧 */}
         {recentCards.length > 0 ? (
           <div className="max-h-[400px] overflow-auto">
