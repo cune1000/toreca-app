@@ -497,22 +497,32 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     return Array.from(conditions)
   }, [purchasePrices])
 
-  // スニダン売買履歴のグラフデータ
+  // スニダン売買履歴のグラフデータ（期間フィルター適用）
   const snkrdunkChartData = useMemo(() => {
+    // 期間でフィルター
+    const now = new Date()
+    const cutoff = selectedPeriod ? new Date(now.getTime() - selectedPeriod * 24 * 60 * 60 * 1000) : null
+
     // すべての売買データを個別の点として表示（平均化しない）
-    return snkrdunkSales.map((sale: any, index: number) => {
-      const result: any = {
-        id: `${sale.sold_at}_${index}`, // 一意のID
-        timestamp: new Date(sale.sold_at).getTime(),
-        date: new Date(sale.sold_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      }
+    return snkrdunkSales
+      .filter((sale: any) => {
+        if (!cutoff) return true
+        const saleDate = new Date(sale.sold_at)
+        return saleDate >= cutoff
+      })
+      .map((sale: any, index: number) => {
+        const result: any = {
+          id: `${sale.sold_at}_${index}`, // 一意のID
+          timestamp: new Date(sale.sold_at).getTime(),
+          date: new Date(sale.sold_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        }
 
-      // グレードごとに価格を設定
-      result[`grade_${sale.grade}`] = sale.price
+        // グレードごとに価格を設定
+        result[`grade_${sale.grade}`] = sale.price
 
-      return result
-    }).sort((a, b) => a.timestamp - b.timestamp).slice(-100)
-  }, [snkrdunkSales])
+        return result
+      }).sort((a, b) => a.timestamp - b.timestamp).slice(-100)
+  }, [snkrdunkSales, selectedPeriod])
 
   // スニダンのユニークなグレードリスト（ソート済み）
   const snkrdunkGrades = useMemo(() => {
