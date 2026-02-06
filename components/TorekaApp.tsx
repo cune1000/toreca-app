@@ -23,7 +23,7 @@ import CronDashboard from './CronDashboard'
 import { PendingPage, ShopsPage, SitesPage, CardsPage, SnkrdunkMonitorPage } from './pages'
 
 // API
-import { getShops, getSaleSites, getPendingImages } from '@/lib/api'
+import { getShops, getSaleSites, getPendingImages, getCard } from '@/lib/api'
 import type { Shop, SaleSite, PendingImage, CardWithRelations } from '@/lib/types'
 
 // =============================================================================
@@ -131,6 +131,15 @@ const TorekaApp = () => {
 
   const handleRefresh = () => {
     setRefresh(r => r + 1)
+  }
+
+  // ダッシュボードからカード選択時のハンドラ
+  const handleDashboardCardSelect = async (cardId: string) => {
+    const card = await getCard(cardId)
+    if (card) {
+      setSelectedCard(card)
+      setShowCardDetail(true)
+    }
   }
 
   // =============================================================================
@@ -266,7 +275,7 @@ const TorekaApp = () => {
         return (
           <>
             <Header title="ダッシュボード" />
-            <DashboardContent key={refresh} />
+            <DashboardContent key={refresh} onSelectCard={handleDashboardCardSelect} />
           </>
         )
       case 'cards':
@@ -328,8 +337,8 @@ const TorekaApp = () => {
                 <button
                   onClick={() => setSettingsTab('cron')}
                   className={`px-4 py-2 text-sm font-medium transition-colors ${settingsTab === 'cron'
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
                   Cron設定
@@ -337,8 +346,8 @@ const TorekaApp = () => {
                 <button
                   onClick={() => setSettingsTab('snkrdunk')}
                   className={`px-4 py-2 text-sm font-medium transition-colors ${settingsTab === 'snkrdunk'
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
                   監視状況（スニダン）

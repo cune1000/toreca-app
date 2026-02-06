@@ -50,7 +50,11 @@ interface SearchResult {
 const PRICE_CHANGE_THRESHOLD_PERCENT = 10
 const PRICE_CHANGE_THRESHOLD_YEN = 1000
 
-export default function DashboardContent() {
+interface DashboardContentProps {
+  onSelectCard?: (cardId: string) => void
+}
+
+export default function DashboardContent({ onSelectCard }: DashboardContentProps) {
   const [stats, setStats] = useState<Stats>({ cards: 0, shops: 0, sites: 0, pending: 0 })
   const [categories, setCategories] = useState<any[]>([])
   const [saleSites, setSaleSites] = useState<any[]>([])
@@ -284,11 +288,7 @@ export default function DashboardContent() {
                     <div
                       key={i}
                       className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                      onClick={() => {
-                        // SPAナビゲーション: カード管理ページへ移動
-                        localStorage.setItem('toreca-currentPage', 'cards')
-                        window.location.reload()
-                      }}
+                      onClick={() => change.card_id && onSelectCard?.(change.card_id)}
                     >
                       <p className="text-sm font-medium text-gray-800 truncate mb-1">{change.card_name}</p>
                       <p className="text-xs text-gray-500 mb-1">{change.site_name}</p>
@@ -335,11 +335,7 @@ export default function DashboardContent() {
               <div
                 key={card.id}
                 className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => {
-                  // SPAナビゲーション: カード管理ページへ移動
-                  localStorage.setItem('toreca-currentPage', 'cards')
-                  window.location.reload()
-                }}
+                onClick={() => onSelectCard?.(card.id)}
               >
                 {card.image_url && (
                   <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow flex-shrink-0" />
