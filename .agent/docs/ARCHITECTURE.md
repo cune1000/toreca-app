@@ -75,11 +75,11 @@ flowchart TB
 | **ファイル** | `app/api/cron/snkrdunk-auto-scrape/route.ts` |
 | **非同期** | ジョブID発行 → ポーリングで結果取得 |
 
-### ⚠️ 重要: 両ファイルで共通のヘルパー関数が重複
+### ✅ 共通ヘルパー関数 (`lib/scraping/helpers.ts`)
 
-以下の関数が両ファイルに存在（リファクタリング対象）:
-- `parseRelativeTime()` - 日時パース
-- `normalizeGrade()` - グレード正規化
+以下の関数は共通モジュールに集約済み:
+- `parseRelativeTime()` - 日時パース（相対/絶対対応）
+- `normalizeGrade()` - グレード正規化（PSA/BGS/ARS/BOX対応）
 - `parsePrice()` - 価格パース
 
 ---
