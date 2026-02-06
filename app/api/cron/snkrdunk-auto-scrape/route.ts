@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseRelativeTime, normalizeGrade, parsePrice } from '@/lib/scraping/helpers'
 
 /**
  * Vercel Cron Job: スニダン自動スクレイピング
@@ -389,81 +390,4 @@ async function scrapeSnkrdunkHistory(cardId: string, url: string) {
         inserted: insertedCount,
         skipped: skippedCount
     }
-}
-
-// ヘルパー関数（既存のsnkrdunk-scrape/route.tsと同じ）
-function parseRelativeTime(timeStr: string, baseTime: Date): Date | null {
-    if (!timeStr || typeof timeStr !== 'string') return null
-
-    // 西暦表記のパターン（2026/01/17, 2025/11/25など）
-    const absoluteDatePattern = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/
-    const absoluteMatch = timeStr.match(absoluteDatePattern)
-    if (absoluteMatch) {
-        const year = parseInt(absoluteMatch[1], 10)
-        const month = parseInt(absoluteMatch[2], 10) - 1 // 月は0-indexed
-        const day = parseInt(absoluteMatch[3], 10)
-        const result = new Date(year, month, day, 0, 0, 0, 0)
-        return isNaN(result.getTime()) ? null : result
-    }
-
-    // 相対時刻のパターン（3日前、2時間前など）
-    const pattern = /(\d+)(分|時間|日)前/
-    const match = timeStr.match(pattern)
-    if (!match) return null
-
-    const value = parseInt(match[1], 10)
-    const unit = match[2]
-    const result = new Date(baseTime)
-
-    switch (unit) {
-        case '分':
-            result.setMinutes(result.getMinutes() - value)
-            break
-        case '時間':
-            result.setHours(result.getHours() - value)
-            break
-        case '日':
-            result.setDate(result.getDate() - value)
-            break
-        default:
-            return null
-    }
-
-    return result
-}
-
-function normalizeGrade(gradeText: string): string | null {
-    if (!gradeText || typeof gradeText !== 'string') return null
-    const cleaned = gradeText.replace(/\s+/g, '').toUpperCase()
-
-    if (cleaned.includes('PSA10')) return 'PSA10'
-    if (cleaned.includes('PSA9')) return 'PSA9'
-    if (cleaned.includes('PSA8') || cleaned.includes('PSA7') || cleaned.includes('PSA6')) return 'PSA8以下'
-    if (cleaned.includes('BGS10BL')) return 'BGS10BL'
-    if (cleaned.includes('BGS10GL')) return 'BGS10GL'
-    if (cleaned.includes('BGS9.5')) return 'BGS9.5'
-    if (cleaned.includes('BGS9')) return 'BGS9以下'
-    if (cleaned.includes('ARS10+')) return 'ARS10+'
-    if (cleaned.includes('ARS10')) return 'ARS10'
-    if (cleaned.includes('ARS9')) return 'ARS9'
-    if (cleaned.includes('ARS8')) return 'ARS8以下'
-    if (cleaned.includes('A') || cleaned === 'A') return 'A'
-    if (cleaned.includes('B') || cleaned === 'B') return 'B'
-    if (cleaned.includes('C') || cleaned === 'C') return 'C'
-    if (cleaned.includes('D') || cleaned === 'D') return 'D'
-
-    // BOX/パック用: 数量パターン (1個, 2個, 3個, など)
-    const quantityMatch = gradeText.match(/(\d+)個/)
-    if (quantityMatch) {
-        return `${quantityMatch[1]}個`
-    }
-
-    return null
-}
-
-function parsePrice(priceText: string): number | null {
-    if (!priceText || typeof priceText !== 'string') return null
-    const cleaned = priceText.replace(/[¥,]/g, '')
-    const price = parseInt(cleaned, 10)
-    return isNaN(price) ? null : price
 }
