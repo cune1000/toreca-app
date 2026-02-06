@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import {
   getDashboardStats,
-  getRecentCards,
   getPriceChanges,
   getCronStats,
   searchCardsForDashboard,
@@ -27,18 +26,13 @@ interface CronStats {
 }
 
 interface PriceChange {
+  card_id?: string
   card_name: string
   site_name: string
+  site_url?: string
   old_price: number | null
   new_price: number | null
   executed_at: string
-}
-
-interface RecentCard {
-  id: string
-  name: string
-  card_number?: string
-  created_at: string
 }
 
 interface SearchResult {
@@ -46,13 +40,18 @@ interface SearchResult {
   name: string
   card_number?: string
   image_url?: string
+  latest_price?: number
+  latest_grade?: string
 }
+
+// 価格変動閾値（10%以上 or 1000円以上）
+const PRICE_CHANGE_THRESHOLD_PERCENT = 10
+const PRICE_CHANGE_THRESHOLD_YEN = 1000
 
 export default function DashboardContent() {
   const [stats, setStats] = useState<Stats>({ cards: 0, shops: 0, sites: 0, pending: 0 })
   const [categories, setCategories] = useState<any[]>([])
   const [saleSites, setSaleSites] = useState<any[]>([])
-  const [recentCards, setRecentCards] = useState<RecentCard[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -61,6 +60,7 @@ export default function DashboardContent() {
   const [loading, setLoading] = useState(true)
   const [priceIndexData, setPriceIndexData] = useState<any[]>([])
   const [indexDays, setIndexDays] = useState(7)
+  const [selectedCard, setSelectedCard] = useState<SearchResult | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -70,19 +70,17 @@ export default function DashboardContent() {
     setLoading(true)
 
     // 並列で全データ取得（lib/api使用）
-    const [statsData, categoriesData, sitesData, cardsData, changesData, cronStatsData] = await Promise.all([
+    const [statsData, categoriesData, sitesData, changesData, cronStatsData] = await Promise.all([
       getDashboardStats(),
       getLargeCategories(),
       getAllSaleSites(),
-      getRecentCards(50),
-      getPriceChanges(24, 10),
+      getPriceChanges(24, 50), // より多く取得してフィルタリング
       getCronStats(24)
     ])
 
     setStats(statsData)
     setCategories(categoriesData)
     setSaleSites(sitesData)
-    setRecentCards(cardsData)
     setPriceChanges(changesData)
     setCronStats(cronStatsData)
 
@@ -261,103 +259,99 @@ export default function DashboardContent() {
           </div>
         </div>
 
-        {/* 最近の価格変動 */}
+        {/* 最近の価格変動（フィルタリング済み） */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <h2 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
             <TrendingUp size={18} className="text-blue-500" />
-            最近の価格変動
+            重要な価格変動
           </h2>
-          {priceChanges.length > 0 ? (
-            <div className="space-y-3 max-h-[280px] overflow-auto">
-              {priceChanges.map((change, i) => (
-                <div key={i} className="p-2 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-800 truncate">{change.card_name}</p>
-                  <p className="text-xs text-gray-500">{change.site_name}</p>
-                  <p className="text-sm">
-                    <span className="text-gray-400">¥{change.old_price?.toLocaleString()}</span>
-                    <span className="mx-1">→</span>
-                    <span className={change.new_price && change.old_price && change.new_price > change.old_price ? 'text-red-600' : 'text-green-600'}>
-                      ¥{change.new_price?.toLocaleString()}
-                    </span>
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 text-center py-4">24時間以内の変動なし</p>
-          )}
+          <p className="text-xs text-gray-400 mb-3">{PRICE_CHANGE_THRESHOLD_PERCENT}%以上 or ¥{PRICE_CHANGE_THRESHOLD_YEN.toLocaleString()}以上</p>
+          {(() => {
+            const filtered = priceChanges.filter(c => {
+              if (!c.old_price || !c.new_price) return false
+              const diff = Math.abs(c.new_price - c.old_price)
+              const percent = (diff / c.old_price) * 100
+              return percent >= PRICE_CHANGE_THRESHOLD_PERCENT || diff >= PRICE_CHANGE_THRESHOLD_YEN
+            })
+            return filtered.length > 0 ? (
+              <div className="space-y-2 max-h-[280px] overflow-auto">
+                {filtered.slice(0, 10).map((change, i) => {
+                  const diff = (change.new_price || 0) - (change.old_price || 0)
+                  const isUp = diff > 0
+                  return (
+                    <div key={i} className="p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer" onClick={() => change.card_id && (window.location.href = `/cards?id=${change.card_id}`)}>
+                      <p className="text-sm font-medium text-gray-800 truncate">{change.card_name}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">{change.site_name}</span>
+                        <span className={`text-sm font-bold ${isUp ? 'text-red-600' : 'text-green-600'}`}>
+                          {isUp ? '↑' : '↓'} ¥{Math.abs(diff).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">大きな変動なし</p>
+            )
+          })()}
         </div>
       </div>
 
-      {/* カード検索 + 一覧 */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-gray-800">カード検索・一覧</h2>
-            <span className="text-sm text-gray-500">最新50件表示</span>
-          </div>
+      {/* カード検索 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <h2 className="font-bold text-gray-800 mb-3">🔍 カード検索</h2>
 
-          {/* 検索ボックス */}
-          <div className="relative">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="カード名・型番で検索（2文字以上）"
-              className="w-full pl-10 pr-4 py-2 border rounded-lg"
-            />
-            {isSearching && <RefreshCw size={18} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />}
-          </div>
-
-          {/* 検索結果 */}
-          {searchResults.length > 0 && (
-            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-              <p className="text-xs text-blue-600 mb-2">検索結果: {searchResults.length}件</p>
-              <div className="flex flex-wrap gap-2">
-                {searchResults.map(card => (
-                  <div key={card.id} className="flex items-center gap-2 px-2 py-1 bg-white rounded border text-sm">
-                    {card.image_url && <img src={card.image_url} alt="" className="w-6 h-8 object-cover rounded" />}
-                    <span className="truncate max-w-[150px]">{card.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
-            <p className="mt-3 text-sm text-gray-500">「{searchQuery}」に一致するカードが見つかりません</p>
-          )}
+        {/* 検索ボックス */}
+        <div className="relative">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="カード名・型番で検索（2文字以上）"
+            className="w-full pl-10 pr-4 py-2 border rounded-lg"
+          />
+          {isSearching && <RefreshCw size={18} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />}
         </div>
 
-        {/* 最近のカード一覧 */}
-        {recentCards.length > 0 ? (
-          <div className="max-h-[400px] overflow-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 sticky top-0">
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード番号</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">登録日</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {recentCards.map(card => (
-                  <tr key={card.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{card.name}</td>
-                    <td className="px-4 py-3 text-gray-600">{card.card_number || '-'}</td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-500">
-                      {new Date(card.created_at).toLocaleDateString('ja-JP')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* 検索結果（価格付き） */}
+        {searchResults.length > 0 && (
+          <div className="mt-4 space-y-2 max-h-[400px] overflow-auto">
+            {searchResults.map(card => (
+              <div
+                key={card.id}
+                className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                onClick={() => window.location.href = `/cards?id=${card.id}`}
+              >
+                {card.image_url && (
+                  <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-800 truncate">{card.name}</p>
+                  {card.card_number && (
+                    <p className="text-xs text-gray-500">{card.card_number}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  {card.latest_price ? (
+                    <>
+                      <p className="font-bold text-blue-600">¥{card.latest_price.toLocaleString()}</p>
+                      <p className="text-xs text-gray-500">{card.latest_grade || '-'}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400">価格なし</p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-        ) : (
-          <div className="p-8 text-center text-gray-500">
-            <p>まだカードが登録されていません</p>
-            <p className="text-sm mt-2">「カード管理」からカードを追加してください</p>
-          </div>
+        )}
+        {searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
+          <p className="mt-3 text-sm text-gray-500 text-center">「{searchQuery}」に一致するカードが見つかりません</p>
+        )}
+        {searchQuery.length < 2 && (
+          <p className="mt-3 text-sm text-gray-400 text-center">2文字以上入力して検索</p>
         )}
       </div>
     </div>

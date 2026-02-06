@@ -68,7 +68,7 @@ export async function getRecentCards(limit: number = 50): Promise<RecentCard[]> 
 /** 価格変動履歴を取得（指定時間内） */
 export async function getPriceChanges(hours: number = 24, limit: number = 10): Promise<PriceChange[]> {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
-  
+
   const { data, error } = await supabase
     .from('cron_logs')
     .select('card_name, site_name, old_price, new_price, executed_at')
@@ -88,7 +88,7 @@ export async function getPriceChanges(hours: number = 24, limit: number = 10): P
 /** Cron統計を取得（指定時間内） */
 export async function getCronStats(hours: number = 24): Promise<CronStats> {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
-  
+
   const { data, error } = await supabase
     .from('cron_logs')
     .select('status, price_changed')
@@ -107,11 +107,18 @@ export async function getCronStats(hours: number = 24): Promise<CronStats> {
   }
 }
 
-/** カード検索 */
+/** カード検索（最新価格付き） */
 export async function searchCardsForDashboard(
-  query: string, 
+  query: string,
   limit: number = 10
-): Promise<Array<{ id: string; name: string; card_number?: string; image_url?: string }>> {
+): Promise<Array<{
+  id: string
+  name: string
+  card_number?: string
+  image_url?: string
+  latest_price?: number
+  latest_grade?: string
+}>> {
   if (!query || query.length < 2) return []
 
   const { data, error } = await supabase
@@ -125,7 +132,29 @@ export async function searchCardsForDashboard(
     return []
   }
 
-  return data || []
+  if (!data || data.length === 0) return []
+
+  // 各カードの最新スニダン価格を取得
+  const cardIds = data.map(c => c.id)
+  const { data: salesData } = await supabase
+    .from('snkrdunk_sales_history')
+    .select('card_id, price, grade, sold_at')
+    .in('card_id', cardIds)
+    .order('sold_at', { ascending: false })
+
+  // カードごとに最新の価格を取得
+  const latestPrices: Record<string, { price: number; grade: string }> = {}
+  for (const sale of (salesData || [])) {
+    if (!latestPrices[sale.card_id]) {
+      latestPrices[sale.card_id] = { price: sale.price, grade: sale.grade }
+    }
+  }
+
+  return data.map(card => ({
+    ...card,
+    latest_price: latestPrices[card.id]?.price,
+    latest_grade: latestPrices[card.id]?.grade
+  }))
 }
 
 // =============================================================================
