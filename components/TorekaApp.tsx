@@ -91,9 +91,11 @@ const TorekaApp = () => {
     setPendingImages(pendingData)
   }
 
-  // ページ変更時にlocalStorageに保存
+  // ページ変更時にlocalStorageに保存＆オーバーレイを閉じる
   useEffect(() => {
     localStorage.setItem('toreca-currentPage', currentPage)
+    setShowShopDetail(false)
+    setShowTwitterFeed(false)
   }, [currentPage])
 
   // =============================================================================
