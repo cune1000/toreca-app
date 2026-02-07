@@ -248,17 +248,10 @@ export default function CardsPage({
   }
 
   const handleBatchLargeChange = async (value: string) => {
-    setBatchUpdates(prev => ({ ...prev, category_large_id: value || null }))
     setBatchMediumCats([])
     setBatchSmallCats([])
     setBatchRarities([])
-    setBatchUpdates(prev => {
-      const next = { ...prev, category_large_id: value || null }
-      delete next.category_medium_id
-      delete next.category_small_id
-      delete next.rarity_id
-      return next
-    })
+    setBatchUpdates({ category_large_id: value || null })
 
     if (value) {
       const [{ data: medData }, { data: rarData }] = await Promise.all([
@@ -271,12 +264,10 @@ export default function CardsPage({
   }
 
   const handleBatchMediumChange = async (value: string) => {
-    setBatchUpdates(prev => ({ ...prev, category_medium_id: value || null }))
     setBatchSmallCats([])
     setBatchUpdates(prev => {
-      const next = { ...prev, category_medium_id: value || null }
-      delete next.category_small_id
-      return next
+      const { category_small_id, ...rest } = prev
+      return { ...rest, category_medium_id: value || null }
     })
 
     if (value) {
