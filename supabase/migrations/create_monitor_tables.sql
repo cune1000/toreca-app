@@ -2,7 +2,7 @@
 -- shop_monitor_settings テーブル
 -- =============================================
 CREATE TABLE IF NOT EXISTS shop_monitor_settings (
-    shop_id UUID PRIMARY KEY REFERENCES shops(id) ON DELETE CASCADE,
+    shop_id UUID PRIMARY KEY REFERENCES purchase_shops(id) ON DELETE CASCADE,
     is_active BOOLEAN NOT NULL DEFAULT false,
     quiet_start INTEGER NOT NULL DEFAULT 2,  -- JST時 (深夜2時)
     quiet_end INTEGER NOT NULL DEFAULT 9,    -- JST時 (朝9時)
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS shop_monitor_settings (
 CREATE TABLE IF NOT EXISTS fetched_tweets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tweet_id TEXT NOT NULL,
-    shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+    shop_id UUID NOT NULL REFERENCES purchase_shops(id) ON DELETE CASCADE,
     is_purchase_related BOOLEAN NOT NULL DEFAULT false,
     is_pinned BOOLEAN NOT NULL DEFAULT false,
     fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
