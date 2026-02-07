@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     // 1. ユーザーIDを取得
     const userResponse = await fetch(
-      `https://api.twitter.com/2/users/by/username/${username}?user.fields=profile_image_url`,
+      `https://api.twitter.com/2/users/by/username/${username}?user.fields=profile_image_url,pinned_tweet_id`,
       {
         headers: {
           'Authorization': `Bearer ${bearerToken}`,
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     const tweetsData = await tweetsResponse.json()
-    
+
     // メディア情報をマップ化（高画質版を取得）
     const mediaMap = new Map()
     if (tweetsData.includes?.media) {
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         const images = (tweet.attachments?.media_keys || [])
           .map((key: string) => mediaMap.get(key))
           .filter(Boolean)
-        
+
         return {
           id: tweet.id,
           text: tweet.text,
@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
         username: userData.data.username,
         name: userData.data.name,
         profileImageUrl: userData.data.profile_image_url,
+        pinnedTweetId: userData.data.pinned_tweet_id || null,
       },
       tweets,
       total: tweets.length,

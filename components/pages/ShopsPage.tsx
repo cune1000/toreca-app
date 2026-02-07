@@ -1,7 +1,8 @@
 'use client'
 
-import React from 'react'
-import { Store, Plus, Edit2 } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Store, Plus, Edit2, Radio, Power, Eye } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import type { Shop } from '@/lib/types'
 
 // =============================================================================
@@ -19,12 +20,51 @@ interface Props {
 // Component
 // =============================================================================
 
-export default function ShopsPage({ 
-  shops, 
-  onAddShop, 
-  onEditShop, 
-  onSelectShop 
+export default function ShopsPage({
+  shops,
+  onAddShop,
+  onEditShop,
+  onSelectShop
 }: Props) {
+  const [monitorStatus, setMonitorStatus] = useState<Record<string, boolean>>({})
+  const [toggling, setToggling] = useState<string | null>(null)
+
+  // 監視ステータス取得
+  useEffect(() => {
+    const fetchStatus = async () => {
+      const { data } = await supabase
+        .from('shop_monitor_settings')
+        .select('shop_id, is_active')
+
+      const statusMap: Record<string, boolean> = {}
+      data?.forEach(s => { statusMap[s.shop_id] = s.is_active })
+      setMonitorStatus(statusMap)
+    }
+    fetchStatus()
+  }, [])
+
+  const toggleMonitor = async (shopId: string) => {
+    setToggling(shopId)
+    const current = monitorStatus[shopId]
+
+    if (current === undefined) {
+      // 初回: レコード作成
+      await supabase.from('shop_monitor_settings').insert({
+        shop_id: shopId,
+        is_active: true
+      })
+      setMonitorStatus(prev => ({ ...prev, [shopId]: true }))
+    } else {
+      // 既存: トグル
+      await supabase
+        .from('shop_monitor_settings')
+        .update({ is_active: !current, updated_at: new Date().toISOString() })
+        .eq('shop_id', shopId)
+      setMonitorStatus(prev => ({ ...prev, [shopId]: !current }))
+    }
+    setToggling(null)
+  }
+
   return (
     <div className="p-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -38,22 +78,22 @@ export default function ShopsPage({
             店舗追加
           </button>
         </div>
-        
+
         {shops.length > 0 ? (
           <div className="divide-y divide-gray-50">
             {shops.map((shop) => (
-              <div 
-                key={shop.id} 
+              <div
+                key={shop.id}
                 className="p-4 flex items-center justify-between hover:bg-gray-50"
               >
-                <div 
+                <div
                   className="flex items-center gap-3 flex-1 cursor-pointer"
                   onClick={() => onSelectShop(shop)}
                 >
-                  {/* Xアイコン or デフォルトアイコン */}
+                  {/* アイコン */}
                   {shop.icon ? (
-                    <img 
-                      src={shop.icon} 
+                    <img
+                      src={shop.icon}
                       alt={shop.name}
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(e) => {
@@ -61,7 +101,7 @@ export default function ShopsPage({
                       }}
                     />
                   ) : shop.x_account ? (
-                    <img 
+                    <img
                       src={`https://unavatar.io/twitter/${shop.x_account}`}
                       alt={shop.name}
                       className="w-12 h-12 rounded-full object-cover"
@@ -78,13 +118,38 @@ export default function ShopsPage({
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
+                  {/* 監視トグル */}
+                  {shop.x_account && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleMonitor(shop.id) }}
+                      disabled={toggling === shop.id}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${monitorStatus[shop.id]
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-300'
+                        } ${toggling === shop.id ? 'opacity-50' : ''}`}
+                    >
+                      {monitorStatus[shop.id] ? <Radio size={14} /> : <Power size={14} />}
+                      {monitorStatus[shop.id] ? '監視中' : '監視OFF'}
+                    </button>
+                  )}
+
+                  {/* X連携バッジ */}
                   {shop.x_account && (
                     <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
                       X連携
                     </span>
                   )}
+
+                  {/* 詳細ボタン */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onSelectShop(shop) }}
+                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Eye size={16} className="text-gray-500" />
+                  </button>
+
                   {/* 編集ボタン */}
                   <button
                     onClick={(e) => onEditShop(shop, e)}

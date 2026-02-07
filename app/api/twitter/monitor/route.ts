@@ -9,30 +9,29 @@ const supabase = createClient(supabaseUrl, supabaseKey)
  * X自動監視API
  * POST /api/twitter/monitor
  * Vercel Cronから毎時呼び出される
+ * 
+ * フロー:
+ * 1. 休止時間チェック（店舗ごとのカスタム設定）
+ * 2. 監視ON店舗のツイート取得
+ * 3. 重複・固定ツイート除外
+ * 4. Gemini AIで買取表か判別
+ * 5. 買取表→保留に追加→バックグラウンドAI解析
  */
 export async function POST(request: NextRequest) {
     const startTime = Date.now()
 
     try {
-        // 1. 時刻チェック（深夜2時〜朝9時は停止）JST
+        // 現在のJST時刻
         const now = new Date()
         const jstHour = (now.getUTCHours() + 9) % 24
-        if (jstHour >= 2 && jstHour < 9) {
-            return NextResponse.json({
-                success: true,
-                message: 'Monitoring paused during 2:00-9:00 JST',
-                skipped: true,
-                current_jst_hour: jstHour
-            })
-        }
 
-        // 2. 監視対象の店舗を取得
+        // 監視対象の店舗を取得
         const { data: settings, error: settingsError } = await supabase
             .from('shop_monitor_settings')
             .select(`
-        *,
-        shop:shop_id(id, name, x_account)
-      `)
+                *,
+                shop:shop_id(id, name, x_account)
+            `)
             .eq('is_active', true)
 
         if (settingsError) {
@@ -42,17 +41,19 @@ export async function POST(request: NextRequest) {
         const results = {
             total_shops: settings?.length || 0,
             processed: 0,
+            skipped_quiet: 0,
             new_tweets: 0,
+            pinned_skipped: 0,
             purchase_lists_found: 0,
             added_to_pending: 0,
             errors: [] as string[]
         }
 
-        // ベースURLを取得
+        // ベースURL
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
             || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
-        // 3. 各店舗のツイートをチェック
+        // 各店舗のツイートをチェック
         for (const setting of settings || []) {
             const shop = setting.shop
             if (!shop?.x_account) {
@@ -60,8 +61,16 @@ export async function POST(request: NextRequest) {
                 continue
             }
 
+            // 店舗ごとの休止時間チェック
+            const quietStart = setting.quiet_start ?? 2
+            const quietEnd = setting.quiet_end ?? 9
+            if (isQuietHour(jstHour, quietStart, quietEnd)) {
+                results.skipped_quiet++
+                continue
+            }
+
             try {
-                // 3.1 ツイート取得
+                // ツイート取得
                 const tweetsRes = await fetch(`${baseUrl}/api/twitter?username=${shop.x_account}`)
                 const tweetsData = await tweetsRes.json()
 
@@ -70,13 +79,29 @@ export async function POST(request: NextRequest) {
                     continue
                 }
 
-                // 3.2 各ツイートを処理
+                const pinnedTweetId = tweetsData.user?.pinnedTweetId
+
+                // 各ツイートを処理
                 for (const tweet of tweetsData.tweets || []) {
+                    // 固定ツイートチェック
+                    if (pinnedTweetId && tweet.id === pinnedTweetId) {
+                        results.pinned_skipped++
+                        // 記録だけして続行
+                        await supabase.from('fetched_tweets').upsert({
+                            tweet_id: tweet.id,
+                            shop_id: shop.id,
+                            is_purchase_related: false,
+                            is_pinned: true
+                        }, { onConflict: 'tweet_id,shop_id' })
+                        continue
+                    }
+
                     // 重複チェック
                     const { data: existing } = await supabase
                         .from('fetched_tweets')
                         .select('id')
                         .eq('tweet_id', tweet.id)
+                        .eq('shop_id', shop.id)
                         .single()
 
                     if (existing) {
@@ -85,22 +110,19 @@ export async function POST(request: NextRequest) {
 
                     results.new_tweets++
 
-                    // 3.3 画像付きツイートのみ処理
+                    // 画像なしツイート
                     if (!tweet.images || tweet.images.length === 0) {
-                        // 取得済みとして記録（画像なし）
                         await supabase.from('fetched_tweets').insert({
                             tweet_id: tweet.id,
                             shop_id: shop.id,
-                            is_purchase_related: false
+                            is_purchase_related: false,
+                            is_pinned: false
                         })
                         continue
                     }
 
-                    // 3.4 Geminiで買取表かどうか判別
+                    // Geminiで買取表かどうか判別
                     let isPurchaseList = false
-                    let classifyConfidence = 0
-                    let classifyReason = ''
-
                     try {
                         const classifyRes = await fetch(`${baseUrl}/api/gemini/classify`, {
                             method: 'POST',
@@ -111,24 +133,17 @@ export async function POST(request: NextRequest) {
                             })
                         })
                         const classifyData = await classifyRes.json()
-
-                        classifyConfidence = classifyData.confidence || 0
-                        classifyReason = classifyData.reason || ''
-
-                        // confidence 70%以上で買取表と判定
-                        isPurchaseList = classifyData.is_purchase_list && classifyConfidence >= 70
+                        isPurchaseList = classifyData.is_purchase_list && (classifyData.confidence || 0) >= 70
 
                         if (isPurchaseList) {
                             results.purchase_lists_found++
                         }
                     } catch (classifyErr: any) {
                         console.error(`Classify error for tweet ${tweet.id}:`, classifyErr)
-                        // 判別エラーでも続行（買取表として扱わない）
                     }
 
-                    // 3.5 買取表なら保留に追加
+                    // 買取表なら保留に追加
                     if (isPurchaseList) {
-                        // 各画像を保留に追加
                         for (const imageUrl of tweet.images) {
                             const { data: pendingImage, error: pendingError } = await supabase
                                 .from('pending_images')
@@ -145,27 +160,26 @@ export async function POST(request: NextRequest) {
                             if (!pendingError && pendingImage) {
                                 results.added_to_pending++
 
-                                // バックグラウンドでAI解析開始（既存のAPIを使用）
+                                // バックグラウンドでAI解析
                                 fetch(`${baseUrl}/api/pending-images/analyze`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ pendingImageId: pendingImage.id })
                                 }).catch(err => console.error('Background analysis error:', err))
-                            } else if (pendingError) {
-                                console.error(`Failed to add pending image for tweet ${tweet.id}:`, pendingError)
                             }
                         }
                     }
 
-                    // 3.6 取得済みツイートとして記録
+                    // 取得済みツイートとして記録
                     await supabase.from('fetched_tweets').insert({
                         tweet_id: tweet.id,
                         shop_id: shop.id,
-                        is_purchase_related: isPurchaseList
+                        is_purchase_related: isPurchaseList,
+                        is_pinned: false
                     })
                 }
 
-                // 3.7 最終チェック時刻を更新
+                // 最終チェック時刻を更新
                 await supabase
                     .from('shop_monitor_settings')
                     .update({
@@ -182,11 +196,9 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const duration = Date.now() - startTime
-
         return NextResponse.json({
             success: true,
-            duration_ms: duration,
+            duration_ms: Date.now() - startTime,
             current_jst_hour: jstHour,
             results
         })
@@ -200,7 +212,19 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// Vercel Cronからの呼び出し用（GETも対応）
+// Vercel Cronからの呼び出し用
 export async function GET(request: NextRequest) {
     return POST(request)
+}
+
+/**
+ * 休止時間判定
+ * 例: quietStart=2, quietEnd=9 → 2時〜9時は休止
+ */
+function isQuietHour(currentHour: number, quietStart: number, quietEnd: number): boolean {
+    if (quietStart <= quietEnd) {
+        return currentHour >= quietStart && currentHour < quietEnd
+    }
+    // 日をまたぐ場合（例: 23時〜6時）
+    return currentHour >= quietStart || currentHour < quietEnd
 }

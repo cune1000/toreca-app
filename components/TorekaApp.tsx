@@ -20,7 +20,7 @@ import BulkRecognition from './BulkRecognition'
 import CronDashboard from './CronDashboard'
 
 // Pages
-import { PendingPage, ShopsPage, SitesPage, CardsPage, SnkrdunkMonitorPage } from './pages'
+import { PendingPage, ShopsPage, SitesPage, CardsPage, SnkrdunkMonitorPage, ShopDetailPage } from './pages'
 
 // API
 import { getShops, getSaleSites, getPendingImages, getCard } from '@/lib/api'
@@ -48,6 +48,7 @@ const TorekaApp = () => {
   const [showTwitterFeed, setShowTwitterFeed] = useState(false)
   const [showCardDetail, setShowCardDetail] = useState(false)
   const [showCardImporter, setShowCardImporter] = useState(false)
+  const [showShopDetail, setShowShopDetail] = useState(false)
   const [showBulkRecognition, setShowBulkRecognition] = useState(false)
 
   // 選択状態
@@ -112,6 +113,11 @@ const TorekaApp = () => {
 
   const handleShopSelect = (shop: Shop) => {
     setSelectedShop(shop)
+    setShowShopDetail(true)
+  }
+
+  const handleOpenTwitterFromDetail = () => {
+    setShowShopDetail(false)
     setShowTwitterFeed(true)
   }
 
@@ -399,6 +405,18 @@ const TorekaApp = () => {
           onClose={() => setShowImageRecognition(false)}
           onRecognized={handleRefresh}
         />
+      )}
+
+      {showShopDetail && selectedShop && (
+        <div className="fixed inset-0 bg-gray-50 z-40 overflow-auto">
+          <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+            <ShopDetailPage
+              shop={selectedShop}
+              onBack={() => setShowShopDetail(false)}
+              onOpenTwitterFeed={handleOpenTwitterFromDetail}
+            />
+          </div>
+        </div>
       )}
 
       {showTwitterFeed && selectedShop && (
