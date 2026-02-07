@@ -109,10 +109,15 @@ export default function MarketChart({ cardId }: MarketChartProps) {
             const entry = ensureDate(sale.sold_at)
             if (sale.grade === 'PSA10') {
                 entry.psa10_prices.push(sale.price)
-            } else if (sale.grade === '1BOX' || sale.grade?.includes('BOX') || sale.grade?.includes('個')) {
-                entry.box_prices.push(sale.price)
             } else if (sale.grade === 'A') {
                 entry.a_prices.push(sale.price)
+            } else if (sale.grade?.includes('個') || sale.grade?.includes('BOX')) {
+                // 「5個」→ 5, 「1BOX」→ 1, 「3BOX」→ 3 のように数量を抽出
+                const match = sale.grade.match(/(\d+)/)
+                const quantity = match ? parseInt(match[1]) : 1
+                // 1BOXあたりの価格に換算
+                const pricePerBox = Math.round(sale.price / quantity)
+                entry.box_prices.push(pricePerBox)
             }
         }
 
