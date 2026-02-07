@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic'
  * 
  * クエリパラメータ:
  * - category: カテゴリ名（ポケモン, ワンピース等）
+ * - subCategory: カテゴリ中＝世代名（スカーレット&バイオレット等）
  * - rarity: レアリティ（SAR, AR等）省略時は全て
- * - grade: グレード（PSA10, A等）省略時は全て
+ * - grade: グレード（PSA10, A, 1BOX等）省略時は全て
  * - priceType: 価格タイプ（sale, purchase）省略時は両方
  * - days: 期間（デフォルト30日）
  */
@@ -17,6 +18,7 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url)
         const category = searchParams.get('category')
+        const subCategory = searchParams.get('subCategory')
         const rarity = searchParams.get('rarity')
         const grade = searchParams.get('grade')
         const priceType = searchParams.get('priceType')
@@ -36,6 +38,9 @@ export async function GET(req: Request) {
 
         if (category) {
             query = query.ilike('category', `%${category}%`)
+        }
+        if (subCategory && subCategory !== 'ALL') {
+            query = query.eq('sub_category', subCategory)
         }
         if (rarity) {
             query = query.eq('rarity', rarity)
@@ -57,13 +62,17 @@ export async function GET(req: Request) {
             }, { status: 500 })
         }
 
+        // 利用可能なサブカテゴリを抽出
+        const subCategories = [...new Set(data?.map((d: any) => d.sub_category).filter(Boolean) || [])]
+
         // グラフ用にデータを整形
         const formatted = formatForChart(data || [])
 
         return NextResponse.json({
             success: true,
             data: data || [],
-            chart: formatted
+            chart: formatted,
+            subCategories
         })
 
     } catch (error: any) {
@@ -79,7 +88,6 @@ export async function GET(req: Request) {
  * グラフ表示用にデータを整形
  */
 function formatForChart(data: any[]) {
-    // 日付でグループ化
     const byDate: Record<string, any> = {}
 
     for (const row of data) {

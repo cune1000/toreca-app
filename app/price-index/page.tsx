@@ -13,16 +13,37 @@ import {
 } from 'recharts'
 
 // グレード・レアリティ別の色
-const CHART_COLORS = {
+const CHART_COLORS: Record<string, string> = {
     'SAR_PSA10_sale': '#ef4444',
     'SAR_A_sale': '#f97316',
     'AR_PSA10_sale': '#3b82f6',
     'AR_A_sale': '#06b6d4',
     'SR_PSA10_sale': '#8b5cf6',
     'SR_A_sale': '#a855f7',
+    'UR_PSA10_sale': '#ec4899',
+    'UR_A_sale': '#f472b6',
+    'BOX_1BOX_sale': '#eab308',
     'SAR_ALL_purchase': '#22c55e',
     'AR_ALL_purchase': '#10b981',
     'SR_ALL_purchase': '#14b8a6',
+    'BOX_ALL_purchase': '#84cc16',
+}
+
+// ラベル名変換
+const LINE_LABELS: Record<string, string> = {
+    'SAR_PSA10_sale': 'SAR PSA10 売買',
+    'SAR_A_sale': 'SAR 状態A 売買',
+    'AR_PSA10_sale': 'AR PSA10 売買',
+    'AR_A_sale': 'AR 状態A 売買',
+    'SR_PSA10_sale': 'SR PSA10 売買',
+    'SR_A_sale': 'SR 状態A 売買',
+    'UR_PSA10_sale': 'UR PSA10 売買',
+    'UR_A_sale': 'UR 状態A 売買',
+    'BOX_1BOX_sale': 'BOX 売買',
+    'SAR_ALL_purchase': 'SAR 買取',
+    'AR_ALL_purchase': 'AR 買取',
+    'SR_ALL_purchase': 'SR 買取',
+    'BOX_ALL_purchase': 'BOX 買取',
 }
 
 const PERIODS = [
@@ -41,19 +62,21 @@ export default function PriceIndexPage() {
 
     // フィルター
     const [category, setCategory] = useState('ポケモン')
+    const [subCategory, setSubCategory] = useState('ALL')
     const [selectedRarities, setSelectedRarities] = useState<string[]>(['SAR'])
     const [selectedGrades, setSelectedGrades] = useState<string[]>(['PSA10'])
     const [priceType, setPriceType] = useState<'all' | 'sale' | 'purchase'>('all')
     const [days, setDays] = useState(30)
 
-    // 利用可能なレアリティ・グレード
+    // 利用可能なオプション
     const [availableRarities, setAvailableRarities] = useState<string[]>([])
     const [availableGrades, setAvailableGrades] = useState<string[]>([])
+    const [availableSubCategories, setAvailableSubCategories] = useState<string[]>([])
 
     // データ取得
     useEffect(() => {
         fetchData()
-    }, [category, days])
+    }, [category, subCategory, days])
 
     const fetchData = async () => {
         setLoading(true)
@@ -65,6 +88,9 @@ export default function PriceIndexPage() {
                 days: days.toString()
             })
 
+            if (subCategory !== 'ALL') {
+                params.set('subCategory', subCategory)
+            }
             if (priceType !== 'all') {
                 params.set('priceType', priceType)
             }
@@ -79,11 +105,18 @@ export default function PriceIndexPage() {
             setData(json.data || [])
             setChartData(json.chart || [])
 
-            // 利用可能なレアリティ・グレードを抽出
+            // 利用可能なオプションを抽出
             const rarities = [...new Set(json.data?.map((d: any) => d.rarity) || [])]
             const grades = [...new Set(json.data?.map((d: any) => d.grade) || [])]
             setAvailableRarities(rarities.filter(r => r && r !== 'UNKNOWN') as string[])
             setAvailableGrades(grades.filter(g => g && g !== 'ALL') as string[])
+
+            // サブカテゴリ
+            if (json.subCategories) {
+                setAvailableSubCategories(
+                    json.subCategories.filter((s: string) => s && s !== 'ALL').sort()
+                )
+            }
 
         } catch (err: any) {
             setError(err.message)
@@ -130,6 +163,16 @@ export default function PriceIndexPage() {
         return `¥${value.toLocaleString()}`
     }
 
+    // レアリティごとの色（ボタン用）
+    const rarityColors: Record<string, string> = {
+        'SAR': 'bg-red-500',
+        'AR': 'bg-blue-500',
+        'SR': 'bg-purple-500',
+        'UR': 'bg-pink-500',
+        'BOX': 'bg-yellow-500',
+        'PROMO': 'bg-gray-500',
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
             {/* ヘッダー */}
@@ -147,18 +190,33 @@ export default function PriceIndexPage() {
             <div className="max-w-7xl mx-auto px-4 py-6">
                 {/* フィルター */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                         {/* カテゴリ */}
                         <div>
                             <label className="block text-sm font-medium mb-1">カテゴリ</label>
                             <select
                                 value={category}
-                                onChange={(e) => setCategory(e.target.value)}
+                                onChange={(e) => { setCategory(e.target.value); setSubCategory('ALL') }}
                                 className="w-full border rounded-md px-3 py-2 dark:bg-gray-700"
                             >
                                 <option value="ポケモン">ポケモンカード</option>
                                 <option value="ワンピース">ワンピースカード</option>
                                 <option value="遊戯王">遊戯王</option>
+                            </select>
+                        </div>
+
+                        {/* 世代（カテゴリ中） */}
+                        <div>
+                            <label className="block text-sm font-medium mb-1">世代</label>
+                            <select
+                                value={subCategory}
+                                onChange={(e) => setSubCategory(e.target.value)}
+                                className="w-full border rounded-md px-3 py-2 dark:bg-gray-700"
+                            >
+                                <option value="ALL">全世代</option>
+                                {availableSubCategories.map(sc => (
+                                    <option key={sc} value={sc}>{sc}</option>
+                                ))}
                             </select>
                         </div>
 
@@ -171,8 +229,8 @@ export default function PriceIndexPage() {
                                         key={p.value}
                                         onClick={() => setDays(p.value)}
                                         className={`px-3 py-1 rounded text-sm ${days === p.value
-                                                ? 'bg-blue-500 text-white'
-                                                : 'bg-gray-200 dark:bg-gray-700'
+                                            ? 'bg-blue-500 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700'
                                             }`}
                                     >
                                         {p.label}
@@ -194,8 +252,8 @@ export default function PriceIndexPage() {
                                         key={t.value}
                                         onClick={() => setPriceType(t.value as any)}
                                         className={`px-3 py-1 rounded text-sm ${priceType === t.value
-                                                ? 'bg-blue-500 text-white'
-                                                : 'bg-gray-200 dark:bg-gray-700'
+                                            ? 'bg-blue-500 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700'
                                             }`}
                                     >
                                         {t.label}
@@ -224,9 +282,9 @@ export default function PriceIndexPage() {
                                 <button
                                     key={rarity}
                                     onClick={() => toggleRarity(rarity)}
-                                    className={`px-3 py-1 rounded text-sm ${selectedRarities.includes(rarity)
-                                            ? 'bg-purple-500 text-white'
-                                            : 'bg-gray-200 dark:bg-gray-700'
+                                    className={`px-3 py-1 rounded text-sm font-medium ${selectedRarities.includes(rarity)
+                                        ? `${rarityColors[rarity] || 'bg-purple-500'} text-white`
+                                        : 'bg-gray-200 dark:bg-gray-700'
                                         }`}
                                 >
                                     {rarity}
@@ -247,11 +305,11 @@ export default function PriceIndexPage() {
                                     key={grade}
                                     onClick={() => toggleGrade(grade)}
                                     className={`px-3 py-1 rounded text-sm ${selectedGrades.includes(grade)
-                                            ? 'bg-green-500 text-white'
-                                            : 'bg-gray-200 dark:bg-gray-700'
+                                        ? 'bg-green-500 text-white'
+                                        : 'bg-gray-200 dark:bg-gray-700'
                                         }`}
                                 >
-                                    {grade}
+                                    {grade === '1BOX' ? '📦 1BOX' : grade}
                                 </button>
                             ))}
                             {availableGrades.length === 0 && (
@@ -270,7 +328,14 @@ export default function PriceIndexPage() {
 
                 {/* グラフ */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                    <h2 className="text-lg font-semibold mb-4">価格推移</h2>
+                    <h2 className="text-lg font-semibold mb-4">
+                        価格推移
+                        {subCategory !== 'ALL' && (
+                            <span className="text-sm font-normal text-gray-500 ml-2">
+                                ({subCategory})
+                            </span>
+                        )}
+                    </h2>
 
                     {chartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height={400}>
@@ -279,24 +344,29 @@ export default function PriceIndexPage() {
                                 <XAxis
                                     dataKey="date"
                                     tick={{ fontSize: 12 }}
-                                    tickFormatter={(value) => value.slice(5)} // MM-DD形式
+                                    tickFormatter={(value) => value.slice(5)}
                                 />
                                 <YAxis
                                     tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}k`}
                                 />
                                 <Tooltip
-                                    formatter={(value: number) => formatPrice(value)}
+                                    formatter={(value: number, name: string) => [
+                                        formatPrice(value),
+                                        LINE_LABELS[name] || name.replace(/_/g, ' ')
+                                    ]}
                                     labelFormatter={(label) => `日付: ${label}`}
                                 />
-                                <Legend />
+                                <Legend
+                                    formatter={(value) => LINE_LABELS[value] || value.replace(/_/g, ' ')}
+                                />
 
                                 {getSelectedLineKeys().map(key => (
                                     <Line
                                         key={key}
                                         type="monotone"
                                         dataKey={key}
-                                        name={key.replace(/_/g, ' ')}
-                                        stroke={CHART_COLORS[key as keyof typeof CHART_COLORS] || '#888'}
+                                        name={key}
+                                        stroke={CHART_COLORS[key] || '#888'}
                                         strokeWidth={2}
                                         dot={false}
                                         connectNulls
@@ -314,11 +384,14 @@ export default function PriceIndexPage() {
                 {/* データ統計 */}
                 {data.length > 0 && (
                     <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {data.slice(-8).map((row, i) => (
+                        {data.slice(-12).map((row, i) => (
                             <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                                 <div className="text-sm text-gray-500">
-                                    {row.rarity} / {row.grade} / {row.price_type === 'sale' ? '売買' : '買取'}
+                                    {row.rarity} / {row.grade === '1BOX' ? '📦 1BOX' : row.grade} / {row.price_type === 'sale' ? '売買' : '買取'}
                                 </div>
+                                {row.sub_category && row.sub_category !== 'ALL' && (
+                                    <div className="text-xs text-gray-400">{row.sub_category}</div>
+                                )}
                                 <div className="text-xl font-bold mt-1">
                                     ¥{row.avg_price?.toLocaleString() || '-'}
                                 </div>
