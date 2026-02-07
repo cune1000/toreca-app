@@ -16,7 +16,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showNewSite, setShowNewSite] = useState(false)
-  const [newSite, setNewSite] = useState({ name: '', icon: '🛒' })
+  const [newSite, setNewSite] = useState({ name: '', icon: '🛒', url: '' })
   const [addingSite, setAddingSite] = useState(false)
 
   const fetchSites = async () => {
@@ -37,7 +37,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
     try {
       const { data, error: insertError } = await supabase
         .from('sale_sites')
-        .insert([{ name: newSite.name.trim(), icon: newSite.icon || '🛒' }])
+        .insert([{ name: newSite.name.trim(), icon: newSite.icon || '🛒', url: newSite.url.trim() || 'https://' }])
         .select()
         .single()
 
@@ -45,7 +45,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
 
       await fetchSites()
       setForm({ ...form, site_id: data.id })
-      setNewSite({ name: '', icon: '🛒' })
+      setNewSite({ name: '', icon: '🛒', url: '' })
       setShowNewSite(false)
     } catch (err: any) {
       setError('サイト追加に失敗: ' + err.message)
@@ -165,8 +165,8 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
                 type="button"
                 onClick={() => setShowNewSite(!showNewSite)}
                 className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ${showNewSite
-                    ? 'bg-gray-200 text-gray-700'
-                    : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                  ? 'bg-gray-200 text-gray-700'
+                  : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
                   }`}
               >
                 <Plus size={14} />
@@ -192,6 +192,15 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
                   value={newSite.name}
                   onChange={(e) => setNewSite({ ...newSite, name: e.target.value })}
                   placeholder="サイト名（例: スニダン）"
+                  className="flex-1 px-3 py-2 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={newSite.url}
+                  onChange={(e) => setNewSite({ ...newSite, url: e.target.value })}
+                  placeholder="サイトURL（例: https://snkrdunk.com）"
                   className="flex-1 px-3 py-2 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <button
