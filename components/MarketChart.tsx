@@ -22,6 +22,7 @@ const PERIOD_OPTIONS = [
 export default function MarketChart({ cardId }: MarketChartProps) {
     const [snkrdunkSales, setSnkrdunkSales] = useState<any[]>([])
     const [purchasePrices, setPurchasePrices] = useState<any[]>([])
+    const [salePrices, setSalePrices] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedDays, setSelectedDays] = useState<number | null>(30)
 
@@ -49,8 +50,17 @@ export default function MarketChart({ cardId }: MarketChartProps) {
             .gt('price', 0)
             .order('created_at', { ascending: true })
 
+        // 販売価格を取得（そのカードの全データ）
+        const { data: saleData } = await supabase
+            .from('sale_prices')
+            .select('price, created_at')
+            .eq('card_id', cardId)
+            .gt('price', 0)
+            .order('created_at', { ascending: true })
+
         setSnkrdunkSales(salesData || [])
         setPurchasePrices(purchaseData || [])
+        setSalePrices(saleData || [])
         setLoading(false)
     }
 
@@ -66,6 +76,7 @@ export default function MarketChart({ cardId }: MarketChartProps) {
     const chartData = useMemo(() => {
         const filteredSales = filterByPeriod(snkrdunkSales, 'sold_at')
         const filteredPurchases = filterByPeriod(purchasePrices, 'created_at')
+        const filteredSalePrices = filterByPeriod(salePrices, 'created_at')
 
         const byDate: Record<string, {
             date: string
@@ -74,6 +85,7 @@ export default function MarketChart({ cardId }: MarketChartProps) {
             box_prices: number[]
             a_prices: number[]
             purchase_prices: number[]
+            sale_prices: number[]
         }> = {}
 
         const ensureDate = (rawDate: string) => {
@@ -86,6 +98,7 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                     box_prices: [],
                     a_prices: [],
                     purchase_prices: [],
+                    sale_prices: [],
                 }
             }
             return byDate[dateStr]
@@ -109,6 +122,12 @@ export default function MarketChart({ cardId }: MarketChartProps) {
             entry.purchase_prices.push(p.price)
         }
 
+        // 販売価格を日次集約
+        for (const s of filteredSalePrices) {
+            const entry = ensureDate(s.created_at)
+            entry.sale_prices.push(s.price)
+        }
+
         // 平均値を計算
         const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null
 
@@ -120,20 +139,23 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                 box_avg: avg(entry.box_prices),
                 a_avg: avg(entry.a_prices),
                 purchase_avg: avg(entry.purchase_prices),
+                sale_avg: avg(entry.sale_prices),
                 psa10_count: entry.psa10_prices.length || null,
                 box_count: entry.box_prices.length || null,
                 a_count: entry.a_prices.length || null,
                 purchase_count: entry.purchase_prices.length || null,
+                sale_count: entry.sale_prices.length || null,
             }))
             .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-    }, [snkrdunkSales, purchasePrices, selectedDays])
+    }, [snkrdunkSales, purchasePrices, salePrices, selectedDays])
 
     // データの存在チェック
     const hasPSA10 = chartData.some(d => d.psa10_avg !== null)
     const hasBox = chartData.some(d => d.box_avg !== null)
     const hasA = chartData.some(d => d.a_avg !== null)
     const hasPurchase = chartData.some(d => d.purchase_avg !== null)
-    const hasAnyData = hasPSA10 || hasBox || hasA || hasPurchase
+    const hasSale = chartData.some(d => d.sale_avg !== null)
+    const hasAnyData = hasPSA10 || hasBox || hasA || hasPurchase || hasSale
 
     // カスタムツールチップ
     const ChartTooltip = ({ active, payload, label }: any) => {
@@ -152,6 +174,7 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                 {data?.a_count > 0 && <div className="text-xs text-gray-400">状態A: {data.a_count}件</div>}
                 {data?.box_count > 0 && <div className="text-xs text-gray-400">BOX: {data.box_count}件</div>}
                 {data?.purchase_count > 0 && <div className="text-xs text-gray-400">買取: {data.purchase_count}件</div>}
+                {data?.sale_count > 0 && <div className="text-xs text-gray-400">販売: {data.sale_count}件</div>}
             </div>
         )
     }
@@ -206,6 +229,10 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
                             <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
                         </linearGradient>
+                        <linearGradient id="saleFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                        </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} />
@@ -258,6 +285,21 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                             connectNulls
                         />
                     )}
+
+                    {/* 平均販売価格 */}
+                    {hasSale && (
+                        <Area
+                            type="monotone"
+                            dataKey="sale_avg"
+                            stroke="#ef4444"
+                            strokeWidth={2}
+                            fill="url(#saleFill)"
+                            name="平均販売"
+                            dot={{ r: 2, fill: '#ef4444' }}
+                            connectNulls
+                        />
+                    )}
+
 
                     {/* 平均買取価格 */}
                     {hasPurchase && (
