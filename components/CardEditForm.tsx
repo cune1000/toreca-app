@@ -11,6 +11,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   const [categories, setCategories] = useState([])
   const [rarities, setRarities] = useState([])
   const [mediumCategories, setMediumCategories] = useState([])
+  const [smallCategories, setSmallCategories] = useState([])
   const [imagePreview, setImagePreview] = useState(card?.image_url || null)
   const [expansionSuggestions, setExpansionSuggestions] = useState<string[]>([])
   const [raritySuggestions, setRaritySuggestions] = useState<string[]>([])
@@ -19,7 +20,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   const fileInputRef = useRef(null)
   const expansionInputRef = useRef<HTMLInputElement>(null)
   const rarityInputRef = useRef<HTMLInputElement>(null)
-  
+
   // rarityがオブジェクトの場合は文字列に変換
   const getRarityString = (rarity: any): string => {
     if (!rarity) return ''
@@ -33,6 +34,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     card_number: card?.card_number || '',
     category_large_id: card?.category_large_id || '',
     category_medium_id: card?.category_medium_id || '',
+    category_small_id: card?.category_small_id || '',
     rarity_id: card?.rarity_id || '',
     rarity: getRarityString(card?.rarity),
     expansion: card?.expansion || '',
@@ -60,7 +62,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         .select('expansion')
         .not('expansion', 'is', null)
         .order('expansion')
-      
+
       if (expansionData) {
         const uniqueExpansions = [...new Set(expansionData.map(d => d.expansion).filter(Boolean))]
         setExpansionSuggestions(uniqueExpansions as string[])
@@ -72,7 +74,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         .select('rarity')
         .not('rarity', 'is', null)
         .order('rarity')
-      
+
       if (rarityData) {
         const uniqueRarities = [...new Set(rarityData.map(d => d.rarity).filter(Boolean))]
         setRaritySuggestions(uniqueRarities as string[])
@@ -87,16 +89,17 @@ export default function CardEditForm({ card, onClose, onSaved }) {
       if (!form.category_large_id) {
         setRarities([])
         setMediumCategories([])
+        setSmallCategories([])
         return
       }
-      
+
       const { data: rarityData } = await supabase
         .from('rarities')
         .select('*')
         .eq('large_id', form.category_large_id)
         .order('sort_order')
       setRarities(rarityData || [])
-      
+
       const { data: mediumData } = await supabase
         .from('category_medium')
         .select('*')
@@ -107,6 +110,23 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     fetchRarities()
   }, [form.category_large_id])
 
+  // 中カテゴリが変わったら小カテゴリを取得
+  useEffect(() => {
+    async function fetchSmallCategories() {
+      if (!form.category_medium_id) {
+        setSmallCategories([])
+        return
+      }
+      const { data } = await supabase
+        .from('category_small')
+        .select('*')
+        .eq('medium_id', form.category_medium_id)
+        .order('sort_order')
+      setSmallCategories(data || [])
+    }
+    fetchSmallCategories()
+  }, [form.category_medium_id])
+
   // 画像選択
   const handleImageSelect = async (e) => {
     const file = e.target.files?.[0]
@@ -116,19 +136,19 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     reader.onload = async (e) => {
       const base64 = e.target?.result as string
       setImagePreview(base64)
-      
+
       setUploading(true)
       try {
         const res = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             image: base64,
             fileName: `${card.id}_${Date.now()}.jpg`
           }),
         })
         const data = await res.json()
-        
+
         if (data.success) {
           setForm({ ...form, image_url: data.url })
         } else {
@@ -164,6 +184,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         card_number: form.card_number || null,
         category_large_id: form.category_large_id || null,
         category_medium_id: form.category_medium_id || null,
+        category_small_id: form.category_small_id || null,
         rarity_id: form.rarity_id || null,
         rarity: form.rarity || null,
         expansion: form.expansion || null,
@@ -186,7 +207,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   // 削除
   const handleDelete = async () => {
     if (!confirm('このカードを削除しますか？')) return
-    
+
     setDeleting(true)
 
     const { error } = await supabase
@@ -222,7 +243,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               カード画像
             </label>
-            <div 
+            <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
             >
@@ -354,7 +375,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
             </label>
             <select
               value={form.category_large_id}
-              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, category_medium_id: '', rarity_id: '' })}
+              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, category_medium_id: '', category_small_id: '', rarity_id: '' })}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
@@ -372,11 +393,30 @@ export default function CardEditForm({ card, onClose, onSaved }) {
               </label>
               <select
                 value={form.category_medium_id}
-                onChange={(e) => setForm({ ...form, category_medium_id: e.target.value })}
+                onChange={(e) => setForm({ ...form, category_medium_id: e.target.value, category_small_id: '' })}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">選択してください</option>
                 {mediumCategories.map((cat: any) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 小カテゴリ */}
+          {smallCategories.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                小カテゴリ（パック）
+              </label>
+              <select
+                value={form.category_small_id}
+                onChange={(e) => setForm({ ...form, category_small_id: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">選択してください</option>
+                {smallCategories.map((cat: any) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
@@ -395,11 +435,10 @@ export default function CardEditForm({ card, onClose, onSaved }) {
                     key={rarity.id}
                     type="button"
                     onClick={() => setForm({ ...form, rarity_id: rarity.id })}
-                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                      form.rarity_id === rarity.id
+                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${form.rarity_id === rarity.id
                         ? 'bg-purple-100 border-purple-300 text-purple-700'
                         : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                    }`}
+                      }`}
                   >
                     {rarity.name}
                   </button>

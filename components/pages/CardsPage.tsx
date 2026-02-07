@@ -505,6 +505,7 @@ export default function CardsPage({
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カテゴリ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">世代</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">パック</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
@@ -535,6 +536,9 @@ export default function CardsPage({
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
                       {card.category_medium?.name || <span className="text-gray-300">−</span>}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
+                      {card.category_small?.name || <span className="text-gray-300">−</span>}
                     </td>
                     <td className="px-4 py-2" onClick={() => onSelectCard(card)}>
                       {card.rarities?.name ? (
