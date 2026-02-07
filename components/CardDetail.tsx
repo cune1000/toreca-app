@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, TrendingUp, TrendingDown, ExternalLink, RefreshCw, Store, Globe, Edit, Plus, Package, Eye, EyeOff } from 'lucide-react'
+import MarketChart from './MarketChart'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import CardEditForm from './CardEditForm'
 import SaleUrlForm from './SaleUrlForm'
@@ -1075,6 +1076,18 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   </div>
                 )}
               </div>
+
+              {/* 市場相場グラフ */}
+              {card?.category_large && (
+                <div className="bg-white border rounded-xl p-4">
+                  <h3 className="font-bold text-gray-800 mb-4">📊 市場相場（カテゴリ平均）</h3>
+                  <MarketChart
+                    category={typeof card.category_large === 'object' ? card.category_large.name : card.category_large}
+                    rarity={card?.rarity ? (typeof card.rarity === 'object' ? card.rarity.name : card.rarity) : undefined}
+                    subCategory={card?.category_medium ? (typeof card.category_medium === 'object' ? card.category_medium.name : card.category_medium) : undefined}
+                  />
+                </div>
+              )}
 
               {/* 販売URL一覧 */}
               <div>
