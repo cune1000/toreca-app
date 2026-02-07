@@ -48,7 +48,6 @@ const TorekaApp = () => {
   const [showTwitterFeed, setShowTwitterFeed] = useState(false)
   const [showCardDetail, setShowCardDetail] = useState(false)
   const [showCardImporter, setShowCardImporter] = useState(false)
-  const [showShopDetail, setShowShopDetail] = useState(false)
   const [showBulkRecognition, setShowBulkRecognition] = useState(false)
 
   // 選択状態
@@ -94,7 +93,6 @@ const TorekaApp = () => {
   // ページ変更時にlocalStorageに保存＆オーバーレイを閉じる
   useEffect(() => {
     localStorage.setItem('toreca-currentPage', currentPage)
-    setShowShopDetail(false)
     setShowTwitterFeed(false)
   }, [currentPage])
 
@@ -115,11 +113,10 @@ const TorekaApp = () => {
 
   const handleShopSelect = (shop: Shop) => {
     setSelectedShop(shop)
-    setShowShopDetail(true)
+    setCurrentPage('shop-detail')
   }
 
   const handleOpenTwitterFromDetail = () => {
-    setShowShopDetail(false)
     setShowTwitterFeed(true)
   }
 
@@ -310,6 +307,18 @@ const TorekaApp = () => {
             />
           </>
         )
+      case 'shop-detail':
+        if (!selectedShop) {
+          setCurrentPage('shops')
+          return null
+        }
+        return (
+          <ShopDetailPage
+            shop={selectedShop}
+            onBack={() => setCurrentPage('shops')}
+            onOpenTwitterFeed={handleOpenTwitterFromDetail}
+          />
+        )
       case 'sites':
         return (
           <>
@@ -409,17 +418,6 @@ const TorekaApp = () => {
         />
       )}
 
-      {showShopDetail && selectedShop && (
-        <div className="fixed inset-0 bg-gray-50 z-40 overflow-auto">
-          <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-            <ShopDetailPage
-              shop={selectedShop}
-              onBack={() => setShowShopDetail(false)}
-              onOpenTwitterFeed={handleOpenTwitterFromDetail}
-            />
-          </div>
-        </div>
-      )}
 
       {showTwitterFeed && selectedShop && (
         <TwitterFeed
