@@ -75,7 +75,10 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
 
       if (insertError) throw insertError
 
-      // 初回スクレイピングを実行
+      // 先にモーダルを閉じる（即座に次の操作に移れる）
+      onSaved()
+
+      // バックグラウンドでスクレイピングを実行（awaitしない）
       const site = sites.find(s => s.id === form.site_id)
       const siteName = site?.name?.toLowerCase() || ''
       let source = null
@@ -87,16 +90,12 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
         source = 'torecacamp'
       }
 
-      try {
-        const res = await fetch('/api/scrape', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: form.product_url, source }),
-        })
-        const data = await res.json()
-
+      fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: form.product_url, source }),
+      }).then(res => res.json()).then(data => {
         if (data.success && data.price) {
-          // 在庫数を取得（数値または文字列に対応）
           let stock = null
           if (data.stock !== null && data.stock !== undefined) {
             if (typeof data.stock === 'number') {
@@ -112,21 +111,15 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
               }
             }
           }
-
-          // 価格を保存
-          await supabase.from('sale_prices').insert({
+          supabase.from('sale_prices').insert({
             card_id: cardId,
             site_id: form.site_id,
             price: data.priceNumber || data.price,
             stock: stock
-          })
+          }).then(() => console.log('Background scrape saved'))
         }
-      } catch (scrapeErr) {
-        console.log('Initial scrape failed:', scrapeErr)
-        // スクレイピング失敗しても登録は成功
-      }
+      }).catch(err => console.log('Background scrape failed:', err))
 
-      onSaved()
     } catch (err: any) {
       console.error('Save error:', err)
       setError('保存に失敗しました: ' + err.message)
