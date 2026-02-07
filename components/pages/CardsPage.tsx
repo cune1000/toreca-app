@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Database, Search, RefreshCw, Plus, Cpu, Globe } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { buildKanaSearchFilter } from '@/lib/utils/kana'
 import type { CardWithRelations, CategoryLarge, Rarity } from '@/lib/types'
 
 // =============================================================================
@@ -20,11 +21,11 @@ interface Props {
 // Component
 // =============================================================================
 
-export default function CardsPage({ 
-  onAddCard, 
-  onImportCards, 
-  onAIRecognition, 
-  onSelectCard 
+export default function CardsPage({
+  onAddCard,
+  onImportCards,
+  onAIRecognition,
+  onSelectCard
 }: Props) {
   // State
   const [searchQuery, setSearchQuery] = useState('')
@@ -37,7 +38,7 @@ export default function CardsPage({
   const [rarities, setRarities] = useState<Rarity[]>([])
   const [cardStatuses, setCardStatuses] = useState<Record<string, any>>({})
   const [isLoading, setIsLoading] = useState(false)
-  
+
   const ITEMS_PER_PAGE = 50
 
   // =============================================================================
@@ -52,7 +53,7 @@ export default function CardsPage({
         .select('id, name, icon')
         .order('sort_order')
       setCategories(catData || [])
-      
+
       const { data: rarData } = await supabase
         .from('rarities')
         .select('id, name, large_id')
@@ -68,7 +69,7 @@ export default function CardsPage({
       const { data } = await supabase
         .from('card_sale_urls')
         .select('card_id, check_interval, error_count, last_checked_at')
-      
+
       const statusMap: Record<string, any> = {}
       data?.forEach(url => {
         statusMap[url.card_id] = {
@@ -86,14 +87,14 @@ export default function CardsPage({
   useEffect(() => {
     const fetchFilteredCards = async () => {
       setIsLoading(true)
-      
+
       let query = supabase
         .from('cards')
         .select(`*, category_large:category_large_id(name, icon), rarity:rarity_id(name)`, { count: 'exact' })
-      
+
       // 検索条件
       if (searchQuery.length >= 2) {
-        query = query.or(`name.ilike.%${searchQuery}%,card_number.ilike.%${searchQuery}%`)
+        query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'card_number']))
       }
       if (filterCategory) {
         query = query.eq('category_large_id', filterCategory)
@@ -101,22 +102,22 @@ export default function CardsPage({
       if (filterRarity) {
         query = query.eq('rarity_id', filterRarity)
       }
-      
+
       // ページネーション
       const from = (currentPage - 1) * ITEMS_PER_PAGE
       const to = from + ITEMS_PER_PAGE - 1
-      
+
       const { data, count, error } = await query
         .order('created_at', { ascending: false })
         .range(from, to)
-      
+
       if (!error) {
         setFilteredCards(data || [])
         setTotalCount(count || 0)
       }
       setIsLoading(false)
     }
-    
+
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
   }, [searchQuery, filterCategory, filterRarity, currentPage])
@@ -138,11 +139,11 @@ export default function CardsPage({
     if (status.hasError) return <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">🔴 エラー</span>
     if (status.interval <= 30) return <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">🟢 30分</span>
     if (status.interval <= 180) return <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded">🟡 {status.interval}分</span>
-    return <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">⚪ {status.interval >= 1440 ? '24h' : `${status.interval/60}h`}</span>
+    return <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">⚪ {status.interval >= 1440 ? '24h' : `${status.interval / 60}h`}</span>
   }
 
   // フィルタ用レアリティ（カテゴリで絞り込み）
-  const filteredRarities = filterCategory 
+  const filteredRarities = filterCategory
     ? rarities.filter(r => r.large_id === filterCategory)
     : rarities
 
@@ -158,27 +159,27 @@ export default function CardsPage({
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-gray-800">カード一覧</h2>
             <div className="flex gap-2">
-              <button 
-                onClick={onImportCards} 
+              <button
+                onClick={onImportCards}
                 className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-2"
               >
                 <Globe size={18} /> 公式からインポート
               </button>
-              <button 
-                onClick={onAIRecognition} 
+              <button
+                onClick={onAIRecognition}
                 className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
               >
                 <Cpu size={18} /> AI認識
               </button>
-              <button 
-                onClick={onAddCard} 
+              <button
+                onClick={onAddCard}
                 className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
               >
                 <Plus size={18} /> カード追加
               </button>
             </div>
           </div>
-          
+
           {/* 検索・フィルタ */}
           <div className="flex gap-3 items-center">
             <div className="relative flex-1 max-w-md">
@@ -212,11 +213,11 @@ export default function CardsPage({
               ))}
             </select>
             <span className="text-sm text-gray-500">
-              {totalCount}件中 {Math.min((currentPage-1)*ITEMS_PER_PAGE+1, totalCount)}-{Math.min(currentPage*ITEMS_PER_PAGE, totalCount)}件
+              {totalCount}件中 {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, totalCount)}-{Math.min(currentPage * ITEMS_PER_PAGE, totalCount)}件
             </span>
           </div>
         </div>
-        
+
         {/* テーブル */}
         {isLoading ? (
           <div className="p-8 text-center">
@@ -238,9 +239,9 @@ export default function CardsPage({
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredCards.map((card) => (
-                  <tr 
-                    key={card.id} 
-                    className="hover:bg-gray-50 cursor-pointer" 
+                  <tr
+                    key={card.id}
+                    className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => onSelectCard(card)}
                   >
                     <td className="px-4 py-2">
@@ -277,7 +278,7 @@ export default function CardsPage({
             <p>{searchQuery || filterCategory || filterRarity ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
           </div>
         )}
-        
+
         {/* ページネーション */}
         {totalPages > 1 && (
           <div className="p-4 border-t flex items-center justify-center gap-2">

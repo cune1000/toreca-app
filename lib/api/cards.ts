@@ -1,4 +1,5 @@
 import { supabase, TABLES } from '../supabase'
+import { buildKanaSearchFilter, toKatakana, containsHiragana } from '../utils/kana'
 import type {
   Card,
   CardWithRelations,
@@ -31,7 +32,7 @@ export async function getCards(options?: {
     .order('created_at', { ascending: false })
 
   if (options?.search) {
-    query = query.or(`name.ilike.%${options.search}%,card_number.ilike.%${options.search}%`)
+    query = query.or(buildKanaSearchFilter(options.search, ['name', 'card_number']))
   }
 
   if (options?.categoryLargeId) {
@@ -78,7 +79,7 @@ export async function getCardsPaginated(
     .range(offset, offset + limit - 1)
 
   if (search) {
-    query = query.or(`name.ilike.%${search}%,card_number.ilike.%${search}%`)
+    query = query.or(buildKanaSearchFilter(search, ['name', 'card_number']))
   }
 
   if (categoryLargeId) {
@@ -192,7 +193,7 @@ export async function searchCards(query: string, limit: number = 20): Promise<Ca
   const { data: exactData, error: exactError } = await supabase
     .from(TABLES.CARDS)
     .select('id, name, image_url, card_number, rarity, expansion')
-    .or(`name.ilike.%${query}%,card_number.ilike.%${query}%`)
+    .or(buildKanaSearchFilter(query, ['name', 'card_number']))
     .limit(limit)
 
   if (exactError) {

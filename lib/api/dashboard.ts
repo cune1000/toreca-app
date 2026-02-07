@@ -1,4 +1,5 @@
 import { supabase, TABLES } from '../supabase'
+import { buildKanaSearchFilter } from '../utils/kana'
 
 // =============================================================================
 // Dashboard Stats (ダッシュボード統計)
@@ -127,7 +128,7 @@ export async function searchCardsForDashboard(
   const { data, error } = await supabase
     .from(TABLES.CARDS)
     .select('id, name, card_number, image_url')
-    .or(`name.ilike.%${query}%,card_number.ilike.%${query}%`)
+    .or(buildKanaSearchFilter(query, ['name', 'card_number']))
     .limit(limit)
 
   if (error) {
