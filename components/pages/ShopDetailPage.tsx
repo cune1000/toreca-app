@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
     ArrowLeft, Store, Radio, Power, RefreshCw, Twitter,
     Image, Clock, CheckCircle, AlertCircle, ExternalLink,
-    TrendingUp, Package, Moon, Search, Filter, X
+    TrendingUp, Package, Moon, Search, XCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Shop } from '@/lib/types'
@@ -298,7 +298,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                                 onClick={() => setSearchQuery('')}
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                             >
-                                <X size={14} />
+                                <XCircle size={14} />
                             </button>
                         )}
                     </div>
