@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Database, Search, RefreshCw, Plus, Cpu, Globe } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Database, Search, RefreshCw, Plus, Cpu, Globe, CheckSquare, Square, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
-import type { CardWithRelations, CategoryLarge, Rarity } from '@/lib/types'
+import type { CardWithRelations, CategoryLarge, CategoryMedium, CategorySmall, Rarity } from '@/lib/types'
 
 // =============================================================================
 // Types
@@ -16,6 +16,8 @@ interface Props {
   onAIRecognition: () => void
   onSelectCard: (card: CardWithRelations) => void
 }
+
+const UNSET = '__UNSET__'
 
 // =============================================================================
 // Component
@@ -29,15 +31,35 @@ export default function CardsPage({
 }: Props) {
   // State
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
+  const [filterCategoryLarge, setFilterCategoryLarge] = useState('')
+  const [filterCategoryMedium, setFilterCategoryMedium] = useState('')
+  const [filterCategorySmall, setFilterCategorySmall] = useState('')
   const [filterRarity, setFilterRarity] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [filteredCards, setFilteredCards] = useState<CardWithRelations[]>([])
-  const [categories, setCategories] = useState<CategoryLarge[]>([])
-  const [rarities, setRarities] = useState<Rarity[]>([])
-  const [cardStatuses, setCardStatuses] = useState<Record<string, any>>({})
   const [isLoading, setIsLoading] = useState(false)
+
+  // Categories & Rarities
+  const [categories, setCategories] = useState<CategoryLarge[]>([])
+  const [mediumCategories, setMediumCategories] = useState<CategoryMedium[]>([])
+  const [smallCategories, setSmallCategories] = useState<CategorySmall[]>([])
+  const [rarities, setRarities] = useState<Rarity[]>([])
+
+  // Card monitoring statuses
+  const [cardStatuses, setCardStatuses] = useState<Record<string, any>>({})
+
+  // Checkbox & batch edit
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBatchModal, setShowBatchModal] = useState(false)
+  const [batchUpdates, setBatchUpdates] = useState<Record<string, string | null>>({})
+  const [batchLoading, setBatchLoading] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  // Batch modal categories (cascading)
+  const [batchMediumCats, setBatchMediumCats] = useState<CategoryMedium[]>([])
+  const [batchSmallCats, setBatchSmallCats] = useState<CategorySmall[]>([])
+  const [batchRarities, setBatchRarities] = useState<Rarity[]>([])
 
   const ITEMS_PER_PAGE = 50
 
@@ -45,7 +67,7 @@ export default function CardsPage({
   // Data Fetching
   // =============================================================================
 
-  // カテゴリとレアリティを取得
+  // カテゴリ取得
   useEffect(() => {
     const fetchFilters = async () => {
       const { data: catData } = await supabase
@@ -62,6 +84,43 @@ export default function CardsPage({
     }
     fetchFilters()
   }, [])
+
+  // 大カテゴリ変更 → 中カテゴリ取得
+  useEffect(() => {
+    if (filterCategoryLarge && filterCategoryLarge !== UNSET) {
+      const fetchMedium = async () => {
+        const { data } = await supabase
+          .from('category_medium')
+          .select('id, name, large_id')
+          .eq('large_id', filterCategoryLarge)
+          .order('sort_order')
+        setMediumCategories(data || [])
+      }
+      fetchMedium()
+    } else {
+      setMediumCategories([])
+    }
+    setFilterCategoryMedium('')
+    setFilterCategorySmall('')
+  }, [filterCategoryLarge])
+
+  // 中カテゴリ変更 → 小カテゴリ取得
+  useEffect(() => {
+    if (filterCategoryMedium && filterCategoryMedium !== UNSET) {
+      const fetchSmall = async () => {
+        const { data } = await supabase
+          .from('category_small')
+          .select('id, name, medium_id')
+          .eq('medium_id', filterCategoryMedium)
+          .order('sort_order')
+        setSmallCategories(data || [])
+      }
+      fetchSmall()
+    } else {
+      setSmallCategories([])
+    }
+    setFilterCategorySmall('')
+  }, [filterCategoryMedium])
 
   // カードステータスを取得
   useEffect(() => {
@@ -90,16 +149,38 @@ export default function CardsPage({
 
       let query = supabase
         .from('cards')
-        .select(`*, category_large:category_large_id(name, icon), rarity:rarity_id(name)`, { count: 'exact' })
+        .select(`*, category_large:category_large_id(name, icon), category_medium:category_medium_id(name), category_small:category_small_id(name), rarities:rarity_id(name)`, { count: 'exact' })
 
       // 検索条件
       if (searchQuery.length >= 2) {
         query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'card_number']))
       }
-      if (filterCategory) {
-        query = query.eq('category_large_id', filterCategory)
+
+      // カテゴリ大
+      if (filterCategoryLarge === UNSET) {
+        query = query.is('category_large_id', null)
+      } else if (filterCategoryLarge) {
+        query = query.eq('category_large_id', filterCategoryLarge)
       }
-      if (filterRarity) {
+
+      // カテゴリ中
+      if (filterCategoryMedium === UNSET) {
+        query = query.is('category_medium_id', null)
+      } else if (filterCategoryMedium) {
+        query = query.eq('category_medium_id', filterCategoryMedium)
+      }
+
+      // カテゴリ小
+      if (filterCategorySmall === UNSET) {
+        query = query.is('category_small_id', null)
+      } else if (filterCategorySmall) {
+        query = query.eq('category_small_id', filterCategorySmall)
+      }
+
+      // レアリティ
+      if (filterRarity === UNSET) {
+        query = query.is('rarity_id', null)
+      } else if (filterRarity) {
         query = query.eq('rarity_id', filterRarity)
       }
 
@@ -120,12 +201,156 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategory, filterRarity, currentPage])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, currentPage])
 
   // フィルタ変更時は1ページ目に戻る
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, filterCategory, filterRarity])
+    setSelectedIds(new Set())
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity])
+
+  // =============================================================================
+  // Checkbox Logic
+  // =============================================================================
+
+  const isAllSelected = filteredCards.length > 0 && filteredCards.every(c => selectedIds.has(c.id))
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredCards.map(c => c.id)))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  // =============================================================================
+  // Batch Edit Logic
+  // =============================================================================
+
+  const openBatchModal = () => {
+    setBatchUpdates({})
+    setBatchMediumCats([])
+    setBatchSmallCats([])
+    setBatchRarities([])
+    setShowBatchModal(true)
+  }
+
+  const handleBatchLargeChange = async (value: string) => {
+    setBatchUpdates(prev => ({ ...prev, category_large_id: value || null }))
+    setBatchMediumCats([])
+    setBatchSmallCats([])
+    setBatchRarities([])
+    setBatchUpdates(prev => {
+      const next = { ...prev, category_large_id: value || null }
+      delete next.category_medium_id
+      delete next.category_small_id
+      delete next.rarity_id
+      return next
+    })
+
+    if (value) {
+      const [{ data: medData }, { data: rarData }] = await Promise.all([
+        supabase.from('category_medium').select('id, name, large_id').eq('large_id', value).order('sort_order'),
+        supabase.from('rarities').select('id, name, large_id').eq('large_id', value).order('sort_order')
+      ])
+      setBatchMediumCats(medData || [])
+      setBatchRarities(rarData || [])
+    }
+  }
+
+  const handleBatchMediumChange = async (value: string) => {
+    setBatchUpdates(prev => ({ ...prev, category_medium_id: value || null }))
+    setBatchSmallCats([])
+    setBatchUpdates(prev => {
+      const next = { ...prev, category_medium_id: value || null }
+      delete next.category_small_id
+      return next
+    })
+
+    if (value) {
+      const { data } = await supabase
+        .from('category_small')
+        .select('id, name, medium_id')
+        .eq('medium_id', value)
+        .order('sort_order')
+      setBatchSmallCats(data || [])
+    }
+  }
+
+  const executeBatchUpdate = async () => {
+    // 値があるフィールドだけ送信
+    const updates: Record<string, string | null> = {}
+    for (const [key, value] of Object.entries(batchUpdates)) {
+      if (value !== undefined) {
+        updates[key] = value || null
+      }
+    }
+
+    if (Object.keys(updates).length === 0) return
+
+    setBatchLoading(true)
+    try {
+      const res = await fetch('/api/cards/batch-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardIds: Array.from(selectedIds),
+          updates
+        })
+      })
+
+      const json = await res.json()
+      if (json.success) {
+        alert(`✅ ${json.updated}件のカードを更新しました`)
+        setShowBatchModal(false)
+        setShowConfirm(false)
+        setSelectedIds(new Set())
+        // リロード
+        setCurrentPage(p => p) // trigger refetch
+        window.location.reload()
+      } else {
+        alert(`❌ エラー: ${json.error}`)
+      }
+    } catch (err: any) {
+      alert(`❌ エラー: ${err.message}`)
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  // 変更内容のラベルを取得
+  const getBatchChangeLabel = () => {
+    const labels: string[] = []
+    if (batchUpdates.category_large_id !== undefined) {
+      const cat = categories.find(c => c.id === batchUpdates.category_large_id)
+      labels.push(`カテゴリ大 → ${cat?.name || '（クリア）'}`)
+    }
+    if (batchUpdates.category_medium_id !== undefined) {
+      const cat = batchMediumCats.find(c => c.id === batchUpdates.category_medium_id)
+      labels.push(`カテゴリ中 → ${cat?.name || '（クリア）'}`)
+    }
+    if (batchUpdates.category_small_id !== undefined) {
+      const cat = batchSmallCats.find(c => c.id === batchUpdates.category_small_id)
+      labels.push(`カテゴリ小 → ${cat?.name || '（クリア）'}`)
+    }
+    if (batchUpdates.rarity_id !== undefined) {
+      const r = batchRarities.find(r => r.id === batchUpdates.rarity_id)
+      labels.push(`レアリティ → ${r?.name || '（クリア）'}`)
+    }
+    return labels
+  }
 
   // =============================================================================
   // Helpers
@@ -143,8 +368,8 @@ export default function CardsPage({
   }
 
   // フィルタ用レアリティ（カテゴリで絞り込み）
-  const filteredRarities = filterCategory
-    ? rarities.filter(r => r.large_id === filterCategory)
+  const filteredRarities = filterCategoryLarge && filterCategoryLarge !== UNSET
+    ? rarities.filter(r => r.large_id === filterCategoryLarge)
     : rarities
 
   // =============================================================================
@@ -159,6 +384,14 @@ export default function CardsPage({
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-gray-800">カード一覧</h2>
             <div className="flex gap-2">
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={openBatchModal}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2"
+                >
+                  <Settings size={18} /> 一括設定 ({selectedIds.size}件)
+                </button>
+              )}
               <button
                 onClick={onImportCards}
                 className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-2"
@@ -180,8 +413,8 @@ export default function CardsPage({
             </div>
           </div>
 
-          {/* 検索・フィルタ */}
-          <div className="flex gap-3 items-center">
+          {/* 検索 */}
+          <div className="flex gap-3 items-center mb-3">
             <div className="relative flex-1 max-w-md">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -192,29 +425,73 @@ export default function CardsPage({
                 className="w-full pl-10 pr-4 py-2 border rounded-lg"
               />
             </div>
+            <span className="text-sm text-gray-500">
+              {totalCount}件中 {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, totalCount)}-{Math.min(currentPage * ITEMS_PER_PAGE, totalCount)}件
+            </span>
+          </div>
+
+          {/* フィルタ行 */}
+          <div className="flex gap-2 flex-wrap items-center">
+            {/* カテゴリ大 */}
             <select
-              value={filterCategory}
-              onChange={(e) => { setFilterCategory(e.target.value); setFilterRarity(''); }}
-              className="px-3 py-2 border rounded-lg"
+              value={filterCategoryLarge}
+              onChange={(e) => setFilterCategoryLarge(e.target.value)}
+              className="px-3 py-1.5 border rounded-lg text-sm"
             >
               <option value="">全カテゴリ</option>
+              <option value={UNSET}>⚠️ 未設定</option>
               {categories.map(cat => (
                 <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
               ))}
             </select>
+
+            {/* カテゴリ中 */}
+            <select
+              value={filterCategoryMedium}
+              onChange={(e) => setFilterCategoryMedium(e.target.value)}
+              className="px-3 py-1.5 border rounded-lg text-sm"
+              disabled={!filterCategoryLarge || filterCategoryLarge === UNSET}
+            >
+              <option value="">全世代</option>
+              <option value={UNSET}>⚠️ 未設定</option>
+              {mediumCategories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+
+            {/* カテゴリ小 */}
+            <select
+              value={filterCategorySmall}
+              onChange={(e) => setFilterCategorySmall(e.target.value)}
+              className="px-3 py-1.5 border rounded-lg text-sm"
+              disabled={!filterCategoryMedium || filterCategoryMedium === UNSET}
+            >
+              <option value="">全パック</option>
+              <option value={UNSET}>⚠️ 未設定</option>
+              {smallCategories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+
+            {/* レアリティ */}
             <select
               value={filterRarity}
               onChange={(e) => setFilterRarity(e.target.value)}
-              className="px-3 py-2 border rounded-lg"
+              className="px-3 py-1.5 border rounded-lg text-sm"
             >
               <option value="">全レアリティ</option>
+              <option value={UNSET}>⚠️ 未設定</option>
               {filteredRarities.map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </select>
-            <span className="text-sm text-gray-500">
-              {totalCount}件中 {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, totalCount)}-{Math.min(currentPage * ITEMS_PER_PAGE, totalCount)}件
-            </span>
+
+            {/* 選択数 */}
+            {selectedIds.size > 0 && (
+              <span className="text-sm font-medium text-orange-600 ml-2">
+                ✓ {selectedIds.size}件選択中
+              </span>
+            )}
           </div>
         </div>
 
@@ -228,45 +505,57 @@ export default function CardsPage({
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-3 py-3 w-10">
+                    <button onClick={toggleSelectAll} className="text-gray-500 hover:text-gray-800">
+                      {isAllSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">画像</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カテゴリ</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">世代</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">登録日</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredCards.map((card) => (
                   <tr
                     key={card.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => onSelectCard(card)}
+                    className={`hover:bg-gray-50 cursor-pointer ${selectedIds.has(card.id) ? 'bg-orange-50' : ''}`}
                   >
-                    <td className="px-4 py-2">
+                    <td className="px-3 py-2" onClick={(e) => { e.stopPropagation(); toggleSelect(card.id) }}>
+                      {selectedIds.has(card.id)
+                        ? <CheckSquare size={18} className="text-orange-500" />
+                        : <Square size={18} className="text-gray-300" />
+                      }
+                    </td>
+                    <td className="px-4 py-2" onClick={() => onSelectCard(card)}>
                       {card.image_url ? (
                         <img src={card.image_url} alt={card.name} className="w-12 h-16 object-cover rounded" />
                       ) : (
                         <div className="w-12 h-16 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">No Image</div>
                       )}
                     </td>
-                    <td className="px-4 py-2 font-medium text-gray-800">{card.name}</td>
-                    <td className="px-4 py-2 text-sm text-gray-600">
-                      {card.category_large?.icon} {card.category_large?.name || '-'}
+                    <td className="px-4 py-2 font-medium text-gray-800" onClick={() => onSelectCard(card)}>{card.name}</td>
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
+                      {card.category_large?.icon} {card.category_large?.name || <span className="text-gray-300">−</span>}
                     </td>
-                    <td className="px-4 py-2">
-                      {card.rarities?.name && (
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
+                      {card.category_medium?.name || <span className="text-gray-300">−</span>}
+                    </td>
+                    <td className="px-4 py-2" onClick={() => onSelectCard(card)}>
+                      {card.rarities?.name ? (
                         <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
                           {card.rarities.name}
                         </span>
+                      ) : (
+                        <span className="text-gray-300 text-sm">−</span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-600">{card.card_number || '-'}</td>
-                    <td className="px-4 py-2 text-center">{getStatusBadge(card.id)}</td>
-                    <td className="px-4 py-2 text-right text-sm text-gray-500">
-                      {card.created_at ? new Date(card.created_at).toLocaleDateString('ja-JP') : '-'}
-                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>{card.card_number || '−'}</td>
+                    <td className="px-4 py-2 text-center" onClick={() => onSelectCard(card)}>{getStatusBadge(card.id)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -275,7 +564,7 @@ export default function CardsPage({
         ) : (
           <div className="p-8 text-center text-gray-500">
             <Database size={48} className="mx-auto mb-4 text-gray-300" />
-            <p>{searchQuery || filterCategory || filterRarity ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
+            <p>{searchQuery || filterCategoryLarge || filterRarity ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
           </div>
         )}
 
@@ -315,6 +604,143 @@ export default function CardsPage({
           </div>
         )}
       </div>
+
+      {/* ===================================================================== */}
+      {/* 一括設定モーダル */}
+      {/* ===================================================================== */}
+      {showBatchModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBatchModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">
+              🔧 一括設定（{selectedIds.size}件）
+            </h3>
+
+            <div className="space-y-4">
+              {/* カテゴリ大 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ大</label>
+                <select
+                  value={batchUpdates.category_large_id || ''}
+                  onChange={(e) => handleBatchLargeChange(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2"
+                >
+                  <option value="">（変更しない）</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* カテゴリ中 */}
+              {batchMediumCats.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ中（世代）</label>
+                  <select
+                    value={batchUpdates.category_medium_id || ''}
+                    onChange={(e) => handleBatchMediumChange(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2"
+                  >
+                    <option value="">（変更しない）</option>
+                    {batchMediumCats.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* カテゴリ小 */}
+              {batchSmallCats.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ小（パック）</label>
+                  <select
+                    value={batchUpdates.category_small_id || ''}
+                    onChange={(e) => setBatchUpdates(prev => ({ ...prev, category_small_id: e.target.value || null }))}
+                    className="w-full border rounded-lg px-3 py-2"
+                  >
+                    <option value="">（変更しない）</option>
+                    {batchSmallCats.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* レアリティ */}
+              {batchRarities.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">レアリティ</label>
+                  <select
+                    value={batchUpdates.rarity_id || ''}
+                    onChange={(e) => setBatchUpdates(prev => ({ ...prev, rarity_id: e.target.value || null }))}
+                    className="w-full border rounded-lg px-3 py-2"
+                  >
+                    <option value="">（変更しない）</option>
+                    {batchRarities.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* アクションボタン */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowBatchModal(false)}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => setShowConfirm(true)}
+                disabled={Object.values(batchUpdates).every(v => v === undefined || v === null || v === '')}
+                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
+              >
+                変更を確認
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 確認ダイアログ */}
+      {/* ===================================================================== */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold mb-3 text-orange-600">
+              ⚠️ 変更の確認
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              以下の変更を <strong>{selectedIds.size}件</strong> のカードに適用します：
+            </p>
+            <ul className="list-disc list-inside text-sm space-y-1 mb-4 bg-orange-50 p-3 rounded-lg">
+              {getBatchChangeLabel().map((label, i) => (
+                <li key={i} className="font-medium">{label}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-red-500 mb-4">
+              ※ この操作は元に戻せません。内容をよく確認してください。
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                戻る
+              </button>
+              <button
+                onClick={executeBatchUpdate}
+                disabled={batchLoading}
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+              >
+                {batchLoading ? '更新中...' : '実行する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
