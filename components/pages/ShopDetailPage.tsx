@@ -151,6 +151,8 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
     return (
         <div className="p-6 max-w-6xl mx-auto">
+            {/* デバッグ: v2マーカー — このテキストが見えれば最新コードが配信されている */}
+            <div className="bg-red-500 text-white text-center py-1 mb-2 rounded text-xs font-bold">SHOP DETAIL v2 — 最新ビルド確認用</div>
             {/* ヘッダー */}
             <div className="flex items-center gap-4 mb-6">
                 <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg">
