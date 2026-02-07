@@ -47,3 +47,4 @@ google-credentials.json".next.zip"
 google-credentials.json 
 *.zip 
 .next/ 
+.vercel

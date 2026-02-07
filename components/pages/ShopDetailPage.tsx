@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
     ArrowLeft, Store, Radio, Power, RefreshCw, Twitter,
     Image, Clock, CheckCircle, AlertCircle, ExternalLink,
-    TrendingUp, Package, Moon, Search, XCircle
+    TrendingUp, Package, Moon, Search, XCircle, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { Shop } from '@/lib/types'
+import { buildKanaSearchFilter } from '@/lib/utils/kana'
+import type { Shop, CategoryLarge, CategoryMedium, CategorySmall, Rarity } from '@/lib/types'
 
 interface Props {
     shop: Shop
@@ -49,6 +50,9 @@ interface PurchaseRow {
     card: any
 }
 
+const UNSET = '__UNSET__'
+const PURCHASES_PER_PAGE = 50
+
 export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Props) {
     const [loading, setLoading] = useState(true)
     const [monitor, setMonitor] = useState<MonitorSetting | null>(null)
@@ -61,25 +65,169 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
     const [tweetFilter, setTweetFilter] = useState<'all' | 'purchase' | 'pinned' | 'normal'>('all')
     const [pendingFilter, setPendingFilter] = useState<'all' | 'pending' | 'processing' | 'processed' | 'error'>('all')
 
+    // 買取価格タブ用: カテゴリ・ページネーション
+    const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('')
+    const [purchaseFilterLarge, setPurchaseFilterLarge] = useState('')
+    const [purchaseFilterMedium, setPurchaseFilterMedium] = useState('')
+    const [purchaseFilterSmall, setPurchaseFilterSmall] = useState('')
+    const [purchaseFilterRarity, setPurchaseFilterRarity] = useState('')
+    const [purchasePage, setPurchasePage] = useState(1)
+    const [purchaseTotalCount, setPurchaseTotalCount] = useState(0)
+    const [purchaseLoading, setPurchaseLoading] = useState(false)
+
+    // カテゴリデータ
+    const [categories, setCategories] = useState<CategoryLarge[]>([])
+    const [mediumCategories, setMediumCategories] = useState<CategoryMedium[]>([])
+    const [smallCategories, setSmallCategories] = useState<CategorySmall[]>([])
+    const [rarities, setRarities] = useState<Rarity[]>([])
+
     useEffect(() => {
         loadData()
+        loadCategories()
     }, [shop.id])
+
+    // カテゴリ・レアリティ取得（初回のみ）
+    const loadCategories = async () => {
+        const [catRes, rarRes] = await Promise.all([
+            supabase.from('category_large').select('id, name, icon').order('sort_order'),
+            supabase.from('rarities').select('id, name, large_id').order('sort_order'),
+        ])
+        setCategories(catRes.data || [])
+        setRarities(rarRes.data || [])
+    }
+
+    // 大カテゴリ変更 → 中カテゴリ取得
+    useEffect(() => {
+        if (purchaseFilterLarge && purchaseFilterLarge !== UNSET) {
+            const fetchMedium = async () => {
+                const { data } = await supabase
+                    .from('category_medium').select('id, name, large_id')
+                    .eq('large_id', purchaseFilterLarge).order('sort_order')
+                setMediumCategories(data || [])
+            }
+            fetchMedium()
+        } else {
+            setMediumCategories([])
+        }
+        setPurchaseFilterMedium('')
+        setPurchaseFilterSmall('')
+    }, [purchaseFilterLarge])
+
+    // 中カテゴリ変更 → 小カテゴリ取得
+    useEffect(() => {
+        if (purchaseFilterMedium && purchaseFilterMedium !== UNSET) {
+            const fetchSmall = async () => {
+                const { data } = await supabase
+                    .from('category_small').select('id, name, medium_id')
+                    .eq('medium_id', purchaseFilterMedium).order('sort_order')
+                setSmallCategories(data || [])
+            }
+            fetchSmall()
+        } else {
+            setSmallCategories([])
+        }
+        setPurchaseFilterSmall('')
+    }, [purchaseFilterMedium])
+
+    // フィルタ変更時 → 1ページ目に戻る
+    useEffect(() => {
+        setPurchasePage(1)
+    }, [purchaseSearchQuery, purchaseFilterLarge, purchaseFilterMedium, purchaseFilterSmall, purchaseFilterRarity])
+
+    // 買取価格データ取得（2ステップ: カード絞り込み → 買取価格取得）
+    const fetchPurchases = useCallback(async () => {
+        setPurchaseLoading(true)
+
+        const hasCardFilter = purchaseFilterLarge || purchaseFilterMedium || purchaseFilterSmall || purchaseFilterRarity || purchaseSearchQuery.length >= 2
+
+        let cardIds: string[] | null = null
+
+        // Step 1: カードフィルタがある場合、先にカードIDリストを取得
+        if (hasCardFilter) {
+            let cardQuery = supabase.from('cards').select('id')
+
+            if (purchaseFilterLarge === UNSET) {
+                cardQuery = cardQuery.is('category_large_id', null)
+            } else if (purchaseFilterLarge) {
+                cardQuery = cardQuery.eq('category_large_id', purchaseFilterLarge)
+            }
+            if (purchaseFilterMedium === UNSET) {
+                cardQuery = cardQuery.is('category_medium_id', null)
+            } else if (purchaseFilterMedium) {
+                cardQuery = cardQuery.eq('category_medium_id', purchaseFilterMedium)
+            }
+            if (purchaseFilterSmall === UNSET) {
+                cardQuery = cardQuery.is('category_small_id', null)
+            } else if (purchaseFilterSmall) {
+                cardQuery = cardQuery.eq('category_small_id', purchaseFilterSmall)
+            }
+            if (purchaseFilterRarity === UNSET) {
+                cardQuery = cardQuery.is('rarity_id', null)
+            } else if (purchaseFilterRarity) {
+                cardQuery = cardQuery.eq('rarity_id', purchaseFilterRarity)
+            }
+            if (purchaseSearchQuery.length >= 2) {
+                cardQuery = cardQuery.or(buildKanaSearchFilter(purchaseSearchQuery, ['name', 'card_number']))
+            }
+
+            const { data: cardData } = await cardQuery
+            cardIds = (cardData || []).map(c => c.id)
+
+            // マッチするカードがなければ空結果
+            if (cardIds.length === 0) {
+                setPurchases([])
+                setPurchaseTotalCount(0)
+                setPurchaseLoading(false)
+                return
+            }
+        }
+
+        // Step 2: purchase_prices取得
+        let query = supabase
+            .from('purchase_prices')
+            .select('id, price, created_at, card:card_id(id, name, image_url)', { count: 'exact' })
+            .eq('shop_id', shop.id)
+
+        if (cardIds) {
+            query = query.in('card_id', cardIds)
+        }
+
+        // ページネーション
+        const from = (purchasePage - 1) * PURCHASES_PER_PAGE
+        const to = from + PURCHASES_PER_PAGE - 1
+
+        const { data, count, error } = await query
+            .order('created_at', { ascending: false })
+            .range(from, to)
+
+        if (!error) {
+            setPurchases((data || []) as any)
+            setPurchaseTotalCount(count || 0)
+        }
+        setPurchaseLoading(false)
+    }, [shop.id, purchaseSearchQuery, purchaseFilterLarge, purchaseFilterMedium, purchaseFilterSmall, purchaseFilterRarity, purchasePage])
+
+    // 買取価格タブ: フィルタ変更時にデータ再取得
+    useEffect(() => {
+        if (activeTab === 'purchases') {
+            const timer = setTimeout(fetchPurchases, 300)
+            return () => clearTimeout(timer)
+        }
+    }, [activeTab, fetchPurchases])
 
     const loadData = async () => {
         setLoading(true)
 
-        // 並列取得
-        const [monitorRes, tweetsRes, pendingRes, purchaseRes] = await Promise.all([
+        // 並列取得（買取価格はfetchPurchasesで別途取得）
+        const [monitorRes, tweetsRes, pendingRes] = await Promise.all([
             supabase.from('shop_monitor_settings').select('*').eq('shop_id', shop.id).single(),
             supabase.from('fetched_tweets').select('*').eq('shop_id', shop.id).order('fetched_at', { ascending: false }).limit(50),
             supabase.from('pending_images').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }).limit(50),
-            supabase.from('purchase_prices').select('id, price, created_at, card:card_id(id, name, image_url)').eq('shop_id', shop.id).order('created_at', { ascending: false }).limit(50),
         ])
 
         setMonitor(monitorRes.data || null)
         setTweets(tweetsRes.data || [])
         setPendingImages(pendingRes.data || [])
-        setPurchases((purchaseRes.data || []) as any)
         setLoading(false)
     }
 
@@ -135,11 +283,12 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
         return result
     }, [pendingImages, pendingFilter, searchQuery])
 
-    const filteredPurchases = useMemo(() => {
-        if (!searchQuery) return purchases
-        const q = searchQuery.toLowerCase()
-        return purchases.filter(p => p.card?.name?.toLowerCase().includes(q))
-    }, [purchases, searchQuery])
+    // フィルタ用レアリティ（カテゴリで絞り込み）
+    const filteredRarities = purchaseFilterLarge && purchaseFilterLarge !== UNSET
+        ? rarities.filter(r => (r as any).large_id === purchaseFilterLarge)
+        : rarities
+
+    const purchaseTotalPages = Math.ceil(purchaseTotalCount / PURCHASES_PER_PAGE)
 
     if (loading) {
         return (
@@ -151,8 +300,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
     return (
         <div className="p-6 max-w-6xl mx-auto">
-            {/* デバッグ: v2マーカー — このテキストが見えれば最新コードが配信されている */}
-            <div className="bg-red-500 text-white text-center py-1 mb-2 rounded text-xs font-bold">SHOP DETAIL v2 — 最新ビルド確認用</div>
             {/* ヘッダー */}
             <div className="flex items-center gap-4 mb-6">
                 <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -265,7 +412,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                     { key: 'overview' as const, label: '概要', icon: Store },
                     { key: 'tweets' as const, label: `ツイート (${tweets.length})`, icon: Twitter },
                     { key: 'pending' as const, label: `保留画像 (${pendingImages.length})`, icon: Image },
-                    { key: 'purchases' as const, label: `買取価格 (${purchases.length})`, icon: TrendingUp },
+                    { key: 'purchases' as const, label: `買取価格 (${purchaseTotalCount})`, icon: TrendingUp },
                 ].map(tab => (
                     <button
                         key={tab.key}
@@ -279,8 +426,8 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                 ))}
             </div>
 
-            {/* 検索バー（概要タブ以外で表示） */}
-            {activeTab !== 'overview' && (
+            {/* 検索バー（概要タブ以外・purchasesタブ以外で表示） */}
+            {activeTab !== 'overview' && activeTab !== 'purchases' && (
                 <div className="flex items-center gap-3 mb-4">
                     <div className="relative flex-1">
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -288,8 +435,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                             type="text"
                             placeholder={
                                 activeTab === 'tweets' ? 'ツイートIDで検索...'
-                                    : activeTab === 'pending' ? 'URLで検索...'
-                                        : 'カード名で検索...'
+                                    : 'URLで検索...'
                             }
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -476,27 +622,145 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                 )}
 
                 {activeTab === 'purchases' && (
-                    <div className="divide-y divide-gray-50">
-                        {filteredPurchases.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">
-                                <TrendingUp size={40} className="mx-auto mb-3 text-gray-300" />
-                                <p>{searchQuery ? '条件に一致する買取データがありません' : '買取価格データはありません'}</p>
-                            </div>
-                        ) : (
-                            filteredPurchases.map(p => (
-                                <div key={p.id} className="p-4 flex items-center gap-4">
-                                    {p.card?.image_url && (
-                                        <img src={p.card.image_url} alt="" className="w-12 h-12 object-cover rounded-lg border" />
+                    <div>
+                        {/* 買取価格専用: 検索 + カテゴリフィルタ */}
+                        <div className="p-4 border-b border-gray-100">
+                            <div className="flex gap-3 items-center mb-3">
+                                <div className="relative flex-1 max-w-md">
+                                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={purchaseSearchQuery}
+                                        onChange={(e) => setPurchaseSearchQuery(e.target.value)}
+                                        placeholder="カード名で検索（2文字以上・ひらがなOK）"
+                                        className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                    {purchaseSearchQuery && (
+                                        <button
+                                            onClick={() => setPurchaseSearchQuery('')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                        >
+                                            <XCircle size={14} />
+                                        </button>
                                     )}
-                                    <div className="flex-1">
-                                        <p className="font-medium text-gray-800">{p.card?.name || '不明'}</p>
-                                        <p className="text-xs text-gray-400">
-                                            {new Date(p.created_at).toLocaleString('ja-JP')}
-                                        </p>
-                                    </div>
-                                    <p className="text-lg font-bold text-green-600">¥{p.price.toLocaleString()}</p>
                                 </div>
-                            ))
+                                <span className="text-sm text-gray-500 whitespace-nowrap">
+                                    {purchaseTotalCount}件中 {purchaseTotalCount > 0 ? Math.min((purchasePage - 1) * PURCHASES_PER_PAGE + 1, purchaseTotalCount) : 0}-{Math.min(purchasePage * PURCHASES_PER_PAGE, purchaseTotalCount)}件
+                                </span>
+                            </div>
+                            <div className="flex gap-2 flex-wrap items-center">
+                                <select
+                                    value={purchaseFilterLarge}
+                                    onChange={(e) => setPurchaseFilterLarge(e.target.value)}
+                                    className="px-3 py-1.5 border rounded-lg text-sm"
+                                >
+                                    <option value="">全カテゴリ</option>
+                                    <option value={UNSET}>⚠️ 未設定</option>
+                                    {categories.map(cat => (
+                                        <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={purchaseFilterMedium}
+                                    onChange={(e) => setPurchaseFilterMedium(e.target.value)}
+                                    className="px-3 py-1.5 border rounded-lg text-sm"
+                                    disabled={!purchaseFilterLarge || purchaseFilterLarge === UNSET}
+                                >
+                                    <option value="">全世代</option>
+                                    <option value={UNSET}>⚠️ 未設定</option>
+                                    {mediumCategories.map(cat => (
+                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={purchaseFilterSmall}
+                                    onChange={(e) => setPurchaseFilterSmall(e.target.value)}
+                                    className="px-3 py-1.5 border rounded-lg text-sm"
+                                    disabled={!purchaseFilterMedium || purchaseFilterMedium === UNSET}
+                                >
+                                    <option value="">全パック</option>
+                                    <option value={UNSET}>⚠️ 未設定</option>
+                                    {smallCategories.map(cat => (
+                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={purchaseFilterRarity}
+                                    onChange={(e) => setPurchaseFilterRarity(e.target.value)}
+                                    className="px-3 py-1.5 border rounded-lg text-sm"
+                                >
+                                    <option value="">全レアリティ</option>
+                                    <option value={UNSET}>⚠️ 未設定</option>
+                                    {filteredRarities.map(r => (
+                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* 買取価格リスト */}
+                        <div className="divide-y divide-gray-50">
+                            {purchaseLoading ? (
+                                <div className="p-8 text-center">
+                                    <RefreshCw size={32} className="animate-spin mx-auto text-gray-400" />
+                                </div>
+                            ) : purchases.length === 0 ? (
+                                <div className="p-8 text-center text-gray-500">
+                                    <TrendingUp size={40} className="mx-auto mb-3 text-gray-300" />
+                                    <p>{purchaseSearchQuery || purchaseFilterLarge || purchaseFilterRarity ? '条件に一致する買取データがありません' : '買取価格データはありません'}</p>
+                                </div>
+                            ) : (
+                                purchases.map(p => (
+                                    <div key={p.id} className="p-4 flex items-center gap-4">
+                                        {p.card?.image_url && (
+                                            <img src={p.card.image_url} alt="" className="w-12 h-12 object-cover rounded-lg border" />
+                                        )}
+                                        <div className="flex-1">
+                                            <p className="font-medium text-gray-800">{p.card?.name || '不明'}</p>
+                                            <p className="text-xs text-gray-400">
+                                                {new Date(p.created_at).toLocaleString('ja-JP')}
+                                            </p>
+                                        </div>
+                                        <p className="text-lg font-bold text-green-600">¥{p.price.toLocaleString()}</p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* ページネーション */}
+                        {purchaseTotalPages > 1 && (
+                            <div className="p-4 border-t flex items-center justify-center gap-2">
+                                <button
+                                    onClick={() => setPurchasePage(p => Math.max(1, p - 1))}
+                                    disabled={purchasePage === 1}
+                                    className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1 text-sm"
+                                >
+                                    <ChevronLeft size={14} /> 前
+                                </button>
+                                {Array.from({ length: Math.min(5, purchaseTotalPages) }, (_, i) => {
+                                    let page = i + 1
+                                    if (purchaseTotalPages > 5) {
+                                        if (purchasePage > 3) page = purchasePage - 2 + i
+                                        if (purchasePage > purchaseTotalPages - 2) page = purchaseTotalPages - 4 + i
+                                    }
+                                    return (
+                                        <button
+                                            key={page}
+                                            onClick={() => setPurchasePage(page)}
+                                            className={`px-3 py-1 rounded text-sm ${purchasePage === page ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
+                                        >
+                                            {page}
+                                        </button>
+                                    )
+                                })}
+                                <button
+                                    onClick={() => setPurchasePage(p => Math.min(purchaseTotalPages, p + 1))}
+                                    disabled={purchasePage === purchaseTotalPages}
+                                    className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1 text-sm"
+                                >
+                                    次 <ChevronRight size={14} />
+                                </button>
+                            </div>
                         )}
                     </div>
                 )}
