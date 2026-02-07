@@ -1077,17 +1077,11 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 )}
               </div>
 
-              {/* 市場相場グラフ */}
-              {card?.category_large && (
-                <div className="bg-white border rounded-xl p-4">
-                  <h3 className="font-bold text-gray-800 mb-4">📊 市場相場（カテゴリ平均）</h3>
-                  <MarketChart
-                    category={typeof card.category_large === 'object' ? card.category_large.name : card.category_large}
-                    rarity={card?.rarity ? (typeof card.rarity === 'object' ? card.rarity.name : card.rarity) : undefined}
-                    subCategory={card?.category_medium ? (typeof card.category_medium === 'object' ? card.category_medium.name : card.category_medium) : undefined}
-                  />
-                </div>
-              )}
+              {/* 日次平均推移グラフ（カード固有） */}
+              <div className="bg-white border rounded-xl p-4">
+                <h3 className="font-bold text-gray-800 mb-4">📊 日次平均推移</h3>
+                <MarketChart cardId={card.id} />
+              </div>
 
               {/* 販売URL一覧 */}
               <div>
