@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getLargeCategories, getMediumCategories, getRarities } from '@/lib/api/categories'
+import { getLargeCategories, getMediumCategories, getSmallCategories, getRarities } from '@/lib/api/categories'
 import { addCard } from '@/lib/api/cards'
 import { Plus, X, RefreshCw, Image } from 'lucide-react'
 
@@ -22,6 +22,7 @@ interface FormData {
   card_number: string
   category_large_id: string
   category_medium_id: string
+  category_small_id: string
   rarity_id: string
   rarity: string
   expansion: string
@@ -39,6 +40,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
   const [categories, setCategories] = useState<Category[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
   const [mediumCategories, setMediumCategories] = useState<Category[]>([])
+  const [smallCategories, setSmallCategories] = useState<Category[]>([])
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [expansionSuggestions, setExpansionSuggestions] = useState<string[]>([])
   const [raritySuggestions, setRaritySuggestions] = useState<string[]>([])
@@ -47,13 +49,14 @@ export default function CardForm({ onClose, onSaved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const expansionInputRef = useRef<HTMLInputElement>(null)
   const rarityInputRef = useRef<HTMLInputElement>(null)
-  
+
   // フォームデータ
   const [form, setForm] = useState<FormData>({
     name: '',
     card_number: '',
     category_large_id: '',
     category_medium_id: '',
+    category_small_id: '',
     rarity_id: '',
     rarity: '',
     expansion: '',
@@ -78,7 +81,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
         .select('expansion')
         .not('expansion', 'is', null)
         .order('expansion')
-      
+
       if (expansionData) {
         const uniqueExpansions = [...new Set(expansionData.map(d => d.expansion).filter(Boolean))]
         setExpansionSuggestions(uniqueExpansions as string[])
@@ -90,7 +93,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
         .select('rarity')
         .not('rarity', 'is', null)
         .order('rarity')
-      
+
       if (rarityData) {
         const uniqueRarities = [...new Set(rarityData.map(d => d.rarity).filter(Boolean))]
         setRaritySuggestions(uniqueRarities as string[])
@@ -107,17 +110,30 @@ export default function CardForm({ onClose, onSaved }: Props) {
         setMediumCategories([])
         return
       }
-      
+
       const [rarityData, mediumData] = await Promise.all([
         getRarities(form.category_large_id),
         getMediumCategories(form.category_large_id)
       ])
-      
+
       setRarities(rarityData)
       setMediumCategories(mediumData)
     }
     fetchRelatedData()
   }, [form.category_large_id])
+
+  // 中カテゴリが変わったら小カテゴリを取得
+  useEffect(() => {
+    async function fetchSmallCategories() {
+      if (!form.category_medium_id) {
+        setSmallCategories([])
+        return
+      }
+      const data = await getSmallCategories(form.category_medium_id)
+      setSmallCategories(data)
+    }
+    fetchSmallCategories()
+  }, [form.category_medium_id])
 
   // 画像選択
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,20 +144,20 @@ export default function CardForm({ onClose, onSaved }: Props) {
     reader.onload = async (e) => {
       const base64 = e.target?.result as string
       setImagePreview(base64)
-      
+
       // アップロード
       setUploading(true)
       try {
         const res = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             image: base64,
             fileName: `${Date.now()}_${file.name}`
           }),
         })
         const data = await res.json()
-        
+
         if (data.success) {
           setForm({ ...form, image_url: data.url })
         } else {
@@ -174,6 +190,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
       card_number: form.card_number || undefined,
       category_large_id: form.category_large_id || undefined,
       category_medium_id: form.category_medium_id || undefined,
+      category_small_id: form.category_small_id || undefined,
       rarity_id: form.rarity_id || undefined,
       rarity: form.rarity || undefined,
       expansion: form.expansion || undefined,
@@ -208,7 +225,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               カード画像
             </label>
-            <div 
+            <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
             >
@@ -345,7 +362,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
             </label>
             <select
               value={form.category_large_id}
-              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, category_medium_id: '', rarity_id: '' })}
+              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, category_medium_id: '', category_small_id: '', rarity_id: '' })}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
@@ -363,11 +380,30 @@ export default function CardForm({ onClose, onSaved }: Props) {
               </label>
               <select
                 value={form.category_medium_id}
-                onChange={(e) => setForm({ ...form, category_medium_id: e.target.value })}
+                onChange={(e) => setForm({ ...form, category_medium_id: e.target.value, category_small_id: '' })}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">選択してください</option>
                 {mediumCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 小カテゴリ */}
+          {smallCategories.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                小カテゴリ
+              </label>
+              <select
+                value={form.category_small_id}
+                onChange={(e) => setForm({ ...form, category_small_id: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">選択してください</option>
+                {smallCategories.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
@@ -386,11 +422,10 @@ export default function CardForm({ onClose, onSaved }: Props) {
                     key={rarity.id}
                     type="button"
                     onClick={() => setForm({ ...form, rarity_id: rarity.id })}
-                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                      form.rarity_id === rarity.id
-                        ? 'bg-purple-100 border-purple-300 text-purple-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${form.rarity_id === rarity.id
+                      ? 'bg-purple-100 border-purple-300 text-purple-700'
+                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                      }`}
                   >
                     {rarity.name}
                   </button>
