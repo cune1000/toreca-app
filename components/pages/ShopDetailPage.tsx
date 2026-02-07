@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
     ArrowLeft, Store, Radio, Power, RefreshCw, Twitter,
     Image, Clock, CheckCircle, AlertCircle, ExternalLink,
-    TrendingUp, Package, Moon
+    TrendingUp, Package, Moon, Search, Filter, X
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Shop } from '@/lib/types'
@@ -57,6 +57,9 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
     const [purchases, setPurchases] = useState<PurchaseRow[]>([])
     const [toggling, setToggling] = useState(false)
     const [activeTab, setActiveTab] = useState<'overview' | 'tweets' | 'pending' | 'purchases'>('overview')
+    const [searchQuery, setSearchQuery] = useState('')
+    const [tweetFilter, setTweetFilter] = useState<'all' | 'purchase' | 'pinned' | 'normal'>('all')
+    const [pendingFilter, setPendingFilter] = useState<'all' | 'pending' | 'processing' | 'processed' | 'error'>('all')
 
     useEffect(() => {
         loadData()
@@ -108,6 +111,35 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
     const purchaseCount = tweets.filter(t => t.is_purchase_related).length
     const pinnedCount = tweets.filter(t => t.is_pinned).length
+
+    // フィルタされたデータ
+    const filteredTweets = useMemo(() => {
+        let result = tweets
+        if (tweetFilter === 'purchase') result = result.filter(t => t.is_purchase_related)
+        else if (tweetFilter === 'pinned') result = result.filter(t => t.is_pinned)
+        else if (tweetFilter === 'normal') result = result.filter(t => !t.is_purchase_related && !t.is_pinned)
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase()
+            result = result.filter(t => t.tweet_id.toLowerCase().includes(q))
+        }
+        return result
+    }, [tweets, tweetFilter, searchQuery])
+
+    const filteredPending = useMemo(() => {
+        let result = pendingImages
+        if (pendingFilter !== 'all') result = result.filter(img => img.status === pendingFilter)
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase()
+            result = result.filter(img => img.tweet_url?.toLowerCase().includes(q) || img.status.toLowerCase().includes(q))
+        }
+        return result
+    }, [pendingImages, pendingFilter, searchQuery])
+
+    const filteredPurchases = useMemo(() => {
+        if (!searchQuery) return purchases
+        const q = searchQuery.toLowerCase()
+        return purchases.filter(p => p.card?.name?.toLowerCase().includes(q))
+    }, [purchases, searchQuery])
 
     if (loading) {
         return (
@@ -245,6 +277,75 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                 ))}
             </div>
 
+            {/* 検索バー（概要タブ以外で表示） */}
+            {activeTab !== 'overview' && (
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="relative flex-1">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder={
+                                activeTab === 'tweets' ? 'ツイートIDで検索...'
+                                    : activeTab === 'pending' ? 'URLで検索...'
+                                        : 'カード名で検索...'
+                            }
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* タブごとのフィルタ */}
+                    {activeTab === 'tweets' && (
+                        <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+                            {[
+                                { key: 'all' as const, label: '全て' },
+                                { key: 'purchase' as const, label: '買取表' },
+                                { key: 'pinned' as const, label: '固定' },
+                                { key: 'normal' as const, label: '通常' },
+                            ].map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setTweetFilter(f.key)}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${tweetFilter === f.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {activeTab === 'pending' && (
+                        <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+                            {[
+                                { key: 'all' as const, label: '全て' },
+                                { key: 'pending' as const, label: '保留中' },
+                                { key: 'processing' as const, label: '解析中' },
+                                { key: 'processed' as const, label: '解析済' },
+                                { key: 'error' as const, label: 'エラー' },
+                            ].map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setPendingFilter(f.key)}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${pendingFilter === f.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* タブコンテンツ */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
                 {activeTab === 'overview' && (
@@ -287,13 +388,13 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
                 {activeTab === 'tweets' && (
                     <div className="divide-y divide-gray-50">
-                        {tweets.length === 0 ? (
+                        {filteredTweets.length === 0 ? (
                             <div className="p-8 text-center text-gray-500">
                                 <Twitter size={40} className="mx-auto mb-3 text-gray-300" />
-                                <p>取得済みのツイートはありません</p>
+                                <p>{searchQuery || tweetFilter !== 'all' ? '条件に一致するツイートがありません' : '取得済みのツイートはありません'}</p>
                             </div>
                         ) : (
-                            tweets.map(tweet => (
+                            filteredTweets.map(tweet => (
                                 <div key={tweet.id} className="p-4 flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         {tweet.is_pinned ? (
@@ -326,13 +427,13 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
                 {activeTab === 'pending' && (
                     <div className="divide-y divide-gray-50">
-                        {pendingImages.length === 0 ? (
+                        {filteredPending.length === 0 ? (
                             <div className="p-8 text-center text-gray-500">
                                 <Image size={40} className="mx-auto mb-3 text-gray-300" />
-                                <p>保留画像はありません</p>
+                                <p>{searchQuery || pendingFilter !== 'all' ? '条件に一致する画像がありません' : '保留画像はありません'}</p>
                             </div>
                         ) : (
-                            pendingImages.map(img => (
+                            filteredPending.map(img => (
                                 <div key={img.id} className="p-4 flex items-center gap-4">
                                     {img.image_url && (
                                         <img src={img.image_url} alt="" className="w-20 h-20 object-cover rounded-lg border" />
@@ -374,13 +475,13 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
                 {activeTab === 'purchases' && (
                     <div className="divide-y divide-gray-50">
-                        {purchases.length === 0 ? (
+                        {filteredPurchases.length === 0 ? (
                             <div className="p-8 text-center text-gray-500">
                                 <TrendingUp size={40} className="mx-auto mb-3 text-gray-300" />
-                                <p>買取価格データはありません</p>
+                                <p>{searchQuery ? '条件に一致する買取データがありません' : '買取価格データはありません'}</p>
                             </div>
                         ) : (
-                            purchases.map(p => (
+                            filteredPurchases.map(p => (
                                 <div key={p.id} className="p-4 flex items-center gap-4">
                                     {p.card?.image_url && (
                                         <img src={p.card.image_url} alt="" className="w-12 h-12 object-cover rounded-lg border" />
