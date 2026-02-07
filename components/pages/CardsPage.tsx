@@ -35,6 +35,8 @@ export default function CardsPage({
   const [filterCategoryMedium, setFilterCategoryMedium] = useState('')
   const [filterCategorySmall, setFilterCategorySmall] = useState('')
   const [filterRarity, setFilterRarity] = useState('')
+  const [filterExpansion, setFilterExpansion] = useState('')
+  const [expansions, setExpansions] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [filteredCards, setFilteredCards] = useState<CardWithRelations[]>([])
@@ -81,6 +83,17 @@ export default function CardsPage({
         .select('id, name, large_id')
         .order('sort_order')
       setRarities(rarData || [])
+
+      // 収録弾の一覧を取得
+      const { data: expData } = await supabase
+        .from('cards')
+        .select('expansion')
+        .not('expansion', 'is', null)
+        .order('expansion')
+      if (expData) {
+        const uniqueExps = [...new Set(expData.map(d => d.expansion).filter(Boolean))] as string[]
+        setExpansions(uniqueExps)
+      }
     }
     fetchFilters()
   }, [])
@@ -184,6 +197,13 @@ export default function CardsPage({
         query = query.eq('rarity_id', filterRarity)
       }
 
+      // 収録弾
+      if (filterExpansion === UNSET) {
+        query = query.is('expansion', null)
+      } else if (filterExpansion) {
+        query = query.eq('expansion', filterExpansion)
+      }
+
       // ページネーション
       const from = (currentPage - 1) * ITEMS_PER_PAGE
       const to = from + ITEMS_PER_PAGE - 1
@@ -201,13 +221,13 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, currentPage])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, currentPage])
 
   // フィルタ変更時は1ページ目に戻る
   useEffect(() => {
     setCurrentPage(1)
     setSelectedIds(new Set())
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion])
 
   // =============================================================================
   // Checkbox Logic
@@ -474,6 +494,19 @@ export default function CardsPage({
               <option value={UNSET}>⚠️ 未設定</option>
               {filteredRarities.map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+
+            {/* 収録弾 */}
+            <select
+              value={filterExpansion}
+              onChange={(e) => setFilterExpansion(e.target.value)}
+              className="px-3 py-1.5 border rounded-lg text-sm"
+            >
+              <option value="">全収録弾</option>
+              <option value={UNSET}>⚠️ 未設定</option>
+              {expansions.map(exp => (
+                <option key={exp} value={exp}>{exp}</option>
               ))}
             </select>
 
