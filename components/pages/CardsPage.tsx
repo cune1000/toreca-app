@@ -644,6 +644,24 @@ export default function CardsPage({
                 ✓ {selectedIds.size}件選択中
               </span>
             )}
+
+            {/* フィルタリセット */}
+            {(searchQuery || filterCategoryLarge || filterCategoryMedium || filterCategorySmall || filterRarity || filterExpansion) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('')
+                  setFilterCategoryLarge('')
+                  setFilterCategoryMedium('')
+                  setFilterCategorySmall('')
+                  setFilterRarity('')
+                  setFilterExpansion('')
+                  setCurrentPage(1)
+                }}
+                className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-lg flex items-center gap-1"
+              >
+                × リセット
+              </button>
+            )}
           </div>
         </div>
 
@@ -664,13 +682,13 @@ export default function CardsPage({
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">画像</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">サイト</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 min-w-[220px]">URL追加</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カテゴリ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">世代</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">パック</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">サイト</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 min-w-[220px]">URL追加</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
                 </tr>
               </thead>
@@ -694,25 +712,6 @@ export default function CardsPage({
                       )}
                     </td>
                     <td className="px-4 py-2 font-medium text-gray-800" onClick={() => onSelectCard(card)}>{card.name}</td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
-                      {card.category_large?.icon} {card.category_large?.name || <span className="text-gray-300">−</span>}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
-                      {card.category_medium?.name || <span className="text-gray-300">−</span>}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
-                      {card.category_small?.name || <span className="text-gray-300">−</span>}
-                    </td>
-                    <td className="px-4 py-2" onClick={() => onSelectCard(card)}>
-                      {card.rarities?.name ? (
-                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                          {card.rarities.name}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-sm">−</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>{card.card_number || '−'}</td>
                     <td className="px-4 py-2" onClick={() => onSelectCard(card)}>
                       <div className="flex gap-0.5 flex-wrap">
                         {(cardSaleUrls[card.id] || []).map((u: any, i: number) => (
@@ -753,6 +752,25 @@ export default function CardsPage({
                         <p className="text-red-500 text-[10px] mt-0.5">{inlineUrlError[card.id]}</p>
                       )}
                     </td>
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
+                      {card.category_large?.icon} {card.category_large?.name || <span className="text-gray-300">−</span>}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
+                      {card.category_medium?.name || <span className="text-gray-300">−</span>}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>
+                      {card.category_small?.name || <span className="text-gray-300">−</span>}
+                    </td>
+                    <td className="px-4 py-2" onClick={() => onSelectCard(card)}>
+                      {card.rarities?.name ? (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                          {card.rarities.name}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 text-sm">−</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>{card.card_number || '−'}</td>
                     <td className="px-4 py-2 text-center" onClick={() => onSelectCard(card)}>{getStatusBadge(card.id)}</td>
                   </tr>
                 ))}
