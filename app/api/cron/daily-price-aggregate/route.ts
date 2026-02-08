@@ -229,10 +229,79 @@ export async function GET(req: Request) {
 
         console.log(`[Price Index] Saved ${results.length} records for ${targetDate}`)
 
+        // =====================================================================
+        // 4. カード単位の日次集計（chart_daily_card_prices）
+        // =====================================================================
+        let chartCardCount = 0
+
+        // 4-1. スニダン売買履歴からカード別販売平均を集計
+        const saleByCard: Record<string, { prices: number[] }> = {}
+        if (salesData && salesData.length > 0) {
+            for (const sale of salesData) {
+                if (!saleByCard[sale.card_id]) saleByCard[sale.card_id] = { prices: [] }
+                saleByCard[sale.card_id].prices.push(sale.price)
+            }
+        }
+
+        // 4-2. 買取価格からカード別平均を集計
+        const purchaseByCard: Record<string, { prices: number[] }> = {}
+        if (purchaseData && purchaseData.length > 0) {
+            for (const p of purchaseData) {
+                if (!purchaseByCard[p.card_id]) purchaseByCard[p.card_id] = { prices: [] }
+                purchaseByCard[p.card_id].prices.push(p.price)
+            }
+        }
+
+        // 4-3. 全カードIDをマージ
+        const allCardIds = new Set([
+            ...Object.keys(saleByCard),
+            ...Object.keys(purchaseByCard),
+        ])
+
+        const chartRecords: any[] = []
+        for (const cardId of allCardIds) {
+            const salePrices = saleByCard[cardId]?.prices || []
+            const purchasePrices2 = purchaseByCard[cardId]?.prices || []
+
+            const saleAvg = salePrices.length > 0
+                ? Math.round(salePrices.reduce((s, v) => s + v, 0) / salePrices.length)
+                : null
+            const purchaseAvg = purchasePrices2.length > 0
+                ? Math.round(purchasePrices2.reduce((s, v) => s + v, 0) / purchasePrices2.length)
+                : null
+
+            chartRecords.push({
+                card_id: cardId,
+                date: targetDate,
+                sale_avg: saleAvg,
+                purchase_avg: purchaseAvg,
+                sale_count: salePrices.length,
+                purchase_count: purchasePrices2.length,
+            })
+        }
+
+        // 4-4. chart_daily_card_pricesにUPSERT（100件ずつ）
+        if (chartRecords.length > 0) {
+            for (let i = 0; i < chartRecords.length; i += 100) {
+                const chunk = chartRecords.slice(i, i + 100)
+                const { error: chartError } = await supabase
+                    .from('chart_daily_card_prices')
+                    .upsert(chunk, { onConflict: 'card_id,date' })
+
+                if (chartError) {
+                    console.error(`[Chart Prices] Upsert error (batch ${i / 100 + 1}):`, chartError)
+                }
+            }
+            chartCardCount = chartRecords.length
+        }
+
+        console.log(`[Chart Prices] Saved ${chartCardCount} card-level records for ${targetDate}`)
+
         return NextResponse.json({
             success: true,
             date: targetDate,
             count: results.length,
+            chartCardCount,
             salesRecords: salesData?.length || 0,
             purchaseRecords: purchaseData?.length || 0,
             results: results.slice(0, 30)
