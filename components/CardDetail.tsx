@@ -939,7 +939,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                               className="px-2 py-1 border rounded text-xs"
                             >
                               <option value="off">停止</option>
-                              <option value="auto">オートメーション（30分～6時間）</option>
+                              <option value="auto">オートメーション（3時間～72時間）</option>
                               <option value="manual">手動設定</option>
                             </select>
                           </div>
@@ -953,12 +953,12 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                                 onChange={(e) => updateScrapeInterval(snkrdunkUrl.id, parseInt(e.target.value))}
                                 className="px-2 py-1 border rounded text-xs"
                               >
-                                <option value="30">30分</option>
-                                <option value="60">1時間</option>
-                                <option value="120">2時間</option>
                                 <option value="180">3時間</option>
-                                <option value="240">4時間</option>
                                 <option value="360">6時間</option>
+                                <option value="720">12時間</option>
+                                <option value="1440">24時間</option>
+                                <option value="2880">48時間</option>
+                                <option value="4320">72時間</option>
                               </select>
                             </div>
                           )}
