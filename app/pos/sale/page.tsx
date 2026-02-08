@@ -1,13 +1,21 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
 import { getInventory, registerSale } from '@/lib/pos/api'
 import { formatPrice, getCondition } from '@/lib/pos/constants'
 import { calculateProfit } from '@/lib/pos/calculations'
 import type { PosInventory } from '@/lib/pos/types'
 
-export default function SalePage() {
+export default function SalePageWrapper() {
+    return <Suspense fallback={<PosLayout><div className="py-12 text-center"><div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" /></div></PosLayout>}><SalePage /></Suspense>
+}
+
+function SalePage() {
+    const searchParams = useSearchParams()
+    const catalogIdParam = searchParams.get('catalog_id')
+
     const [inventory, setInventory] = useState<PosInventory[]>([])
     const [search, setSearch] = useState('')
     const [selectedInv, setSelectedInv] = useState<(PosInventory & { cond?: any }) | null>(null)
@@ -16,12 +24,30 @@ export default function SalePage() {
     const [notes, setNotes] = useState('')
     const [showResult, setShowResult] = useState(false)
     const [submitting, setSubmitting] = useState(false)
+    const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
+    const loadInventory = () => {
+        setLoading(true)
         getInventory()
-            .then(res => setInventory(res.data.filter((i: PosInventory) => i.quantity > 0)))
+            .then(res => {
+                const inStock = res.data.filter((i: PosInventory) => i.quantity > 0)
+                setInventory(inStock)
+
+                // catalog_id パラメータが指定されている場合、該当する在庫を自動選択
+                if (catalogIdParam && inStock.length > 0) {
+                    const match = inStock.find((i: PosInventory) => i.catalog_id === catalogIdParam)
+                    if (match) {
+                        const cond = getCondition(match.condition)
+                        setSelectedInv({ ...match, cond })
+                        setUnitPrice(String(match.catalog?.fixed_price || ''))
+                    }
+                }
+            })
             .catch(console.error)
-    }, [showResult]) // reload after sale
+            .finally(() => setLoading(false))
+    }
+
+    useEffect(() => { loadInventory() }, [])
 
     const filtered = inventory
         .map(inv => ({ ...inv, cond: getCondition(inv.condition) }))
@@ -49,6 +75,7 @@ export default function SalePage() {
             setQuantity(1)
             setNotes('')
             setSearch('')
+            loadInventory()
         } catch (err: any) {
             alert(err.message)
         } finally {
@@ -67,7 +94,11 @@ export default function SalePage() {
                 </div>
             )}
 
-            {!selectedInv ? (
+            {loading ? (
+                <div className="py-12 text-center">
+                    <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
+                </div>
+            ) : !selectedInv ? (
                 <div>
                     <div className="relative mb-3">
                         <input
@@ -100,9 +131,9 @@ export default function SalePage() {
                                     <div className="flex items-center gap-1.5">
                                         <span
                                             className="text-[10px] px-1.5 py-0.5 rounded-full text-white"
-                                            style={{ backgroundColor: inv.cond?.color }}
+                                            style={{ backgroundColor: inv.cond?.color || '#6b7280' }}
                                         >
-                                            {inv.cond?.name}
+                                            {inv.cond?.name || inv.condition}
                                         </span>
                                         <span className="text-[10px] text-gray-400">在庫 {inv.quantity}点</span>
                                         <span className="text-[10px] text-gray-400">仕入 {formatPrice(inv.avg_purchase_price)}</span>
@@ -132,9 +163,9 @@ export default function SalePage() {
                                 <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                                     <span
                                         className="px-1.5 py-0.5 rounded-full text-white text-[10px]"
-                                        style={{ backgroundColor: selectedInv.cond?.color }}
+                                        style={{ backgroundColor: selectedInv.cond?.color || '#6b7280' }}
                                     >
-                                        {selectedInv.cond?.name}
+                                        {selectedInv.cond?.name || selectedInv.condition}
                                     </span>
                                     <span>在庫 {selectedInv.quantity}点</span>
                                     <span>仕入 {formatPrice(selectedInv.avg_purchase_price)}</span>
@@ -153,7 +184,14 @@ export default function SalePage() {
                                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
                                     className="w-10 h-10 bg-gray-100 rounded-lg text-lg font-bold text-gray-600 hover:bg-gray-200"
                                 >-</button>
-                                <span className="text-2xl font-bold text-gray-900 w-12 text-center">{quantity}</span>
+                                <input
+                                    type="number"
+                                    value={quantity}
+                                    onChange={e => setQuantity(Math.max(1, Math.min(selectedInv.quantity, parseInt(e.target.value) || 1)))}
+                                    className="w-16 text-center text-2xl font-bold text-gray-900 border border-gray-200 rounded-lg py-1 focus:outline-none focus:border-gray-400"
+                                    min={1}
+                                    max={selectedInv.quantity}
+                                />
                                 <button
                                     onClick={() => setQuantity(Math.min(selectedInv.quantity, quantity + 1))}
                                     className="w-10 h-10 bg-gray-100 rounded-lg text-lg font-bold text-gray-600 hover:bg-gray-200"
@@ -216,8 +254,8 @@ export default function SalePage() {
                             onClick={handleSubmit}
                             disabled={!unitPrice || total === 0 || quantity > selectedInv.quantity || submitting}
                             className={`w-full py-3.5 rounded-xl text-sm font-bold transition-colors ${unitPrice && total > 0 && quantity <= selectedInv.quantity && !submitting
-                                    ? 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]'
-                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                ? 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]'
+                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}
                         >
                             {submitting ? '登録中...' : `🛒 販売登録（利益 ${profit ? formatPrice(profit.total) : '¥0'}）`}

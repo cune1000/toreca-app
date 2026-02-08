@@ -25,8 +25,7 @@ export function formatPrice(n: number | null | undefined): string {
 // ナビゲーション項目
 export const NAV_ITEMS = [
     { key: 'dashboard', icon: '📊', label: 'ダッシュボード', href: '/pos' },
-    { key: 'catalog', icon: '📋', label: 'カタログ', href: '/pos/catalog' },
-    { key: 'inventory', icon: '📦', label: '在庫', href: '/pos/inventory' },
+    { key: 'catalog', icon: '📋', label: 'カタログ・在庫', href: '/pos/catalog' },
     { key: 'purchase', icon: '💰', label: '仕入れ', href: '/pos/purchase' },
     { key: 'sale', icon: '🛒', label: '販売', href: '/pos/sale' },
     { key: 'history', icon: '📜', label: '履歴', href: '/pos/history' },

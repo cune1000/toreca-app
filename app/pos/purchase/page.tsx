@@ -1,46 +1,79 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
-import { getCatalogs, registerPurchase } from '@/lib/pos/api'
+import { getCatalogs, getCatalog, registerPurchase } from '@/lib/pos/api'
 import { CONDITIONS, formatPrice } from '@/lib/pos/constants'
 import type { PosCatalog } from '@/lib/pos/types'
 
-export default function PurchasePage() {
+const PRESET_CONDITIONS = CONDITIONS.map(c => c.code)
+
+export default function PurchasePageWrapper() {
+    return <Suspense fallback={<PosLayout><div className="py-12 text-center"><div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" /></div></PosLayout>}><PurchasePage /></Suspense>
+}
+
+function PurchasePage() {
+    const searchParams = useSearchParams()
+    const catalogIdParam = searchParams.get('catalog_id')
+
     const [catalogs, setCatalogs] = useState<PosCatalog[]>([])
     const [search, setSearch] = useState('')
     const [selectedCatalog, setSelectedCatalog] = useState<PosCatalog | null>(null)
     const [condition, setCondition] = useState('A')
+    const [customCondition, setCustomCondition] = useState('')
+    const [useCustomCondition, setUseCustomCondition] = useState(false)
     const [quantity, setQuantity] = useState(1)
-    const [unitPrice, setUnitPrice] = useState('')
+    const [priceMode, setPriceMode] = useState<'unit' | 'total'>('unit')
+    const [priceInput, setPriceInput] = useState('')
     const [notes, setNotes] = useState('')
     const [showResult, setShowResult] = useState(false)
     const [submitting, setSubmitting] = useState(false)
 
+    // URLパラメータからカタログ直接選択
     useEffect(() => {
-        getCatalogs({ search }).then(res => setCatalogs(res.data)).catch(console.error)
-    }, [search])
+        if (catalogIdParam) {
+            getCatalog(catalogIdParam)
+                .then(res => setSelectedCatalog(res.data))
+                .catch(console.error)
+        }
+    }, [catalogIdParam])
 
-    const total = quantity * (parseInt(unitPrice) || 0)
+    useEffect(() => {
+        if (!selectedCatalog) {
+            getCatalogs({ search }).then(res => setCatalogs(res.data)).catch(console.error)
+        }
+    }, [search, selectedCatalog])
+
+    // 単価計算
+    const effectiveCondition = useCustomCondition ? customCondition : condition
+    const unitPrice = priceMode === 'unit'
+        ? (parseInt(priceInput) || 0)
+        : quantity > 0 ? Math.round((parseInt(priceInput) || 0) / quantity) : 0
+    const total = priceMode === 'unit'
+        ? quantity * (parseInt(priceInput) || 0)
+        : (parseInt(priceInput) || 0)
 
     const handleSubmit = async () => {
-        if (!selectedCatalog || !unitPrice || total === 0) return
+        if (!selectedCatalog || total === 0 || !effectiveCondition) return
         setSubmitting(true)
         try {
             await registerPurchase({
                 catalog_id: selectedCatalog.id,
-                condition,
+                condition: effectiveCondition,
                 quantity,
-                unit_price: parseInt(unitPrice),
+                unit_price: unitPrice,
                 notes: notes || undefined,
             })
             setShowResult(true)
             setTimeout(() => setShowResult(false), 3000)
             setSelectedCatalog(null)
-            setUnitPrice('')
+            setPriceInput('')
             setQuantity(1)
             setNotes('')
             setSearch('')
+            setCustomCondition('')
+            setUseCustomCondition(false)
         } catch (err: any) {
             alert(err.message)
         } finally {
@@ -124,27 +157,53 @@ export default function PurchasePage() {
 
                     {/* 入力フォーム */}
                     <div className="space-y-4">
-                        {/* 状態 */}
+                        {/* 状態（プリセット＋自由入力） */}
                         <div>
                             <label className="text-xs font-medium text-gray-600 mb-2 block">状態</label>
-                            <div className="grid grid-cols-3 gap-1.5">
-                                {CONDITIONS.map(c => (
+                            {!useCustomCondition ? (
+                                <>
+                                    <div className="grid grid-cols-3 gap-1.5 mb-2">
+                                        {CONDITIONS.map(c => (
+                                            <button
+                                                key={c.code}
+                                                onClick={() => setCondition(c.code)}
+                                                className={`py-2 rounded-lg text-xs font-medium transition-colors ${condition === c.code
+                                                    ? 'text-white'
+                                                    : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                                                    }`}
+                                                style={condition === c.code ? { backgroundColor: c.color } : {}}
+                                            >
+                                                {c.code} {c.name}
+                                            </button>
+                                        ))}
+                                    </div>
                                     <button
-                                        key={c.code}
-                                        onClick={() => setCondition(c.code)}
-                                        className={`py-2 rounded-lg text-xs font-medium transition-colors ${condition === c.code
-                                                ? 'text-white'
-                                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                                            }`}
-                                        style={condition === c.code ? { backgroundColor: c.color } : {}}
+                                        onClick={() => setUseCustomCondition(true)}
+                                        className="text-[10px] text-blue-500 hover:text-blue-700"
                                     >
-                                        {c.code} {c.name}
+                                        📝 自由入力（PSA10、BGS9.5など）
                                     </button>
-                                ))}
-                            </div>
+                                </>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={customCondition}
+                                        onChange={e => setCustomCondition(e.target.value)}
+                                        placeholder="例: PSA10, BGS9.5, 未開封BOX..."
+                                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-gray-400"
+                                    />
+                                    <button
+                                        onClick={() => { setUseCustomCondition(false); setCustomCondition('') }}
+                                        className="px-3 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs"
+                                    >
+                                        プリセット
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
-                        {/* 数量 */}
+                        {/* 数量（直接入力対応） */}
                         <div>
                             <label className="text-xs font-medium text-gray-600 mb-2 block">数量</label>
                             <div className="flex items-center gap-3">
@@ -152,7 +211,13 @@ export default function PurchasePage() {
                                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
                                     className="w-10 h-10 bg-gray-100 rounded-lg text-lg font-bold text-gray-600 hover:bg-gray-200"
                                 >-</button>
-                                <span className="text-2xl font-bold text-gray-900 w-12 text-center">{quantity}</span>
+                                <input
+                                    type="number"
+                                    value={quantity}
+                                    onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                    className="w-16 text-center text-2xl font-bold text-gray-900 border border-gray-200 rounded-lg py-1 focus:outline-none focus:border-gray-400"
+                                    min={1}
+                                />
                                 <button
                                     onClick={() => setQuantity(quantity + 1)}
                                     className="w-10 h-10 bg-gray-100 rounded-lg text-lg font-bold text-gray-600 hover:bg-gray-200"
@@ -160,19 +225,37 @@ export default function PurchasePage() {
                             </div>
                         </div>
 
-                        {/* 仕入れ単価 */}
+                        {/* 仕入れ単価 / 合計切替 */}
                         <div>
-                            <label className="text-xs font-medium text-gray-600 mb-2 block">仕入れ単価</label>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs font-medium text-gray-600">
+                                    {priceMode === 'unit' ? '仕入れ単価（1個あたり）' : '仕入れ合計金額'}
+                                </label>
+                                <button
+                                    onClick={() => {
+                                        setPriceMode(prev => prev === 'unit' ? 'total' : 'unit')
+                                        setPriceInput('')
+                                    }}
+                                    className="text-[10px] px-2 py-1 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200"
+                                >
+                                    {priceMode === 'unit' ? '🔄 合計入力に切替' : '🔄 単価入力に切替'}
+                                </button>
+                            </div>
                             <div className="relative">
                                 <span className="absolute left-3 top-3 text-gray-400 text-sm">¥</span>
                                 <input
                                     type="number"
-                                    value={unitPrice}
-                                    onChange={e => setUnitPrice(e.target.value)}
+                                    value={priceInput}
+                                    onChange={e => setPriceInput(e.target.value)}
                                     placeholder="0"
                                     className="w-full px-4 py-3 pl-8 border border-gray-200 rounded-xl text-lg font-bold text-right focus:outline-none focus:border-gray-400"
                                 />
                             </div>
+                            {priceMode === 'total' && quantity > 0 && priceInput && (
+                                <p className="text-xs text-gray-400 mt-1 text-right">
+                                    → 1個あたり {formatPrice(unitPrice)}
+                                </p>
+                            )}
                         </div>
 
                         {/* メモ */}
@@ -188,18 +271,25 @@ export default function PurchasePage() {
                         </div>
 
                         {/* 合計 */}
-                        <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between">
-                            <span className="text-sm text-gray-500">合計金額</span>
-                            <span className="text-xl font-bold text-gray-900">{formatPrice(total)}</span>
+                        <div className="bg-gray-50 rounded-xl px-4 py-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-500">合計金額</span>
+                                <span className="text-xl font-bold text-gray-900">{formatPrice(total)}</span>
+                            </div>
+                            {priceMode === 'unit' && quantity > 1 && (
+                                <p className="text-[10px] text-gray-400 text-right mt-1">
+                                    {formatPrice(parseInt(priceInput) || 0)} × {quantity}個
+                                </p>
+                            )}
                         </div>
 
                         {/* 登録ボタン */}
                         <button
                             onClick={handleSubmit}
-                            disabled={!unitPrice || total === 0 || submitting}
-                            className={`w-full py-3.5 rounded-xl text-sm font-bold transition-colors ${unitPrice && total > 0 && !submitting
-                                    ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]'
-                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            disabled={total === 0 || !effectiveCondition || submitting}
+                            className={`w-full py-3.5 rounded-xl text-sm font-bold transition-colors ${total > 0 && effectiveCondition && !submitting
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]'
+                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}
                         >
                             {submitting ? '登録中...' : `💰 仕入れ登録（${formatPrice(total)}）`}

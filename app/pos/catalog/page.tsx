@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
-import { getCatalogs, createCatalog, deleteCatalog, searchCatalogFromAPI } from '@/lib/pos/api'
-import { formatPrice } from '@/lib/pos/constants'
-import type { PosCatalog } from '@/lib/pos/types'
+import { getCatalogs, createCatalog, deleteCatalog, searchCatalogFromAPI, getInventory } from '@/lib/pos/api'
+import { formatPrice, getCondition } from '@/lib/pos/constants'
+import { calculateProfit } from '@/lib/pos/calculations'
+import type { PosCatalog, PosInventory } from '@/lib/pos/types'
 
 export default function CatalogPage() {
     const router = useRouter()
     const [catalogs, setCatalogs] = useState<PosCatalog[]>([])
+    const [inventory, setInventory] = useState<PosInventory[]>([])
     const [search, setSearch] = useState('')
+    const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'nostock'>('all')
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [showApiSearch, setShowApiSearch] = useState(false)
@@ -18,20 +21,50 @@ export default function CatalogPage() {
     const [apiResults, setApiResults] = useState<any[]>([])
     const [apiSearching, setApiSearching] = useState(false)
 
-    // 新規作成フォーム
     const [form, setForm] = useState({
         name: '', category: '', subcategory: '', card_number: '', rarity: '', fixed_price: '',
     })
 
     const load = async () => {
         try {
-            const res = await getCatalogs({ search })
-            setCatalogs(res.data)
+            const [catRes, invRes] = await Promise.all([
+                getCatalogs({ search }),
+                getInventory(),
+            ])
+            setCatalogs(catRes.data)
+            setInventory(invRes.data)
         } catch (err) { console.error(err) }
         finally { setLoading(false) }
     }
 
     useEffect(() => { load() }, [search])
+
+    // カタログごとの在庫をマッピング
+    const catalogWithStock = useMemo(() => {
+        const invByCatalog: Record<string, PosInventory[]> = {}
+        for (const inv of inventory) {
+            const cid = inv.catalog_id
+            if (!invByCatalog[cid]) invByCatalog[cid] = []
+            invByCatalog[cid].push(inv)
+        }
+
+        return catalogs.map(cat => {
+            const items = invByCatalog[cat.id] || []
+            const totalQty = items.reduce((s, i) => s + i.quantity, 0)
+            const totalCost = items.reduce((s, i) => s + i.avg_purchase_price * i.quantity, 0)
+            const sellPrice = cat.fixed_price || 0
+            const estimatedProfit = sellPrice > 0 ? (sellPrice * totalQty) - totalCost : 0
+            return { ...cat, inventoryItems: items, totalQty, totalCost, estimatedProfit }
+        })
+    }, [catalogs, inventory])
+
+    // フィルタ適用
+    const filtered = useMemo(() => {
+        let items = catalogWithStock
+        if (stockFilter === 'instock') items = items.filter(c => c.totalQty > 0)
+        if (stockFilter === 'nostock') items = items.filter(c => c.totalQty === 0)
+        return items
+    }, [catalogWithStock, stockFilter])
 
     const handleCreate = async () => {
         if (!form.name.trim()) return
@@ -160,7 +193,7 @@ export default function CatalogPage() {
                 </div>
             )}
 
-            {/* 検索 */}
+            {/* 検索 + フィルタ */}
             <div className="relative mb-3">
                 <input
                     type="text"
@@ -172,44 +205,108 @@ export default function CatalogPage() {
                 <span className="absolute left-3 top-3 text-gray-400 text-sm">🔍</span>
             </div>
 
+            {/* 在庫フィルタ */}
+            <div className="flex gap-2 mb-4">
+                {[
+                    { key: 'all' as const, label: 'すべて' },
+                    { key: 'instock' as const, label: '在庫あり' },
+                    { key: 'nostock' as const, label: '在庫なし' },
+                ].map(f => (
+                    <button
+                        key={f.key}
+                        onClick={() => setStockFilter(f.key)}
+                        className={`px-3 py-1.5 rounded-full text-xs ${stockFilter === f.key ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
+                            }`}
+                    >
+                        {f.label}
+                    </button>
+                ))}
+                <span className="text-xs text-gray-400 ml-auto self-center">{filtered.length}件</span>
+            </div>
+
             {/* 一覧 */}
             {loading ? (
                 <div className="py-12 text-center">
                     <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
                 </div>
             ) : (
-                <div className="space-y-1.5">
-                    {catalogs.length > 0 ? catalogs.map(cat => (
-                        <div key={cat.id} className="bg-white border border-gray-100 rounded-lg px-3 py-2.5 flex items-center gap-3">
-                            {cat.image_url ? (
-                                <img src={cat.image_url} alt="" className="w-10 h-14 object-cover rounded" />
-                            ) : (
-                                <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-lg">🎴</div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-800 truncate">{cat.name}</p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="text-[10px] text-gray-400">{cat.category || '-'}</span>
-                                    <span className="text-[10px] text-gray-400">·</span>
-                                    <span className="text-[10px] text-gray-400">{cat.rarity || '-'}</span>
-                                    {cat.card_number && (
-                                        <>
-                                            <span className="text-[10px] text-gray-400">·</span>
-                                            <span className="text-[10px] text-gray-400">{cat.card_number}</span>
-                                        </>
+                <div className="space-y-2">
+                    {filtered.length > 0 ? filtered.map(cat => (
+                        <div key={cat.id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                            <div className="flex gap-3">
+                                {cat.image_url ? (
+                                    <img src={cat.image_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
+                                ) : (
+                                    <div className="w-12 h-16 bg-gray-100 rounded flex items-center justify-center text-xl flex-shrink-0">🎴</div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800 truncate">{cat.name}</p>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <span className="text-[10px] text-gray-400">{cat.category || '-'}</span>
+                                                <span className="text-[10px] text-gray-400">·</span>
+                                                <span className="text-[10px] text-gray-400">{cat.rarity || '-'}</span>
+                                                {cat.source_type === 'api' ? (
+                                                    <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-500 rounded-full ml-1">API</span>
+                                                ) : (
+                                                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded-full ml-1">独自</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {cat.totalQty > 0 && (
+                                            <span className="text-base font-bold text-gray-900">
+                                                {cat.totalQty}<span className="text-[10px] text-gray-400 ml-0.5">点</span>
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* 在庫情報（在庫がある場合） */}
+                                    {cat.totalQty > 0 && (
+                                        <div className="flex items-center gap-3 mt-1.5">
+                                            <div className="flex gap-1 flex-wrap">
+                                                {cat.inventoryItems.filter(i => i.quantity > 0).map(inv => (
+                                                    <span
+                                                        key={inv.id}
+                                                        className="text-[10px] px-1.5 py-0.5 rounded-full text-white"
+                                                        style={{ backgroundColor: getCondition(inv.condition)?.color || '#6b7280' }}
+                                                    >
+                                                        {inv.condition}:{inv.quantity}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            {cat.fixed_price && (
+                                                <span className="text-[10px] text-gray-400 ml-auto">
+                                                    販売 {formatPrice(cat.fixed_price)}
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                                {cat.fixed_price && (
-                                    <span className="text-xs font-medium text-gray-600">{formatPrice(cat.fixed_price)}</span>
+
+                            {/* アクションボタン */}
+                            <div className="flex gap-2 mt-2.5 pt-2.5 border-t border-gray-50">
+                                <button
+                                    onClick={() => router.push(`/pos/purchase?catalog_id=${cat.id}`)}
+                                    className="flex-1 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100"
+                                >
+                                    💰 仕入れ
+                                </button>
+                                {cat.totalQty > 0 && (
+                                    <button
+                                        onClick={() => router.push(`/pos/sale?catalog_id=${cat.id}`)}
+                                        className="flex-1 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100"
+                                    >
+                                        🛒 販売
+                                    </button>
                                 )}
-                                {cat.source_type === 'api' ? (
-                                    <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-500 rounded-full">API</span>
-                                ) : (
-                                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full">独自</span>
-                                )}
-                                <button onClick={() => handleDelete(cat.id)} className="text-gray-400 hover:text-red-500 text-sm ml-1">✕</button>
+                                <button
+                                    onClick={() => handleDelete(cat.id)}
+                                    className="py-1.5 px-3 bg-gray-50 text-gray-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500"
+                                >
+                                    ✕
+                                </button>
                             </div>
                         </div>
                     )) : (
