@@ -18,6 +18,33 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
   const [showNewSite, setShowNewSite] = useState(false)
   const [newSite, setNewSite] = useState({ name: '', icon: '🛒', url: '' })
   const [addingSite, setAddingSite] = useState(false)
+  const [autoDetected, setAutoDetected] = useState(false)
+
+  // URLパターンから販売サイトを自動特定
+  const detectSiteFromUrl = (url: string) => {
+    if (!url || sites.length === 0) return
+    const lowerUrl = url.toLowerCase()
+    let matchedSite: any = null
+
+    if (lowerUrl.includes('snkrdunk.com')) {
+      matchedSite = sites.find(s => s.name.includes('スニーカーダンク') || s.name.includes('スニダン') || s.name.toLowerCase().includes('snkrdunk'))
+    } else if (lowerUrl.includes('cardrush.jp')) {
+      matchedSite = sites.find(s => s.name.includes('カードラッシュ') || s.name.toLowerCase().includes('cardrush'))
+    } else if (lowerUrl.includes('torecacamp')) {
+      matchedSite = sites.find(s => s.name.includes('トレカキャンプ') || s.name.toLowerCase().includes('torecacamp'))
+    } else if (lowerUrl.includes('mercari.com')) {
+      matchedSite = sites.find(s => s.name.includes('メルカリ') || s.name.toLowerCase().includes('mercari'))
+    } else if (lowerUrl.includes('auctions.yahoo')) {
+      matchedSite = sites.find(s => s.name.includes('ヤフオク') || s.name.toLowerCase().includes('yahoo'))
+    }
+
+    if (matchedSite) {
+      setForm(prev => ({ ...prev, site_id: matchedSite.id }))
+      setAutoDetected(true)
+    } else {
+      setAutoDetected(false)
+    }
+  }
 
   const fetchSites = async () => {
     const { data } = await supabase
@@ -65,12 +92,19 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
 
     setSaving(true)
     try {
+      // スニダンURLの場合、自動更新設定をデフォルトで追加
+      const isSnkrdunk = form.product_url.toLowerCase().includes('snkrdunk.com')
+
       const { error: insertError } = await supabase
         .from('card_sale_urls')
         .insert([{
           card_id: cardId,
           site_id: form.site_id,
-          product_url: form.product_url
+          product_url: form.product_url,
+          ...(isSnkrdunk ? {
+            auto_scrape_mode: 'manual',
+            auto_scrape_interval_minutes: 360
+          } : {})
         }])
 
       if (insertError) throw insertError
@@ -82,7 +116,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
       const site = sites.find(s => s.id === form.site_id)
       const siteName = site?.name?.toLowerCase() || ''
       let source = null
-      if (siteName.includes('スニダン') || siteName.includes('snkrdunk')) {
+      if (siteName.includes('スニダン') || siteName.includes('スニーカーダンク') || siteName.includes('snkrdunk') || form.product_url.includes('snkrdunk.com')) {
         source = 'snkrdunk'
       } else if (siteName.includes('カードラッシュ') || siteName.includes('cardrush')) {
         source = 'cardrush'
@@ -214,7 +248,10 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
             <input
               type="url"
               value={form.product_url}
-              onChange={(e) => setForm({ ...form, product_url: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, product_url: e.target.value })
+                detectSiteFromUrl(e.target.value)
+              }}
               placeholder="https://..."
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />

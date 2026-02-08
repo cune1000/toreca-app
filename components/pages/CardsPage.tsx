@@ -41,6 +41,7 @@ export default function CardsPage({
   const [totalCount, setTotalCount] = useState(0)
   const [filteredCards, setFilteredCards] = useState<CardWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // Categories & Rarities
   const [categories, setCategories] = useState<CategoryLarge[]>([])
@@ -221,7 +222,7 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, currentPage])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, currentPage, refreshKey])
 
   // フィルタ変更時は1ページ目に戻る
   useEffect(() => {
@@ -328,9 +329,8 @@ export default function CardsPage({
         setShowBatchModal(false)
         setShowConfirm(false)
         setSelectedIds(new Set())
-        // リロード
-        setCurrentPage(p => p) // trigger refetch
-        window.location.reload()
+        // フィルタを保持したままリフェッチ
+        setRefreshKey(k => k + 1)
       } else {
         alert(`❌ エラー: ${json.error}`)
       }
