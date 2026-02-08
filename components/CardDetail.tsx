@@ -291,6 +291,24 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     }
   }
 
+  // 販売価格チェック間隔を変更
+  const updateCheckInterval = async (saleUrlId: string, intervalMinutes: number) => {
+    try {
+      const { error } = await supabase
+        .from('card_sale_urls')
+        .update({
+          check_interval: intervalMinutes,
+          next_check_at: new Date(Date.now() + intervalMinutes * 60000).toISOString()
+        })
+        .eq('id', saleUrlId)
+
+      if (error) throw error
+      fetchPrices()
+    } catch (error: any) {
+      alert('❌ エラー: ' + error.message)
+    }
+  }
+
   // 相対時間を表示
   const formatRelativeTime = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -1123,6 +1141,19 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                               )}
                             </div>
                           )}
+                          <select
+                            value={url.check_interval || 180}
+                            onChange={(e) => updateCheckInterval(url.id, parseInt(e.target.value))}
+                            className="px-2 py-1 border rounded text-xs"
+                            title="価格チェック間隔"
+                          >
+                            <option value="180">3h</option>
+                            <option value="360">6h</option>
+                            <option value="720">12h</option>
+                            <option value="1440">24h</option>
+                            <option value="2880">48h</option>
+                            <option value="4320">72h</option>
+                          </select>
                           <button
                             onClick={() => updatePrice(url)}
                             disabled={scraping}
