@@ -128,6 +128,8 @@ export async function GET(req: Request) {
 
 /**
  * アダプティブアルゴリズム: 売買頻度に応じて間隔を調整
+ * 最短3時間、最镲4８時間
+ * 段階: 3h → 6h → 12h → 24h → 48h → 72h
  */
 async function calculateAdaptiveInterval(cardId: string): Promise<number> {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
@@ -143,30 +145,31 @@ async function calculateAdaptiveInterval(cardId: string): Promise<number> {
     let intervalMinutes: number
 
     if (salesPerHour >= 5) {
-        // 非常に活発: 5件/時間以上 → 30分
-        intervalMinutes = 30
-    } else if (salesPerHour >= 2) {
-        // 活発: 2-5件/時間 → 1時間
-        intervalMinutes = 60
-    } else if (salesPerHour >= 1) {
-        // 中程度: 1-2件/時間 → 2時間
-        intervalMinutes = 120
-    } else if (salesPerHour >= 0.5) {
-        // やや静か: 0.5-1件/時間 → 3時間
+        // 非常に活発: 5件/時間以上 → 3時間
         intervalMinutes = 180
-    } else if (salesPerHour >= 0.2) {
-        // 静か: 0.2-0.5件/時間 → 4時間
-        intervalMinutes = 240
-    } else {
-        // 非常に静か: 0.2件/時間未満 → 6時間
+    } else if (salesPerHour >= 2) {
+        // 活発: 2-5件/時間 → 6時間
         intervalMinutes = 360
+    } else if (salesPerHour >= 1) {
+        // 中程度: 1-2件/時間 → 12時間
+        intervalMinutes = 720
+    } else if (salesPerHour >= 0.5) {
+        // やや静か: 0.5-1件/時間 → 24時間
+        intervalMinutes = 1440
+    } else if (salesPerHour >= 0.2) {
+        // 静か: 0.2-0.5件/時間 → 48時間
+        intervalMinutes = 2880
+    } else {
+        // 非常に静か: 0.2件/時間未満 → 72時間
+        intervalMinutes = 4320
     }
 
     // ランダム化（±10%）
     const randomOffset = Math.floor(intervalMinutes * 0.1 * (Math.random() * 2 - 1))
     intervalMinutes += randomOffset
 
-    return intervalMinutes
+    // 範囲制限: 最短3時間、最镲72時間
+    return Math.max(180, Math.min(4320, intervalMinutes))
 }
 
 /**
