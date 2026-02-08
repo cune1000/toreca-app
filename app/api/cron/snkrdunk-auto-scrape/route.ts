@@ -34,8 +34,10 @@ export async function GET(req: Request) {
 
         // スニダンのURLのみフィルタ
         const snkrdunkUrls = (saleUrls || []).filter((url: any) =>
-            url.site?.name?.toLowerCase().includes('スニダン') ||
-            url.site?.name?.toLowerCase().includes('snkrdunk')
+            url.site?.name?.includes('スニダン') ||
+            url.site?.name?.includes('スニーカーダンク') ||
+            url.site?.name?.toLowerCase().includes('snkrdunk') ||
+            url.product_url?.includes('snkrdunk.com')
         )
 
         if (snkrdunkUrls.length === 0) {
