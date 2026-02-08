@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Database, Search, RefreshCw, Plus, Cpu, Globe, CheckSquare, Square, Settings } from 'lucide-react'
+import { Database, Search, RefreshCw, Plus, Cpu, Globe, CheckSquare, Square, Settings, Link, Loader2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
 import type { CardWithRelations, CategoryLarge, CategoryMedium, CategorySmall, Rarity } from '@/lib/types'
@@ -81,11 +81,122 @@ export default function CardsPage({
   const [batchSmallCats, setBatchSmallCats] = useState<CategorySmall[]>([])
   const [batchRarities, setBatchRarities] = useState<Rarity[]>([])
 
+  // インラインURL入力
+  const [saleSites, setSaleSites] = useState<any[]>([])
+  const [cardSaleUrls, setCardSaleUrls] = useState<Record<string, any[]>>({})
+  const [inlineUrlInputs, setInlineUrlInputs] = useState<Record<string, string>>({})
+  const [inlineUrlSaving, setInlineUrlSaving] = useState<Record<string, boolean>>({})
+  const [inlineUrlSuccess, setInlineUrlSuccess] = useState<Record<string, boolean>>({})
+  const [inlineUrlError, setInlineUrlError] = useState<Record<string, string>>({})
+
   const ITEMS_PER_PAGE = 50
 
   // =============================================================================
   // Data Fetching
   // =============================================================================
+
+  // サイト・登録URLの取得
+  useEffect(() => {
+    const fetchSaleSites = async () => {
+      const { data } = await supabase.from('sale_sites').select('id, name, icon').order('name')
+      setSaleSites(data || [])
+    }
+    fetchSaleSites()
+  }, [])
+
+  // カード一覧が変わったら登録URL情報を取得
+  useEffect(() => {
+    const fetchCardSaleUrls = async () => {
+      if (filteredCards.length === 0) return
+      const cardIds = filteredCards.map(c => c.id)
+      const { data } = await supabase
+        .from('card_sale_urls')
+        .select('id, card_id, product_url, site_id, site:site_id(id, name, icon)')
+        .in('card_id', cardIds)
+      if (data) {
+        const map: Record<string, any[]> = {}
+        data.forEach(url => {
+          if (!map[url.card_id]) map[url.card_id] = []
+          map[url.card_id].push(url)
+        })
+        setCardSaleUrls(map)
+      }
+    }
+    fetchCardSaleUrls()
+  }, [filteredCards, refreshKey])
+
+  // URL自動サイト特定
+  const detectSiteFromUrl = (url: string) => {
+    if (!url || saleSites.length === 0) return null
+    const lowerUrl = url.toLowerCase()
+    if (lowerUrl.includes('snkrdunk.com')) return saleSites.find(s => s.name.includes('スニーカーダンク') || s.name.includes('スニダン') || s.name.toLowerCase().includes('snkrdunk'))
+    if (lowerUrl.includes('cardrush.jp')) return saleSites.find(s => s.name.includes('カードラッシュ') || s.name.toLowerCase().includes('cardrush'))
+    if (lowerUrl.includes('torecacamp')) return saleSites.find(s => s.name.includes('トレカキャンプ') || s.name.toLowerCase().includes('torecacamp'))
+    if (lowerUrl.includes('mercari.com')) return saleSites.find(s => s.name.includes('メルカリ') || s.name.toLowerCase().includes('mercari'))
+    if (lowerUrl.includes('auctions.yahoo')) return saleSites.find(s => s.name.includes('ヤフオク') || s.name.toLowerCase().includes('yahoo'))
+    return null
+  }
+
+  // インラインURL保存
+  const handleInlineUrlSave = async (cardId: string) => {
+    const url = inlineUrlInputs[cardId]?.trim()
+    if (!url) return
+
+    // サイト自動特定
+    const site = detectSiteFromUrl(url)
+    if (!site) {
+      setInlineUrlError(prev => ({ ...prev, [cardId]: 'サイトを特定できません' }))
+      setTimeout(() => setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n }), 3000)
+      return
+    }
+
+    // 重複チェック
+    const existing = cardSaleUrls[cardId] || []
+    if (existing.some(u => u.product_url === url)) {
+      setInlineUrlError(prev => ({ ...prev, [cardId]: 'このURLは登録済みです' }))
+      setTimeout(() => setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n }), 3000)
+      return
+    }
+
+    setInlineUrlSaving(prev => ({ ...prev, [cardId]: true }))
+    setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n })
+
+    try {
+      const isSnkrdunk = url.toLowerCase().includes('snkrdunk.com')
+      const { error } = await supabase.from('card_sale_urls').insert([{
+        card_id: cardId,
+        site_id: site.id,
+        product_url: url,
+        ...(isSnkrdunk ? { auto_scrape_mode: 'manual', auto_scrape_interval_minutes: 360 } : {})
+      }])
+      if (error) throw error
+
+      // 成功: 入力クリア、URL一覧更新
+      setInlineUrlInputs(prev => ({ ...prev, [cardId]: '' }))
+      setInlineUrlSuccess(prev => ({ ...prev, [cardId]: true }))
+      setTimeout(() => setInlineUrlSuccess(prev => { const n = { ...prev }; delete n[cardId]; return n }), 2000)
+
+      // 登録URL一覧をリフレッシュ
+      const newUrl = { id: 'temp', card_id: cardId, product_url: url, site_id: site.id, site }
+      setCardSaleUrls(prev => ({ ...prev, [cardId]: [...(prev[cardId] || []), newUrl] }))
+
+      // バックグラウンドスクレイピング
+      let source = null
+      if (isSnkrdunk) source = 'snkrdunk'
+      else if (url.includes('cardrush')) source = 'cardrush'
+      else if (url.includes('torecacamp')) source = 'torecacamp'
+      fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, source }),
+      }).catch(() => { })
+    } catch (err: any) {
+      setInlineUrlError(prev => ({ ...prev, [cardId]: err.message }))
+      setTimeout(() => setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n }), 3000)
+    } finally {
+      setInlineUrlSaving(prev => ({ ...prev, [cardId]: false }))
+    }
+  }
 
   // カテゴリ取得
   useEffect(() => {
@@ -558,6 +669,8 @@ export default function CardsPage({
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">パック</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">サイト</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 min-w-[220px]">URL追加</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
                 </tr>
               </thead>
@@ -600,6 +713,46 @@ export default function CardsPage({
                       )}
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>{card.card_number || '−'}</td>
+                    <td className="px-4 py-2" onClick={() => onSelectCard(card)}>
+                      <div className="flex gap-0.5 flex-wrap">
+                        {(cardSaleUrls[card.id] || []).map((u: any, i: number) => (
+                          <span key={i} title={`${u.site?.name || '不明'}\n${u.product_url}`} className="cursor-default text-base">
+                            {u.site?.icon || '🔗'}
+                          </span>
+                        ))}
+                        {!(cardSaleUrls[card.id]?.length) && <span className="text-gray-300 text-xs">−</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="url"
+                          value={inlineUrlInputs[card.id] || ''}
+                          onChange={(e) => setInlineUrlInputs(prev => ({ ...prev, [card.id]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleInlineUrlSave(card.id) } }}
+                          placeholder="https://..."
+                          className={`w-40 px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 ${inlineUrlError[card.id] ? 'border-red-300 bg-red-50' : inlineUrlSuccess[card.id] ? 'border-green-300 bg-green-50' : 'border-gray-200'
+                            }`}
+                        />
+                        {inlineUrlSaving[card.id] ? (
+                          <Loader2 size={14} className="animate-spin text-blue-400" />
+                        ) : inlineUrlSuccess[card.id] ? (
+                          <Check size={14} className="text-green-500" />
+                        ) : (
+                          <button
+                            onClick={() => handleInlineUrlSave(card.id)}
+                            disabled={!inlineUrlInputs[card.id]?.trim()}
+                            className="p-1 text-blue-500 hover:bg-blue-50 rounded disabled:opacity-30"
+                            title="保存"
+                          >
+                            <Link size={14} />
+                          </button>
+                        )}
+                      </div>
+                      {inlineUrlError[card.id] && (
+                        <p className="text-red-500 text-[10px] mt-0.5">{inlineUrlError[card.id]}</p>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-center" onClick={() => onSelectCard(card)}>{getStatusBadge(card.id)}</td>
                   </tr>
                 ))}
