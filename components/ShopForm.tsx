@@ -74,7 +74,7 @@ export default function ShopForm({ shop, onClose, onSaved }: Props) {
 
     try {
       const cleanXAccount = xAccount.replace('@', '')
-      
+
       const shopData = {
         name: name.trim(),
         x_account: cleanXAccount || null,
@@ -111,7 +111,7 @@ export default function ShopForm({ shop, onClose, onSaved }: Props) {
   // 削除
   const handleDelete = async () => {
     if (!shop?.id) return
-    
+
     const confirmed = window.confirm(`「${shop.name}」を削除しますか？\n関連する買取価格データも削除されます。`)
     if (!confirmed) return
 
@@ -225,7 +225,7 @@ export default function ShopForm({ shop, onClose, onSaved }: Props) {
               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="active">アクティブ（監視中）</option>
-              <option value="inactive">停止中</option>
+              <option value="paused">停止中</option>
             </select>
           </div>
 
@@ -255,7 +255,7 @@ export default function ShopForm({ shop, onClose, onSaved }: Props) {
           ) : (
             <div />
           )}
-          
+
           <div className="flex gap-3">
             <button
               onClick={onClose}
