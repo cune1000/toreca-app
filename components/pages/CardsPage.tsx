@@ -167,6 +167,7 @@ export default function CardsPage({
         card_id: cardId,
         site_id: site.id,
         product_url: url,
+        check_interval: 180,
         ...(isSnkrdunk ? { auto_scrape_mode: 'manual', auto_scrape_interval_minutes: 360 } : {})
       }])
       if (error) throw error
