@@ -967,7 +967,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                             <div className="flex items-center gap-2 mb-3 ml-4">
                               <span className="text-xs text-gray-600">⏱️ 更新間隔:</span>
                               <select
-                                value={snkrdunkUrl.auto_scrape_interval_minutes || 360}
+                                value={snkrdunkUrl.auto_scrape_interval_minutes || 1440}
                                 onChange={(e) => updateScrapeInterval(snkrdunkUrl.id, parseInt(e.target.value))}
                                 className="px-2 py-1 border rounded text-xs"
                               >

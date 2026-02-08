@@ -168,7 +168,7 @@ export default function CardsPage({
         site_id: site.id,
         product_url: url,
         check_interval: 180,
-        ...(isSnkrdunk ? { auto_scrape_mode: 'manual', auto_scrape_interval_minutes: 360 } : {})
+        ...(isSnkrdunk ? { auto_scrape_mode: 'manual', auto_scrape_interval_minutes: 1440 } : {})
       }])
       if (error) throw error
 
@@ -544,15 +544,15 @@ export default function CardsPage({
           <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">🔴 エラー</span>
         ) : (
           <span className={`px-2 py-0.5 text-xs rounded ${status.interval <= 180 ? 'bg-green-100 text-green-700' :
-              status.interval <= 720 ? 'bg-yellow-100 text-yellow-700' :
-                'bg-gray-100 text-gray-600'
+            status.interval <= 720 ? 'bg-yellow-100 text-yellow-700' :
+              'bg-gray-100 text-gray-600'
             }`}>💰 {formatIntervalLabel(status.interval)}</span>
         )}
         {/* スニダン売買 */}
         {status.snkrdunk && (
           <span className={`px-2 py-0.5 text-xs rounded ${status.snkrdunk.status === 'error' ? 'bg-red-100 text-red-700' :
-              status.snkrdunk.mode === 'off' ? 'bg-gray-100 text-gray-400' :
-                'bg-blue-100 text-blue-700'
+            status.snkrdunk.mode === 'off' ? 'bg-gray-100 text-gray-400' :
+              'bg-blue-100 text-blue-700'
             }`}>
             📊 {status.snkrdunk.mode === 'off' ? '停止' :
               status.snkrdunk.status === 'error' ? 'エラー' :

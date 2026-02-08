@@ -103,7 +103,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
           product_url: form.product_url,
           ...(isSnkrdunk ? {
             auto_scrape_mode: 'manual',
-            auto_scrape_interval_minutes: 360
+            auto_scrape_interval_minutes: 1440
           } : {})
         }])
 

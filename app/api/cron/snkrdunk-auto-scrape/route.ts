@@ -56,7 +56,7 @@ export async function GET(req: Request) {
                     intervalMinutes = await calculateAdaptiveInterval(saleUrl.card_id)
                 } else if (saleUrl.auto_scrape_mode === 'manual') {
                     // 手動設定: ユーザー指定の間隔
-                    intervalMinutes = saleUrl.auto_scrape_interval_minutes || 360
+                    intervalMinutes = saleUrl.auto_scrape_interval_minutes || 1440
                 } else {
                     continue
                 }
@@ -92,7 +92,7 @@ export async function GET(req: Request) {
 
                 // エラー時は間隔を2倍に延長
                 const intervalMinutes = saleUrl.auto_scrape_mode === 'manual'
-                    ? saleUrl.auto_scrape_interval_minutes || 360
+                    ? saleUrl.auto_scrape_interval_minutes || 1440
                     : 360
                 const nextScrapeAt = new Date(now.getTime() + intervalMinutes * 2 * 60 * 1000)
 
