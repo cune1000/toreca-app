@@ -25,8 +25,10 @@ export default function SnkrdunkMonitorPage() {
 
             // スニダンのURLのみフィルタ
             const snkrdunkData = (data || []).filter((item: any) =>
-                item.site?.name?.toLowerCase().includes('スニダン') ||
-                item.site?.name?.toLowerCase().includes('snkrdunk')
+                item.site?.name?.includes('スニダン') ||
+                item.site?.name?.includes('スニーカーダンク') ||
+                item.site?.name?.toLowerCase().includes('snkrdunk') ||
+                item.product_url?.includes('snkrdunk.com')
             )
 
             setMonitorData(snkrdunkData)
@@ -92,8 +94,8 @@ export default function SnkrdunkMonitorPage() {
                 <button
                     onClick={() => setFilter('all')}
                     className={`px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'all'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                 >
                     全て ({monitorData.length})
@@ -101,8 +103,8 @@ export default function SnkrdunkMonitorPage() {
                 <button
                     onClick={() => setFilter('monitoring')}
                     className={`px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'monitoring'
-                            ? 'bg-green-500 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                 >
                     監視中 ({monitorData.filter(item => item.auto_scrape_mode !== 'off').length})
@@ -110,8 +112,8 @@ export default function SnkrdunkMonitorPage() {
                 <button
                     onClick={() => setFilter('error')}
                     className={`px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'error'
-                            ? 'bg-red-500 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-red-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                 >
                     エラー ({monitorData.filter(item => item.last_scrape_status === 'error').length})
@@ -161,12 +163,12 @@ export default function SnkrdunkMonitorPage() {
                                     <td className="px-4 py-3 text-center">
                                         <span
                                             className={`px-2 py-1 rounded text-xs font-medium ${item.auto_scrape_mode === 'off'
-                                                    ? 'bg-gray-100 text-gray-600'
-                                                    : item.auto_scrape_mode === 'manual'
-                                                        ? 'bg-blue-100 text-blue-700'
-                                                        : item.auto_scrape_mode === 'auto'
-                                                            ? 'bg-purple-100 text-purple-700'
-                                                            : 'bg-gray-100 text-gray-400'
+                                                ? 'bg-gray-100 text-gray-600'
+                                                : item.auto_scrape_mode === 'manual'
+                                                    ? 'bg-blue-100 text-blue-700'
+                                                    : item.auto_scrape_mode === 'auto'
+                                                        ? 'bg-purple-100 text-purple-700'
+                                                        : 'bg-gray-100 text-gray-400'
                                                 }`}
                                         >
                                             {getModeLabel(item.auto_scrape_mode)}
