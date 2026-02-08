@@ -8,10 +8,12 @@ import PriceGraph from '@/components/chart/PriceGraph'
 import PurchasePriceTable from '@/components/chart/PurchasePriceTable'
 import AffiliateButtons from '@/components/chart/AffiliateButtons'
 import PriceChangeIndicator from '@/components/chart/PriceChangeIndicator'
+import ShinsokuLink from '@/components/chart/ShinsokuLink'
 import { getCardDetail, getPriceHistory, getPurchasePrices } from '@/lib/chart/queries'
 import { getAffiliateLinks } from '@/lib/chart/affiliate'
 import { formatPrice } from '@/lib/chart/format'
 import { CardDetail, PricePoint, PurchaseShopPrice } from '@/lib/chart/types'
+import { supabase } from '@/lib/supabase'
 
 interface Props {
     params: Promise<{ id: string }>
@@ -21,7 +23,8 @@ export default function CardDetailPage({ params }: Props) {
     const [card, setCard] = useState<CardDetail | null>(null)
     const [priceData, setPriceData] = useState<Record<string, PricePoint[]>>({})
     const [purchasePrices, setPurchasePrices] = useState<PurchaseShopPrice[]>([])
-    const [tab, setTab] = useState<'chart' | 'purchase' | 'related'>('chart')
+    const [tab, setTab] = useState<'chart' | 'purchase' | 'shinsoku'>('chart')
+    const [shinsokuItemId, setShinsokuItemId] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
     const [cardId, setCardId] = useState<string>('')
 
@@ -35,13 +38,14 @@ export default function CardDetailPage({ params }: Props) {
         async function fetchData() {
             setLoading(true)
 
-            const [cardData, history30, history90, history1y, historyAll, purchases] = await Promise.all([
+            const [cardData, history30, history90, history1y, historyAll, purchases, shinsokuRes] = await Promise.all([
                 getCardDetail(cardId),
                 getPriceHistory(cardId, '30d'),
                 getPriceHistory(cardId, '90d'),
                 getPriceHistory(cardId, '1y'),
                 getPriceHistory(cardId, 'all'),
                 getPurchasePrices(cardId),
+                supabase.from('cards').select('shinsoku_item_id').eq('id', cardId).single(),
             ])
 
             setCard(cardData)
@@ -52,6 +56,7 @@ export default function CardDetailPage({ params }: Props) {
                 'all': historyAll,
             })
             setPurchasePrices(purchases)
+            setShinsokuItemId(shinsokuRes.data?.shinsoku_item_id || null)
             setLoading(false)
         }
 
@@ -201,14 +206,14 @@ export default function CardDetailPage({ params }: Props) {
                         {[
                             { key: 'chart' as const, label: '📊 チャート' },
                             { key: 'purchase' as const, label: '🏪 買取価格' },
-                            { key: 'related' as const, label: '🔗 関連カード' },
+                            { key: 'shinsoku' as const, label: `🔗 シンソク${shinsokuItemId ? ' ✅' : ''}` },
                         ].map(t => (
                             <button
                                 key={t.key}
                                 onClick={() => setTab(t.key)}
                                 className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${tab === t.key
-                                        ? 'border-gray-800 text-gray-800'
-                                        : 'border-transparent text-gray-400 hover:text-gray-600'
+                                    ? 'border-gray-800 text-gray-800'
+                                    : 'border-transparent text-gray-400 hover:text-gray-600'
                                     }`}
                             >
                                 {t.label}
@@ -253,15 +258,22 @@ export default function CardDetailPage({ params }: Props) {
                         </>
                     )}
 
-                    {/* 関連カードタブ */}
-                    {tab === 'related' && (
+                    {/* シンソク紐付けタブ */}
+                    {tab === 'shinsoku' && (
                         <>
                             <h3 className="text-sm font-bold text-gray-700 mb-3">
-                                関連カード
+                                🔗 シンソク買取 紐付け
                             </h3>
-                            <div className="py-8 text-center text-gray-400 text-sm">
-                                関連カード機能は準備中です
-                            </div>
+                            <p className="text-xs text-gray-400 mb-3">
+                                シンソクの商品と紐付けると、買取価格を自動追跡します
+                            </p>
+                            <ShinsokuLink
+                                cardId={cardId}
+                                cardName={card.name}
+                                linkedItemId={shinsokuItemId}
+                                onLinked={(itemId) => setShinsokuItemId(itemId)}
+                                onUnlinked={() => setShinsokuItemId(null)}
+                            />
                         </>
                     )}
 
