@@ -747,6 +747,7 @@ export default function CardsPage({
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
+                  <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">シンソク</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -829,6 +830,13 @@ export default function CardsPage({
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>{card.card_number || '−'}</td>
                     <td className="px-4 py-2 text-center" onClick={() => onSelectCard(card)}>{getStatusBadge(card.id)}</td>
+                    <td className="px-3 py-2 text-center" onClick={() => onSelectCard(card)}>
+                      {card.shinsoku_item_id ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700" title={`ID: ${card.shinsoku_item_id}`}>✅</span>
+                      ) : (
+                        <span className="text-gray-300 text-sm">−</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

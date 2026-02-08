@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface ShinsokuResult {
     item_id: string
@@ -37,11 +37,13 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, onLinked,
     const [error, setError] = useState('')
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [total, setTotal] = useState(0)
+    const [autoSearched, setAutoSearched] = useState(false)
 
     const formatPrice = (p: number | null) => p != null ? `¥${p.toLocaleString()}` : '-'
 
-    const search = async () => {
-        if (query.length < 2) {
+    const search = async (q?: string) => {
+        const searchQuery = q || query
+        if (searchQuery.length < 2) {
             setError('2文字以上入力してください')
             return
         }
@@ -49,17 +51,28 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, onLinked,
         setError('')
         setResults([])
         try {
-            const res = await fetch(`/api/shinsoku/search?q=${encodeURIComponent(query)}`)
+            const res = await fetch(`/api/shinsoku/search?q=${encodeURIComponent(searchQuery)}`)
             const json = await res.json()
             if (!json.success) throw new Error(json.error)
             setResults(json.data.items)
             setTotal(json.data.total)
+            if (json.data.cache_empty) {
+                setError('キャッシュが空です。管理者にshinsoku-syncの実行を依頼してください。')
+            }
         } catch (err: any) {
             setError(err.message)
         } finally {
             setSearching(false)
         }
     }
+
+    // マウント時に自動検索（未紐付けの場合のみ）
+    useEffect(() => {
+        if (!autoSearched && cardName && cardName.length >= 2 && !linkedItemId) {
+            setAutoSearched(true)
+            search(cardName)
+        }
+    }, [cardName, linkedItemId])
 
     const link = async (itemId: string) => {
         setLinking(true)
@@ -127,7 +140,7 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, onLinked,
                     className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                 />
                 <button
-                    onClick={search}
+                    onClick={() => search()}
                     disabled={searching}
                     className="px-4 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 disabled:opacity-50 whitespace-nowrap"
                 >
@@ -142,7 +155,7 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, onLinked,
             {/* 検索結果 */}
             {results.length > 0 && (
                 <div>
-                    <p className="text-xs text-gray-400 mb-2">{total}件中 {results.length}件表示</p>
+                    <p className="text-xs text-gray-400 mb-2">{total}件の候補</p>
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {results.map(item => (
                             <div
@@ -237,12 +250,17 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, onLinked,
                 </div>
             )}
 
+            {/* 検索中 */}
             {searching && (
-                <div className="py-8 text-center">
-                    <div className="inline-block w-6 h-6 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-                    <p className="text-xs text-gray-400 mt-2">シンソクAPIから商品を検索中...</p>
-                    <p className="text-[10px] text-gray-300 mt-1">全商品をスキャンするため数秒かかります</p>
+                <div className="py-4 text-center">
+                    <div className="inline-block w-5 h-5 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
+                    <p className="text-xs text-gray-400 mt-2">候補を検索中...</p>
                 </div>
+            )}
+
+            {/* 候補なし */}
+            {autoSearched && !searching && results.length === 0 && !error && !currentLinked && (
+                <p className="text-xs text-gray-400 text-center py-2">候補が見つかりませんでした。キーワードを変えて検索してください。</p>
             )}
         </div>
     )
