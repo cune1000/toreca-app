@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   // limit=-1 または limit=all で全件取得
   const limit = (limitParam === 'all' || limitParam === '-1') ? '-1' : (limitParam || '20')
   const offset = searchParams.get('offset') || '0'
-  
+
   if (!listUrl) {
     return NextResponse.json({
       message: 'Pokemon Card Import API (via Railway)',
@@ -20,20 +20,20 @@ export async function GET(request: NextRequest) {
       example: '/api/pokemon-card-import?url=https://www.pokemon-card.com/card-search/index.php?sc_rare_sar=1&limit=20&offset=0'
     })
   }
-  
+
   try {
     // Railwayに転送
     const railwayUrl = `${RAILWAY_URL}/pokemon-import?url=${encodeURIComponent(listUrl)}&limit=${limit}&offset=${offset}`
     console.log('Calling Railway:', railwayUrl)
-    
-    const res = await fetch(railwayUrl, { 
+
+    const res = await fetch(railwayUrl, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     })
-    
+
     const data = await res.json()
     return NextResponse.json(data)
-    
+
   } catch (error: any) {
     console.error('Railway call error:', error)
     return NextResponse.json(
@@ -46,11 +46,11 @@ export async function GET(request: NextRequest) {
 // POST: DBに保存
 export async function POST(request: NextRequest) {
   const { url: listUrl, limit = 20, offset = 0, skipExisting = true } = await request.json()
-  
+
   if (!listUrl) {
     return NextResponse.json({ error: 'url is required' }, { status: 400 })
   }
-  
+
   try {
     // Railwayからカードデータ取得
     const railwayRes = await fetch(`${RAILWAY_URL}/pokemon-import`, {
@@ -58,81 +58,113 @@ export async function POST(request: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: listUrl, limit, offset })
     })
-    
+
     const railwayData = await railwayRes.json()
-    
+
     if (!railwayData.success) {
       return NextResponse.json(railwayData, { status: 500 })
     }
-    
+
     // ポケモンカードのカテゴリIDを取得
     const { data: category } = await supabase
       .from('category_large')
       .select('id')
       .eq('name', 'ポケモンカード')
       .single()
-    
-    let newCount = 0
-    let updateCount = 0
-    let skipCount = 0
-    let errorCount = 0
-    const errors: string[] = []
-    
-    for (const card of railwayData.cards) {
-      try {
-        if (!card.name || !card.imageUrl) {
-          errorCount++
-          continue
-        }
-        
-        // 既存チェック（画像URLで判定）
-        const { data: existingList } = await supabase
-          .from('cards')
-          .select('id')
-          .eq('image_url', card.imageUrl)
-        
-        const existing = existingList?.[0]
-        
-        if (existing) {
-          if (skipExisting) {
-            skipCount++
-          } else {
-            // 更新
-            await supabase
-              .from('cards')
-              .update({
-                name: card.name,
-                card_number: card.cardNumber,
-                rarity: card.rarity,
-                illustrator: card.illustrator,
-                expansion: card.expansion,
-                regulation: card.regulation
-              })
-              .eq('id', existing.id)
-            updateCount++
-          }
-        } else {
-          // 新規登録
-          await supabase
-            .from('cards')
-            .insert([{
-              name: card.name,
-              image_url: card.imageUrl,
-              card_number: card.cardNumber,
-              rarity: card.rarity,
-              illustrator: card.illustrator,
-              expansion: card.expansion,
-              regulation: card.regulation,
-              category_large_id: category?.id || null
-            }])
-          newCount++
-        }
-      } catch (err: any) {
-        errorCount++
-        errors.push(`${card.name}: ${err.message}`)
+
+    const cards = railwayData.cards || []
+
+    // 有効なカードのみフィルタ
+    const validCards = cards.filter((c: any) => c.name && c.imageUrl)
+    const invalidCount = cards.length - validCards.length
+
+    // 全画像URLで既存チェック（バッチ）
+    const imageUrls = validCards.map((c: any) => c.imageUrl)
+    const existingMap = new Map<string, string>()
+
+    // Supabaseの.in()は最大100件制限があるため、チャンクで取得
+    const CHUNK_SIZE = 100
+    for (let i = 0; i < imageUrls.length; i += CHUNK_SIZE) {
+      const chunk = imageUrls.slice(i, i + CHUNK_SIZE)
+      const { data: existingCards } = await supabase
+        .from('cards')
+        .select('id, image_url')
+        .in('image_url', chunk)
+
+      if (existingCards) {
+        existingCards.forEach((c: any) => existingMap.set(c.image_url, c.id))
       }
     }
-    
+
+    // 新規・更新・スキップに分類
+    const newCards: any[] = []
+    const updateCards: any[] = []
+    let skipCount = 0
+
+    for (const card of validCards) {
+      const existingId = existingMap.get(card.imageUrl)
+      if (existingId) {
+        if (skipExisting) {
+          skipCount++
+        } else {
+          updateCards.push({ id: existingId, ...card })
+        }
+      } else {
+        newCards.push({
+          name: card.name,
+          image_url: card.imageUrl,
+          card_number: card.cardNumber,
+          rarity: card.rarity,
+          illustrator: card.illustrator,
+          expansion: card.expansion,
+          regulation: card.regulation,
+          category_large_id: category?.id || null
+        })
+      }
+    }
+
+    // 新規カードをバッチINSERT（100件ずつ）
+    let newCount = 0
+    let errorCount = invalidCount
+    const errors: string[] = []
+
+    for (let i = 0; i < newCards.length; i += CHUNK_SIZE) {
+      const chunk = newCards.slice(i, i + CHUNK_SIZE)
+      const { error } = await supabase
+        .from('cards')
+        .insert(chunk)
+
+      if (error) {
+        errorCount += chunk.length
+        errors.push(`Batch insert error (${i}-${i + chunk.length}): ${error.message}`)
+      } else {
+        newCount += chunk.length
+      }
+    }
+
+    // 更新カードをバッチ処理
+    let updateCount = 0
+    for (const card of updateCards) {
+      const { error } = await supabase
+        .from('cards')
+        .update({
+          name: card.name,
+          card_number: card.cardNumber,
+          rarity: card.rarity,
+          illustrator: card.illustrator,
+          expansion: card.expansion,
+          regulation: card.regulation
+        })
+        .eq('id', card.id)
+
+      if (error) {
+        errorCount++
+        errors.push(`Update ${card.name}: ${error.message}`)
+      } else {
+        updateCount++
+      }
+    }
+
     return NextResponse.json({
       success: true,
       totalFound: railwayData.totalFound,
@@ -143,7 +175,7 @@ export async function POST(request: NextRequest) {
       errorCount,
       errors: errors.slice(0, 10)
     })
-    
+
   } catch (error: any) {
     console.error('Import error:', error)
     return NextResponse.json(
