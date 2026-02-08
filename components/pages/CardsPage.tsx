@@ -29,15 +29,32 @@ export default function CardsPage({
   onAIRecognition,
   onSelectCard
 }: Props) {
-  // State
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterCategoryLarge, setFilterCategoryLarge] = useState('')
-  const [filterCategoryMedium, setFilterCategoryMedium] = useState('')
-  const [filterCategorySmall, setFilterCategorySmall] = useState('')
-  const [filterRarity, setFilterRarity] = useState('')
-  const [filterExpansion, setFilterExpansion] = useState('')
+  // sessionStorage永続化ヘルパー
+  const useSessionState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
+    const [value, setValue] = useState<T>(() => {
+      if (typeof window !== 'undefined') {
+        const saved = sessionStorage.getItem(`cards-filter-${key}`)
+        if (saved !== null) {
+          try { return JSON.parse(saved) } catch { return defaultValue }
+        }
+      }
+      return defaultValue
+    })
+    useEffect(() => {
+      sessionStorage.setItem(`cards-filter-${key}`, JSON.stringify(value))
+    }, [key, value])
+    return [value, setValue]
+  }
+
+  // State（sessionStorageに永続化）
+  const [searchQuery, setSearchQuery] = useSessionState('searchQuery', '')
+  const [filterCategoryLarge, setFilterCategoryLarge] = useSessionState('categoryLarge', '')
+  const [filterCategoryMedium, setFilterCategoryMedium] = useSessionState('categoryMedium', '')
+  const [filterCategorySmall, setFilterCategorySmall] = useSessionState('categorySmall', '')
+  const [filterRarity, setFilterRarity] = useSessionState('rarity', '')
+  const [filterExpansion, setFilterExpansion] = useSessionState('expansion', '')
   const [expansions, setExpansions] = useState<string[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage, setCurrentPage] = useSessionState('page', 1)
   const [totalCount, setTotalCount] = useState(0)
   const [filteredCards, setFilteredCards] = useState<CardWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(false)

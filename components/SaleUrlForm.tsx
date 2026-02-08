@@ -163,8 +163,8 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-      <div className="bg-white rounded-2xl w-[500px] p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-[500px] p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-800">販売URL追加</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">

@@ -228,8 +228,8 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl w-[600px] max-h-[90vh] overflow-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-[600px] max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-800">カード編集</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -436,8 +436,8 @@ export default function CardEditForm({ card, onClose, onSaved }) {
                     type="button"
                     onClick={() => setForm({ ...form, rarity_id: rarity.id })}
                     className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${form.rarity_id === rarity.id
-                        ? 'bg-purple-100 border-purple-300 text-purple-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                      ? 'bg-purple-100 border-purple-300 text-purple-700'
+                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
                       }`}
                   >
                     {rarity.name}
