@@ -1,0 +1,60 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+// 統計サマリー
+export async function GET() {
+    try {
+        const today = new Date().toISOString().split('T')[0]
+
+        // 在庫データ
+        const { data: inventory } = await supabase
+            .from('pos_inventory')
+            .select('quantity, avg_purchase_price, catalog:pos_catalogs(fixed_price)')
+
+        const totalItems = (inventory || []).reduce((s: number, i: any) => s + i.quantity, 0)
+        const totalKinds = (inventory || []).length
+        const totalCost = (inventory || []).reduce(
+            (s: number, i: any) => s + i.avg_purchase_price * i.quantity, 0
+        )
+        const estimatedValue = (inventory || []).reduce(
+            (s: number, i: any) => s + (i.catalog?.fixed_price || i.avg_purchase_price) * i.quantity, 0
+        )
+
+        // 本日の取引
+        const { data: todayTx } = await supabase
+            .from('pos_transactions')
+            .select('type, total_price, profit')
+            .eq('transaction_date', today)
+
+        const todayPurchase = (todayTx || [])
+            .filter((t: any) => t.type === 'purchase')
+            .reduce((s: number, t: any) => s + t.total_price, 0)
+        const todaySale = (todayTx || [])
+            .filter((t: any) => t.type === 'sale')
+            .reduce((s: number, t: any) => s + t.total_price, 0)
+        const todayProfit = (todayTx || [])
+            .filter((t: any) => t.type === 'sale')
+            .reduce((s: number, t: any) => s + (t.profit || 0), 0)
+
+        return NextResponse.json({
+            success: true,
+            data: {
+                totalItems,
+                totalKinds,
+                totalCost,
+                estimatedValue,
+                estimatedProfit: estimatedValue - totalCost,
+                todayPurchase,
+                todaySale,
+                todayProfit,
+            },
+        })
+    } catch (error: any) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+}
