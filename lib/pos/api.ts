@@ -138,3 +138,14 @@ export async function adjustInventory(data: {
 export async function getStats() {
     return request<{ success: true; data: PosStats }>(`${BASE}/stats`)
 }
+
+// =============================================================================
+// 相場
+// =============================================================================
+
+export async function getMarketPrice(cardId: string, days?: number) {
+    const sp = new URLSearchParams()
+    sp.set('card_id', cardId)
+    if (days) sp.set('days', String(days))
+    return request<{ success: true; data: any }>(`${BASE}/market-price?${sp.toString()}`)
+}

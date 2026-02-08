@@ -2,66 +2,54 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { NAV_ITEMS } from '@/lib/pos/constants'
 
-interface Props {
-    children: React.ReactNode
-}
+const NAV_ITEMS = [
+    { key: 'dashboard', icon: '📊', label: 'ダッシュボード', href: '/pos' },
+    { key: 'catalog', icon: '📋', label: 'カタログ・在庫', href: '/pos/catalog' },
+    { key: 'purchase', icon: '💰', label: '仕入れ登録', href: '/pos/purchase' },
+    { key: 'sale', icon: '🛒', label: '販売登録', href: '/pos/sale' },
+    { key: 'history', icon: '📜', label: '取引履歴', href: '/pos/history' },
+]
 
-export default function PosLayout({ children }: Props) {
+export default function PosLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
 
-    const getActiveKey = () => {
-        if (pathname === '/pos') return 'dashboard'
-        const match = NAV_ITEMS.find(item => item.key !== 'dashboard' && pathname.startsWith(item.href))
-        return match?.key || 'dashboard'
-    }
-
-    const active = getActiveKey()
-
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-[#f8f9fb] flex">
             {/* PC サイドバー */}
-            <aside className="hidden md:flex flex-col w-52 bg-white border-r border-gray-100 min-h-screen pt-4 shrink-0">
-                <div className="px-4 mb-6">
-                    <Link href="/pos" className="text-base font-bold text-gray-800 flex items-center gap-2">
-                        <span className="text-lg">🏪</span> POS管理
+            <aside className="w-56 bg-white border-r border-gray-200 flex-shrink-0 sticky top-0 h-screen overflow-y-auto">
+                <div className="px-5 py-5 border-b border-gray-100">
+                    <Link href="/pos" className="flex items-center gap-2">
+                        <span className="text-xl">🏪</span>
+                        <span className="text-base font-bold text-gray-900">POS管理</span>
                     </Link>
                 </div>
-                {NAV_ITEMS.map(item => (
-                    <Link
-                        key={item.key}
-                        href={item.href}
-                        className={`flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors ${active === item.key
-                                ? 'bg-gray-800 text-white mx-2 rounded-lg font-medium'
-                                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                            }`}
-                    >
-                        <span>{item.icon}</span>
-                        <span>{item.label}</span>
-                    </Link>
-                ))}
+                <nav className="px-3 py-3 space-y-0.5">
+                    {NAV_ITEMS.map(item => {
+                        const active = pathname === item.href || (item.href !== '/pos' && pathname.startsWith(item.href))
+                        return (
+                            <Link
+                                key={item.key}
+                                href={item.href}
+                                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${active
+                                        ? 'bg-gray-900 text-white'
+                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <span className="text-base">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </Link>
+                        )
+                    })}
+                </nav>
             </aside>
 
             {/* メインコンテンツ */}
-            <main className="flex-1 px-4 py-4 md:px-6 md:py-6 pb-20 md:pb-6 max-w-4xl">
-                {children}
+            <main className="flex-1 min-w-0">
+                <div className="max-w-6xl mx-auto px-8 py-6">
+                    {children}
+                </div>
             </main>
-
-            {/* モバイル 下部ナビ */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex z-50">
-                {NAV_ITEMS.map(item => (
-                    <Link
-                        key={item.key}
-                        href={item.href}
-                        className={`flex-1 flex flex-col items-center py-2 text-[10px] transition-colors ${active === item.key ? 'text-gray-800 font-bold' : 'text-gray-400'
-                            }`}
-                    >
-                        <span className="text-base">{item.icon}</span>
-                        <span>{item.label}</span>
-                    </Link>
-                ))}
-            </nav>
         </div>
     )
 }
