@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, TrendingUp, TrendingDown, ExternalLink, RefreshCw, Store, Globe, Edit, Plus, Package, Eye, EyeOff } from 'lucide-react'
+import ShinsokuLink from '@/components/chart/ShinsokuLink'
 import MarketChart from './MarketChart'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import CardEditForm from './CardEditForm'
@@ -1302,6 +1303,24 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   ) : (
                     <p className="text-gray-500 text-center py-4">履歴なし</p>
                   )}
+                </div>
+
+                {/* シンソク買取 紐付け */}
+                <div>
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-orange-500">🔗</span>
+                    シンソク買取 紐付け
+                  </h3>
+                  <p className="text-xs text-gray-400 mb-3">
+                    シンソクの商品と紐付けると、買取価格を自動追跡します（6時間ごと）
+                  </p>
+                  <ShinsokuLink
+                    cardId={card.id}
+                    cardName={card.name}
+                    linkedItemId={card.shinsoku_item_id}
+                    onLinked={() => onUpdated?.()}
+                    onUnlinked={() => onUpdated?.()}
+                  />
                 </div>
               </div>
             </>

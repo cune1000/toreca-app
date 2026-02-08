@@ -16,10 +16,9 @@ COMMENT ON COLUMN cards.shinsoku_item_id IS 'シンソク買取APIのitem_id（�
 COMMENT ON COLUMN cards.shinsoku_linked_at IS 'シンソクと紐付けた日時';
 
 -- 2. purchase_shopsにシンソクを登録
-INSERT INTO purchase_shops (name, url, notes)
+INSERT INTO purchase_shops (name, status)
 VALUES (
   'シンソク（郵送買取）',
-  'https://shinsoku-tcg.com/yuso-kaitori',
-  '自動スクレイピング対象。API: /api/items'
+  'active'
 )
 ON CONFLICT DO NOTHING;
