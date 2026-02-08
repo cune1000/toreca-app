@@ -17,6 +17,8 @@ export interface Card {
   category_medium_id?: string
   category_small_id?: string
   category_detail_id?: string
+  shinsoku_item_id?: string | null
+  shinsoku_linked_at?: string | null
   created_at?: string
   updated_at?: string
 }

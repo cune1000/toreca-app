@@ -86,6 +86,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [showEditForm, setShowEditForm] = useState(false)
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState(30)
+  const [shinsokuItemId, setShinsokuItemId] = useState<string | null>(card?.shinsoku_item_id || null)
 
   // 表示切り替え用state
   const [showPurchase, setShowPurchase] = useState(true)
@@ -131,27 +132,34 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const fetchPrices = async () => {
     setLoading(true)
 
-    const { data: purchaseData } = await supabase
-      .from('purchase_prices')
-      .select('*, shop:shop_id(id, name, icon)')
-      .eq('card_id', card.id)
-      .order('created_at', { ascending: false })
-      .limit(200)
-    setPurchasePrices(purchaseData || [])
+    const [purchaseRes, saleRes, urlRes, cardRes] = await Promise.all([
+      supabase
+        .from('purchase_prices')
+        .select('*, shop:shop_id(id, name, icon)')
+        .eq('card_id', card.id)
+        .order('created_at', { ascending: false })
+        .limit(200),
+      supabase
+        .from('sale_prices')
+        .select('*, site:site_id(id, name, icon)')
+        .eq('card_id', card.id)
+        .order('created_at', { ascending: false })
+        .limit(200),
+      supabase
+        .from('card_sale_urls')
+        .select('*, site:site_id(id, name, icon, url)')
+        .eq('card_id', card.id),
+      supabase
+        .from('cards')
+        .select('shinsoku_item_id')
+        .eq('id', card.id)
+        .single(),
+    ])
 
-    const { data: saleData } = await supabase
-      .from('sale_prices')
-      .select('*, site:site_id(id, name, icon)')
-      .eq('card_id', card.id)
-      .order('created_at', { ascending: false })
-      .limit(200)
-    setSalePrices(saleData || [])
-
-    const { data: urlData } = await supabase
-      .from('card_sale_urls')
-      .select('*, site:site_id(id, name, icon, url)')
-      .eq('card_id', card.id)
-    setSaleUrls(urlData || [])
+    setPurchasePrices(purchaseRes.data || [])
+    setSalePrices(saleRes.data || [])
+    setSaleUrls(urlRes.data || [])
+    setShinsokuItemId(cardRes.data?.shinsoku_item_id || null)
 
     setLoading(false)
   }
@@ -1317,9 +1325,9 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                   <ShinsokuLink
                     cardId={card.id}
                     cardName={card.name}
-                    linkedItemId={card.shinsoku_item_id}
-                    onLinked={() => onUpdated?.()}
-                    onUnlinked={() => onUpdated?.()}
+                    linkedItemId={shinsokuItemId}
+                    onLinked={(itemId) => { setShinsokuItemId(itemId); onUpdated?.() }}
+                    onUnlinked={() => { setShinsokuItemId(null); onUpdated?.() }}
                   />
                 </div>
               </div>
