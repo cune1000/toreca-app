@@ -48,3 +48,4 @@ google-credentials.json
 *.zip 
 .next/ 
 .vercel
+.env*.local

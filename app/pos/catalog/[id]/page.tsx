@@ -284,8 +284,8 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                         </td>
                                         <td className="text-center px-3">
                                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${tx.type === 'purchase'
-                                                    ? 'bg-blue-50 text-blue-700'
-                                                    : 'bg-green-50 text-green-700'
+                                                ? 'bg-blue-50 text-blue-700'
+                                                : 'bg-green-50 text-green-700'
                                                 }`}>
                                                 {tx.type === 'purchase' ? '仕入れ' : '販売'}
                                             </span>
@@ -339,66 +339,226 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                         </div>
                     ) : marketData ? (
                         <div className="space-y-4">
-                            {/* 相場サマリー */}
-                            <div className="grid grid-cols-4 gap-4">
-                                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs text-gray-400 mb-1">直近取引価格</p>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {marketData.latestSalePrice ? formatPrice(marketData.latestSalePrice) : '-'}
-                                    </p>
-                                </div>
-                                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs text-gray-400 mb-1">30日平均</p>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {marketData.avgSalePrice ? formatPrice(marketData.avgSalePrice) : '-'}
-                                    </p>
-                                </div>
-                                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs text-gray-400 mb-1">PSA10 平均</p>
-                                    <p className="text-2xl font-bold text-purple-600">
-                                        {marketData.psa10?.avg ? formatPrice(marketData.psa10.avg) : '-'}
-                                    </p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{marketData.psa10?.count || 0}件</p>
-                                </div>
-                                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs text-gray-400 mb-1">買取平均</p>
-                                    <p className="text-2xl font-bold text-orange-600">
-                                        {marketData.avgPurchasePrice ? formatPrice(marketData.avgPurchasePrice) : '-'}
-                                    </p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{marketData.purchasesCount || 0}件</p>
-                                </div>
+                            {/* カード種別表示 */}
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${marketData.isBox ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
+                                    }`}>
+                                    {marketData.isBox ? '📦 BOXカード' : '🃏 シングルカード'}
+                                </span>
+                                <span className="text-xs text-gray-400">30日間データ</span>
                             </div>
 
-                            {/* 利益分析 */}
-                            {avgCost > 0 && marketData.latestSalePrice && (
-                                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <h3 className="text-sm font-bold text-gray-700 mb-3">📊 利益分析（相場 vs 平均仕入）</h3>
-                                    <div className="grid grid-cols-3 gap-6">
-                                        <div>
-                                            <p className="text-xs text-gray-400 mb-1">平均仕入単価</p>
-                                            <p className="text-xl font-bold text-gray-900">{formatPrice(avgCost)}</p>
+                            {/* ===== BOXカードの相場 ===== */}
+                            {marketData.isBox ? (
+                                <>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                            <p className="text-xs text-gray-400 mb-1">📦 BOX平均売買（スニダン）</p>
+                                            <p className="text-2xl font-bold text-amber-600">
+                                                {marketData.box?.avgUnitPrice ? formatPrice(marketData.box.avgUnitPrice) : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                直近: {marketData.box?.latestUnitPrice ? formatPrice(marketData.box.latestUnitPrice) : '-'} / {marketData.box?.count || 0}件
+                                            </p>
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-gray-400 mb-1">現在の相場</p>
-                                            <p className="text-xl font-bold text-gray-900">{formatPrice(marketData.latestSalePrice)}</p>
+                                        <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                            <p className="text-xs text-gray-400 mb-1">🏪 平均販売価格（ショップ）</p>
+                                            <p className="text-2xl font-bold text-blue-600">
+                                                {marketData.shopSale?.avg ? formatPrice(marketData.shopSale.avg) : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                直近: {marketData.shopSale?.latest ? formatPrice(marketData.shopSale.latest) : '-'} / {marketData.shopSale?.count || 0}件
+                                            </p>
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-gray-400 mb-1">見込み利益/個</p>
-                                            {(() => {
-                                                const diff = marketData.latestSalePrice - avgCost
-                                                const rate = avgCost > 0 ? Math.round(diff / avgCost * 100) : 0
-                                                return (
-                                                    <div>
-                                                        <p className={`text-xl font-bold ${diff >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                                            {diff > 0 ? '+' : ''}{formatPrice(diff)}
-                                                        </p>
-                                                        <p className={`text-xs ${diff >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                                                            ({rate > 0 ? '+' : ''}{rate}%)
-                                                        </p>
-                                                    </div>
-                                                )
-                                            })()}
+                                        <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                            <p className="text-xs text-gray-400 mb-1">💴 平均買取価格</p>
+                                            <p className="text-2xl font-bold text-orange-600">
+                                                {marketData.purchase?.avg ? formatPrice(marketData.purchase.avg) : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                直近: {marketData.purchase?.latest ? formatPrice(marketData.purchase.latest) : '-'} / {marketData.purchase?.count || 0}件
+                                            </p>
                                         </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* ===== シングルカードの相場 ===== */}
+                                    <div className="grid grid-cols-4 gap-4">
+                                        <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                            <p className="text-xs text-gray-400 mb-1">💎 PSA10 平均売買</p>
+                                            <p className="text-2xl font-bold text-purple-600">
+                                                {marketData.psa10?.avg ? formatPrice(marketData.psa10.avg) : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                直近: {marketData.psa10?.latest ? formatPrice(marketData.psa10.latest) : '-'} / {marketData.psa10?.count || 0}件
+                                            </p>
+                                        </div>
+                                        <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                            <p className="text-xs text-gray-400 mb-1">🅰️ 状態A 平均売買</p>
+                                            <p className="text-2xl font-bold text-sky-600">
+                                                {marketData.gradeA?.avg ? formatPrice(marketData.gradeA.avg) : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                直近: {marketData.gradeA?.latest ? formatPrice(marketData.gradeA.latest) : '-'} / {marketData.gradeA?.count || 0}件
+                                            </p>
+                                        </div>
+                                        <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                            <p className="text-xs text-gray-400 mb-1">🏪 平均販売価格（ショップ）</p>
+                                            <p className="text-2xl font-bold text-blue-600">
+                                                {marketData.shopSale?.avg ? formatPrice(marketData.shopSale.avg) : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                直近: {marketData.shopSale?.latest ? formatPrice(marketData.shopSale.latest) : '-'} / {marketData.shopSale?.count || 0}件
+                                            </p>
+                                        </div>
+                                        <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                            <p className="text-xs text-gray-400 mb-1">💴 平均買取価格</p>
+                                            <p className="text-2xl font-bold text-orange-600">
+                                                {marketData.purchase?.avg ? formatPrice(marketData.purchase.avg) : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                直近: {marketData.purchase?.latest ? formatPrice(marketData.purchase.latest) : '-'} / {marketData.purchase?.count || 0}件
+                                            </p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* ===== 見込み利益分析 ===== */}
+                            {avgCost > 0 && (
+                                <div className="bg-white border-2 border-green-100 rounded-xl p-5">
+                                    <h3 className="text-sm font-bold text-gray-700 mb-4">📊 見込み利益分析（相場 vs 平均仕入）</h3>
+                                    <div className="overflow-hidden rounded-lg border border-gray-100">
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="bg-gray-50/80">
+                                                    <th className="text-left text-xs font-medium text-gray-500 px-4 py-2.5">基準相場</th>
+                                                    <th className="text-right text-xs font-medium text-gray-500 px-4 py-2.5">相場価格</th>
+                                                    <th className="text-right text-xs font-medium text-gray-500 px-4 py-2.5">仕入単価</th>
+                                                    <th className="text-right text-xs font-medium text-gray-500 px-4 py-2.5">見込み利益/個</th>
+                                                    <th className="text-right text-xs font-medium text-gray-500 px-4 py-2.5">利益率</th>
+                                                    <th className="text-right text-xs font-medium text-gray-500 px-4 py-2.5">在庫全体</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {(() => {
+                                                    const rows = marketData.isBox
+                                                        ? [
+                                                            { label: '📦 BOX売買（スニダン）', price: marketData.box?.latestUnitPrice },
+                                                            { label: '🏪 ショップ販売', price: marketData.shopSale?.latest },
+                                                            { label: '💴 買取価格', price: marketData.purchase?.latest },
+                                                        ]
+                                                        : [
+                                                            { label: '💎 PSA10（スニダン）', price: marketData.psa10?.latest },
+                                                            { label: '🅰️ 状態A（スニダン）', price: marketData.gradeA?.latest },
+                                                            { label: '🏪 ショップ販売', price: marketData.shopSale?.latest },
+                                                            { label: '💴 買取価格', price: marketData.purchase?.latest },
+                                                        ]
+                                                    return rows.filter(r => r.price).map((row, i) => {
+                                                        const diff = row.price - avgCost
+                                                        const rate = Math.round(diff / avgCost * 100)
+                                                        const totalEst = diff * totalQty
+                                                        return (
+                                                            <tr key={i} className="hover:bg-gray-50/50">
+                                                                <td className="px-4 py-3 text-sm text-gray-700">{row.label}</td>
+                                                                <td className="text-right px-4 text-sm font-medium text-gray-900">{formatPrice(row.price)}</td>
+                                                                <td className="text-right px-4 text-sm text-gray-500">{formatPrice(avgCost)}</td>
+                                                                <td className="text-right px-4">
+                                                                    <span className={`text-sm font-bold ${diff >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                                        {diff > 0 ? '+' : ''}{formatPrice(diff)}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="text-right px-4">
+                                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${rate >= 20 ? 'bg-green-100 text-green-700' :
+                                                                            rate >= 0 ? 'bg-yellow-100 text-yellow-700' :
+                                                                                'bg-red-100 text-red-600'
+                                                                        }`}>
+                                                                        {rate > 0 ? '+' : ''}{rate}%
+                                                                    </span>
+                                                                </td>
+                                                                <td className="text-right px-4">
+                                                                    <span className={`text-sm font-bold ${totalEst >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                                        {totalEst > 0 ? '+' : ''}{formatPrice(totalEst)}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-gray-400 ml-1">({totalQty}点)</span>
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    })
+                                                })()}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 日次推移 */}
+                            {marketData.daily?.length > 0 && (
+                                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                    <div className="px-5 py-3 border-b border-gray-100">
+                                        <h3 className="text-sm font-bold text-gray-700">📅 日次平均推移</h3>
+                                    </div>
+                                    <div className="max-h-[300px] overflow-y-auto">
+                                        <table className="w-full">
+                                            <thead className="sticky top-0 bg-white">
+                                                <tr className="border-b border-gray-100 bg-gray-50/50">
+                                                    <th className="text-left text-xs font-medium text-gray-400 px-5 py-2">日付</th>
+                                                    {marketData.isBox ? (
+                                                        <>
+                                                            <th className="text-right text-xs font-medium text-gray-400 px-3 py-2">BOX売買</th>
+                                                            <th className="text-right text-xs font-medium text-gray-400 px-3 py-2">ショップ販売</th>
+                                                            <th className="text-right text-xs font-medium text-gray-400 px-3 py-2">買取</th>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <th className="text-right text-xs font-medium text-gray-400 px-3 py-2">PSA10</th>
+                                                            <th className="text-right text-xs font-medium text-gray-400 px-3 py-2">状態A</th>
+                                                            <th className="text-right text-xs font-medium text-gray-400 px-3 py-2">ショップ販売</th>
+                                                            <th className="text-right text-xs font-medium text-gray-400 px-3 py-2">買取</th>
+                                                        </>
+                                                    )}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {marketData.daily.map((d: any) => (
+                                                    <tr key={d.date} className="hover:bg-gray-50/30">
+                                                        <td className="px-5 py-2 text-xs text-gray-500">{d.date}</td>
+                                                        {marketData.isBox ? (
+                                                            <>
+                                                                <td className="text-right px-3 text-sm text-amber-600 font-medium">
+                                                                    {d.box_avg ? formatPrice(d.box_avg) : <span className="text-gray-300">-</span>}
+                                                                    {d.box_count > 0 && <span className="text-[10px] text-gray-300 ml-1">({d.box_count})</span>}
+                                                                </td>
+                                                                <td className="text-right px-3 text-sm text-blue-600">
+                                                                    {d.shop_sale_avg ? formatPrice(d.shop_sale_avg) : <span className="text-gray-300">-</span>}
+                                                                </td>
+                                                                <td className="text-right px-3 text-sm text-orange-600">
+                                                                    {d.purchase_avg ? formatPrice(d.purchase_avg) : <span className="text-gray-300">-</span>}
+                                                                </td>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <td className="text-right px-3 text-sm text-purple-600 font-medium">
+                                                                    {d.psa10_avg ? formatPrice(d.psa10_avg) : <span className="text-gray-300">-</span>}
+                                                                    {d.psa10_count > 0 && <span className="text-[10px] text-gray-300 ml-1">({d.psa10_count})</span>}
+                                                                </td>
+                                                                <td className="text-right px-3 text-sm text-sky-600">
+                                                                    {d.a_avg ? formatPrice(d.a_avg) : <span className="text-gray-300">-</span>}
+                                                                    {d.a_count > 0 && <span className="text-[10px] text-gray-300 ml-1">({d.a_count})</span>}
+                                                                </td>
+                                                                <td className="text-right px-3 text-sm text-blue-600">
+                                                                    {d.shop_sale_avg ? formatPrice(d.shop_sale_avg) : <span className="text-gray-300">-</span>}
+                                                                </td>
+                                                                <td className="text-right px-3 text-sm text-orange-600">
+                                                                    {d.purchase_avg ? formatPrice(d.purchase_avg) : <span className="text-gray-300">-</span>}
+                                                                </td>
+                                                            </>
+                                                        )}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             )}
