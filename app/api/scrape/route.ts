@@ -3,30 +3,35 @@ import { NextRequest, NextResponse } from 'next/server'
 // Railway経由でスクレイピング
 async function scrapeViaRailway(url: string, mode: string = 'auto') {
   const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
-  
+
   if (!RAILWAY_URL) {
     throw new Error('RAILWAY_SCRAPER_URL is not configured')
   }
-  
+
   const res = await fetch(`${RAILWAY_URL}/scrape`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, mode }),
   })
-  
-  return await res.json()
+
+  const text = await res.text()
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`Railway returned non-JSON response: ${text.substring(0, 100)}`)
+  }
 }
 
 export async function POST(request: NextRequest) {
   const { url, mode = 'auto' } = await request.json()
-  
+
   if (!url) {
     return NextResponse.json({ error: 'url is required' }, { status: 400 })
   }
-  
+
   try {
     const result = await scrapeViaRailway(url, mode)
-    
+
     if (result.success) {
       return NextResponse.json(result)
     } else {
@@ -45,9 +50,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const url = searchParams.get('url')
   const mode = searchParams.get('mode') || 'auto'
-  
+
   if (!url) {
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: 'Price scraping API (via Railway)',
       usage: 'POST with { url: "https://...", mode: "auto|light|browser" }',
       modes: {
@@ -59,10 +64,10 @@ export async function GET(request: NextRequest) {
       railway: process.env.RAILWAY_SCRAPER_URL ? 'configured' : 'not configured'
     })
   }
-  
+
   try {
     const result = await scrapeViaRailway(url, mode)
-    
+
     if (result.success) {
       return NextResponse.json(result)
     } else {

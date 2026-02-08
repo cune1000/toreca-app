@@ -128,30 +128,33 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: form.product_url, source }),
-      }).then(res => res.json()).then(data => {
-        if (data.success && data.price) {
-          let stock = null
-          if (data.stock !== null && data.stock !== undefined) {
-            if (typeof data.stock === 'number') {
-              stock = data.stock
-            } else if (typeof data.stock === 'string') {
-              const stockMatch = data.stock.match(/(\d+)/)
-              if (stockMatch) {
-                stock = parseInt(stockMatch[1], 10)
-              } else if (data.stock.includes('あり') || data.stock.includes('在庫')) {
-                stock = 1
-              } else if (data.stock.includes('なし') || data.stock.includes('売切')) {
-                stock = 0
-              }
+      }).then(async res => {
+        if (!res.ok) return null
+        const text = await res.text()
+        try { return JSON.parse(text) } catch { return null }
+      }).then(data => {
+        if (!data?.success || !data?.price) return
+        let stock = null
+        if (data.stock !== null && data.stock !== undefined) {
+          if (typeof data.stock === 'number') {
+            stock = data.stock
+          } else if (typeof data.stock === 'string') {
+            const stockMatch = data.stock.match(/(\d+)/)
+            if (stockMatch) {
+              stock = parseInt(stockMatch[1], 10)
+            } else if (data.stock.includes('あり') || data.stock.includes('在庫')) {
+              stock = 1
+            } else if (data.stock.includes('なし') || data.stock.includes('売切')) {
+              stock = 0
             }
           }
-          supabase.from('sale_prices').insert({
-            card_id: cardId,
-            site_id: form.site_id,
-            price: data.priceNumber || data.price,
-            stock: stock
-          }).then(() => console.log('Background scrape saved'))
         }
+        supabase.from('sale_prices').insert({
+          card_id: cardId,
+          site_id: form.site_id,
+          price: data.priceNumber || data.price,
+          stock: stock
+        }).then(() => console.log('Background scrape saved'))
       }).catch(err => console.log('Background scrape failed:', err))
 
     } catch (err: any) {
