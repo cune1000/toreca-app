@@ -270,14 +270,33 @@ export default function CardsPage({
     const fetchStatuses = async () => {
       const { data } = await supabase
         .from('card_sale_urls')
-        .select('card_id, check_interval, error_count, last_checked_at')
+        .select('card_id, check_interval, error_count, last_checked_at, auto_scrape_mode, auto_scrape_interval_minutes, last_scraped_at, last_scrape_status, last_scrape_error, product_url')
 
       const statusMap: Record<string, any> = {}
       data?.forEach(url => {
-        statusMap[url.card_id] = {
-          interval: url.check_interval || 30,
-          hasError: url.error_count > 0,
-          lastChecked: url.last_checked_at
+        const isSnkrdunk = url.product_url?.includes('snkrdunk.com')
+        const existing = statusMap[url.card_id]
+        // 価格監視情報
+        if (!existing || url.error_count > 0) {
+          statusMap[url.card_id] = {
+            ...existing,
+            interval: url.check_interval || 180,
+            hasError: url.error_count > 0,
+            lastChecked: url.last_checked_at
+          }
+        }
+        // スニダン売買履歴情報
+        if (isSnkrdunk) {
+          statusMap[url.card_id] = {
+            ...statusMap[url.card_id],
+            snkrdunk: {
+              mode: url.auto_scrape_mode,
+              intervalMin: url.auto_scrape_interval_minutes,
+              lastScraped: url.last_scraped_at,
+              status: url.last_scrape_status,
+              error: url.last_scrape_error
+            }
+          }
         }
       })
       setCardStatuses(statusMap)
@@ -498,13 +517,50 @@ export default function CardsPage({
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
 
+  const formatIntervalLabel = (minutes: number) => {
+    if (minutes >= 1440) return `${minutes / 1440}日`
+    if (minutes >= 60) return `${minutes / 60}h`
+    return `${minutes}分`
+  }
+
+  const formatRelTime = (dateStr: string | null) => {
+    if (!dateStr) return null
+    const diffMs = Date.now() - new Date(dateStr).getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 60) return `${diffMins}分前`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}h前`
+    return `${Math.floor(diffHours / 24)}日前`
+  }
+
   const getStatusBadge = (cardId: string) => {
     const status = cardStatuses[cardId]
     if (!status) return <span className="text-xs text-gray-400">−</span>
-    if (status.hasError) return <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">🔴 エラー</span>
-    if (status.interval <= 30) return <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">🟢 30分</span>
-    if (status.interval <= 180) return <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded">🟡 {status.interval}分</span>
-    return <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">⚪ {status.interval >= 1440 ? '24h' : `${status.interval / 60}h`}</span>
+
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        {/* 価格監視 */}
+        {status.hasError ? (
+          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">🔴 エラー</span>
+        ) : (
+          <span className={`px-2 py-0.5 text-xs rounded ${status.interval <= 180 ? 'bg-green-100 text-green-700' :
+              status.interval <= 720 ? 'bg-yellow-100 text-yellow-700' :
+                'bg-gray-100 text-gray-600'
+            }`}>💰 {formatIntervalLabel(status.interval)}</span>
+        )}
+        {/* スニダン売買 */}
+        {status.snkrdunk && (
+          <span className={`px-2 py-0.5 text-xs rounded ${status.snkrdunk.status === 'error' ? 'bg-red-100 text-red-700' :
+              status.snkrdunk.mode === 'off' ? 'bg-gray-100 text-gray-400' :
+                'bg-blue-100 text-blue-700'
+            }`}>
+            📊 {status.snkrdunk.mode === 'off' ? '停止' :
+              status.snkrdunk.status === 'error' ? 'エラー' :
+                formatRelTime(status.snkrdunk.lastScraped) || '未取得'}
+          </span>
+        )}
+      </div>
+    )
   }
 
   // フィルタ用レアリティ（カテゴリで絞り込み）
