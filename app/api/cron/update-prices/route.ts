@@ -5,14 +5,17 @@ const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
 
 // ===== 設定 =====
 const CONFIG = {
-  DEFAULT_INTERVAL: 30,        // デフォルト間隔（分）
-  MAX_INTERVAL: 360,           // 最大間隔（分）= 6時間
-  OUT_OF_STOCK_INTERVAL: 360,  // 在庫0の場合の間隔（分）
-  ERROR_RETRY_INTERVAL: 30,    // エラー時のリトライ間隔（分）
+  MIN_INTERVAL: 180,           // 最短間隔（分）= 3時間
+  MAX_INTERVAL: 2880,          // 最長間隔（分）= 48時間
+  DEFAULT_INTERVAL: 180,       // デフォルト間隔（分）= 3時間
+  OUT_OF_STOCK_INTERVAL: 360,  // 在庫0の場合の間隔（分）= 6時間
+  ERROR_RETRY_INTERVAL: 180,   // エラー時のリトライ間隔（分）= 3時間
   JITTER_PERCENT: 10,          // ゆらぎ幅（±%）
-  
-  // 変動なし時の間隔テーブル
-  NO_CHANGE_INTERVALS: [30, 60, 180, 360],  // 0回, 1回, 2回, 3回以上
+
+  // 価格変動ベースの間隔調整
+  PRICE_CHANGE_THRESHOLD_LOW: 1,   // 変動1%未満 → +1時間
+  PRICE_CHANGE_THRESHOLD_HIGH: 5,  // 変動5%以上 → -1時間
+  INTERVAL_STEP: 60,               // 調整ステップ（分）= 1時間
 }
 
 // ===== ヘルパー関数 =====
@@ -21,10 +24,10 @@ const CONFIG = {
 function verifyCronAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-  
+
   if (authHeader === `Bearer ${cronSecret}`) return true
   if (process.env.NODE_ENV === 'development') return true
-  
+
   return false
 }
 
@@ -48,10 +51,28 @@ function calculateNextCheckAt(intervalMinutes: number): string {
   return next.toISOString()
 }
 
-// 変動なし回数から間隔を取得
-function getIntervalByNoChangeCount(count: number): number {
-  const index = Math.min(count, CONFIG.NO_CHANGE_INTERVALS.length - 1)
-  return CONFIG.NO_CHANGE_INTERVALS[index]
+// 価格変動率に応じた次回間隔を計算
+function calculateNextInterval(currentInterval: number, oldPrice: number | null, newPrice: number | null): number {
+  let interval = currentInterval || CONFIG.DEFAULT_INTERVAL
+
+  // 最低3時間にクランプ
+  if (interval < CONFIG.MIN_INTERVAL) interval = CONFIG.MIN_INTERVAL
+
+  if (oldPrice && newPrice && oldPrice > 0) {
+    const changePercent = Math.abs((newPrice - oldPrice) / oldPrice * 100)
+
+    if (changePercent < CONFIG.PRICE_CHANGE_THRESHOLD_LOW) {
+      // 変動1%未満 → +1時間
+      interval += CONFIG.INTERVAL_STEP
+    } else if (changePercent >= CONFIG.PRICE_CHANGE_THRESHOLD_HIGH) {
+      // 変動5%以上 → -1時間
+      interval -= CONFIG.INTERVAL_STEP
+    }
+    // 1%〜5%はそのまま維持
+  }
+
+  // 範囲制限
+  return Math.max(CONFIG.MIN_INTERVAL, Math.min(CONFIG.MAX_INTERVAL, interval))
 }
 
 // Railwayでスクレイピング
@@ -59,13 +80,13 @@ async function scrapeViaRailway(url: string, mode: string = 'light') {
   if (!RAILWAY_URL) {
     throw new Error('RAILWAY_SCRAPER_URL is not configured')
   }
-  
+
   const res = await fetch(`${RAILWAY_URL}/scrape`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, mode }),
   })
-  
+
   return await res.json()
 }
 
@@ -132,7 +153,7 @@ export async function GET(request: NextRequest) {
   try {
     // next_check_atが現在時刻以前のものを取得（チェック予定を過ぎたもの）
     const now = new Date().toISOString()
-    
+
     const { data: saleUrls, error: fetchError } = await supabase
       .from('card_sale_urls')
       .select(`
@@ -167,22 +188,22 @@ export async function GET(request: NextRequest) {
 
     for (const site of saleUrls) {
       results.processed++
-      
+
       const cardName = (site.card as any)?.name || 'Unknown'
       const siteName = (site.site as any)?.name || 'Unknown'
       const oldPrice = site.last_price
       const oldStock = site.last_stock
       const currentNoChangeCount = site.no_change_count || 0
-      
+
       try {
         const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
-        
+
         if (!scrapeResult.success) {
           // エラー時：30分後リトライ
           results.errors++
           const errorMsg = scrapeResult.error || 'Scrape failed'
           const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-          
+
           await supabase
             .from('card_sale_urls')
             .update({
@@ -193,7 +214,7 @@ export async function GET(request: NextRequest) {
               last_error: errorMsg
             })
             .eq('id', site.id)
-          
+
           results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
           await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
           continue
@@ -206,12 +227,12 @@ export async function GET(request: NextRequest) {
         if (typeof newStock !== 'number') {
           newStock = newStock ? parseInt(newStock, 10) : 0
         }
-        
+
         // 状態別価格がある場合
         if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
           const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
           const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
-          
+
           if (conditionA?.price) {
             newPrice = conditionA.price
             newStock = conditionA.stock ?? 0
@@ -224,29 +245,31 @@ export async function GET(request: NextRequest) {
         if (newPrice !== null && newPrice !== undefined) {
           const priceChanged = oldPrice !== newPrice
           const stockChanged = oldStock !== newStock
-          
+
           let nextBaseInterval: number
           let newNoChangeCount: number
           let status: 'success' | 'no_change'
 
-          if (priceChanged) {
-            // 価格変動あり → 30分にリセット
-            nextBaseInterval = CONFIG.DEFAULT_INTERVAL
-            newNoChangeCount = 0
-            status = 'success'
-            results.updated++
-          } else if (newStock === 0) {
+          if (newStock === 0) {
             // 在庫0 → 6時間
             nextBaseInterval = CONFIG.OUT_OF_STOCK_INTERVAL
             newNoChangeCount = currentNoChangeCount
             status = 'no_change'
             results.noChange++
           } else {
-            // 価格変動なし → 間隔延長
-            newNoChangeCount = currentNoChangeCount + 1
-            nextBaseInterval = getIntervalByNoChangeCount(newNoChangeCount)
-            status = 'no_change'
-            results.noChange++
+            // 価格変動率に応じて間隔を調整
+            const currentCheckInterval = site.check_interval || CONFIG.DEFAULT_INTERVAL
+            nextBaseInterval = calculateNextInterval(currentCheckInterval, oldPrice, newPrice)
+
+            if (priceChanged) {
+              newNoChangeCount = 0
+              status = 'success'
+              results.updated++
+            } else {
+              newNoChangeCount = currentNoChangeCount + 1
+              status = 'no_change'
+              results.noChange++
+            }
           }
 
           const nextInterval = getJitteredInterval(nextBaseInterval)
@@ -278,21 +301,21 @@ export async function GET(request: NextRequest) {
               })
           }
 
-          results.details.push({ 
-            cardName, siteName, status, 
-            oldPrice, newPrice, oldStock, newStock, 
-            priceChanged, stockChanged, 
+          results.details.push({
+            cardName, siteName, status,
+            oldPrice, newPrice, oldStock, newStock,
+            priceChanged, stockChanged,
             nextInterval,
             noChangeCount: newNoChangeCount
           })
           await logCronResult(site.id, cardName, siteName, status, oldPrice, newPrice, oldStock, newStock, nextInterval)
-          
+
         } else {
           // 価格取得失敗
           results.errors++
           const errorMsg = 'Price not found in response'
           const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-          
+
           await supabase
             .from('card_sale_urls')
             .update({
@@ -313,7 +336,7 @@ export async function GET(request: NextRequest) {
       } catch (err: any) {
         results.errors++
         const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-        
+
         await supabase
           .from('card_sale_urls')
           .update({
@@ -350,7 +373,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let limit = 10
   let forceUpdate = false
-  
+
   try {
     const body = await request.json()
     limit = body.limit ?? 10
@@ -358,7 +381,7 @@ export async function POST(request: NextRequest) {
   } catch {
     // bodyが空の場合はデフォルト値を使用
   }
-  
+
   const startTime = Date.now()
   const results = {
     processed: 0,
@@ -389,7 +412,7 @@ export async function POST(request: NextRequest) {
       .not('product_url', 'is', null)
       .order('next_check_at', { ascending: true, nullsFirst: true })
       .limit(limit)
-    
+
     // forceUpdateでない場合は、next_check_atを過ぎたもののみ
     if (!forceUpdate) {
       const now = new Date().toISOString()
@@ -410,21 +433,21 @@ export async function POST(request: NextRequest) {
 
     for (const site of saleUrls) {
       results.processed++
-      
+
       const cardName = (site.card as any)?.name || 'Unknown'
       const siteName = (site.site as any)?.name || 'Unknown'
       const oldPrice = site.last_price
       const oldStock = site.last_stock
       const currentNoChangeCount = site.no_change_count || 0
-      
+
       try {
         const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
-        
+
         if (!scrapeResult.success) {
           results.errors++
           const errorMsg = scrapeResult.error || 'Scrape failed'
           const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-          
+
           await supabase
             .from('card_sale_urls')
             .update({
@@ -435,7 +458,7 @@ export async function POST(request: NextRequest) {
               last_error: errorMsg
             })
             .eq('id', site.id)
-          
+
           results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
           await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
           continue
@@ -447,11 +470,11 @@ export async function POST(request: NextRequest) {
         if (typeof newStock !== 'number') {
           newStock = newStock ? parseInt(newStock, 10) : 0
         }
-        
+
         if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
           const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
           const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
-          
+
           if (conditionA?.price) {
             newPrice = conditionA.price
             newStock = conditionA.stock ?? 0
@@ -464,26 +487,29 @@ export async function POST(request: NextRequest) {
         if (newPrice !== null && newPrice !== undefined) {
           const priceChanged = oldPrice !== newPrice
           const stockChanged = oldStock !== newStock
-          
+
           let nextBaseInterval: number
           let newNoChangeCount: number
           let status: 'success' | 'no_change'
 
-          if (priceChanged) {
-            nextBaseInterval = CONFIG.DEFAULT_INTERVAL
-            newNoChangeCount = 0
-            status = 'success'
-            results.updated++
-          } else if (newStock === 0) {
+          if (newStock === 0) {
             nextBaseInterval = CONFIG.OUT_OF_STOCK_INTERVAL
             newNoChangeCount = currentNoChangeCount
             status = 'no_change'
             results.noChange++
           } else {
-            newNoChangeCount = currentNoChangeCount + 1
-            nextBaseInterval = getIntervalByNoChangeCount(newNoChangeCount)
-            status = 'no_change'
-            results.noChange++
+            const currentCheckInterval = site.check_interval || CONFIG.DEFAULT_INTERVAL
+            nextBaseInterval = calculateNextInterval(currentCheckInterval, oldPrice, newPrice)
+
+            if (priceChanged) {
+              newNoChangeCount = 0
+              status = 'success'
+              results.updated++
+            } else {
+              newNoChangeCount = currentNoChangeCount + 1
+              status = 'no_change'
+              results.noChange++
+            }
           }
 
           const nextInterval = getJitteredInterval(nextBaseInterval)
@@ -513,20 +539,20 @@ export async function POST(request: NextRequest) {
               })
           }
 
-          results.details.push({ 
-            cardName, siteName, status, 
-            oldPrice, newPrice, oldStock, newStock, 
-            priceChanged, stockChanged, 
+          results.details.push({
+            cardName, siteName, status,
+            oldPrice, newPrice, oldStock, newStock,
+            priceChanged, stockChanged,
             nextInterval,
             noChangeCount: newNoChangeCount
           })
           await logCronResult(site.id, cardName, siteName, status, oldPrice, newPrice, oldStock, newStock, nextInterval)
-          
+
         } else {
           results.errors++
           const errorMsg = 'Price not found'
           const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-          
+
           await supabase
             .from('card_sale_urls')
             .update({
@@ -546,7 +572,7 @@ export async function POST(request: NextRequest) {
       } catch (err: any) {
         results.errors++
         const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-        
+
         await supabase
           .from('card_sale_urls')
           .update({
