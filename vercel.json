@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/shinsoku-sync",
-      "schedule": "0 19 * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }
