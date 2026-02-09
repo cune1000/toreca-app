@@ -37,9 +37,22 @@ export async function fetchAllLoungeCards(): Promise<LoungeCard[]> {
     const html = await res.text()
     const cards: LoungeCard[] = []
 
-    // RSCストリーム内の product JSON を正規表現で抽出
-    // パターン: "product":{"productFormat":"...","productId":"...","productName":"...","grade":"...","modelNumber":"...","rarity":"...","buyPrice":"...","imageUrl":"..."}
-    const productRegex = /"product":\{[^}]*"productFormat":"([^"]*)"[^}]*"productId":"([^"]*)"[^}]*"productName":"([^"]*)"[^}]*"grade":"([^"]*)"[^}]*"modelNumber":"([^"]*)"[^}]*"rarity":"([^"]*)"[^}]*"buyPrice":"([^"]*)"[^}]*"imageUrl":"([^"]*)"/g
+    // RSCストリーム内の product JSON を抽出
+    // HTMLのscriptタグ内では JSON が \\\" でエスケープされている
+    // パターン: \\"product\\":{\\"productFormat\\":\\"...\\",...}
+    const q = '\\\\"'  // エスケープされたクォート \"
+    const productRegex = new RegExp(
+        `${q}product${q}:\\{` +
+        `${q}productFormat${q}:${q}([^\\\\]*)${q},` +
+        `${q}productId${q}:${q}([^\\\\]*)${q},` +
+        `${q}productName${q}:${q}([^\\\\]*)${q},` +
+        `${q}grade${q}:${q}([^\\\\]*)${q},` +
+        `${q}modelNumber${q}:${q}([^\\\\]*)${q},` +
+        `${q}rarity${q}:${q}([^\\\\]*)${q},` +
+        `${q}buyPrice${q}:${q}([^\\\\]*)${q},` +
+        `${q}imageUrl${q}:${q}([^\\\\]*)${q}`,
+        'g'
+    )
 
     let match
     while ((match = productRegex.exec(html)) !== null) {
