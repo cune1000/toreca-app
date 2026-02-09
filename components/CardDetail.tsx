@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, TrendingUp, TrendingDown, ExternalLink, RefreshCw, Store, Globe, Edit, Plus, Package, Eye, EyeOff } from 'lucide-react'
 import ShinsokuLink from '@/components/chart/ShinsokuLink'
+import LoungeLink from '@/components/chart/LoungeLink'
 import MarketChart from './MarketChart'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import CardEditForm from './CardEditForm'
@@ -88,6 +89,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [selectedPeriod, setSelectedPeriod] = useState(30)
   const [shinsokuItemId, setShinsokuItemId] = useState<string | null>(card?.shinsoku_item_id || null)
   const [shinsokuCondition, setShinsokuCondition] = useState<string>(card?.shinsoku_condition || 'S')
+  const [loungeCardKey, setLoungeCardKey] = useState<string | null>(card?.lounge_card_key || null)
   const [isDragging, setIsDragging] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
   const [cardImageUrl, setCardImageUrl] = useState(card?.image_url || null)
@@ -1447,6 +1449,24 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                     onLinked={(itemId, cond) => { setShinsokuItemId(itemId); setShinsokuCondition(cond); onUpdated?.() }}
                     onUnlinked={() => { setShinsokuItemId(null); setShinsokuCondition('S'); onUpdated?.() }}
                     onConditionChanged={(cond) => { setShinsokuCondition(cond); onUpdated?.() }}
+                  />
+                </div>
+
+                {/* トレカラウンジ買取 紐付け */}
+                <div>
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-orange-500">🏪</span>
+                    トレカラウンジ買取 紐付け
+                  </h3>
+                  <p className="text-xs text-gray-400 mb-3">
+                    トレカラウンジの商品と紐付けると、買取価格を自動追跡します
+                  </p>
+                  <LoungeLink
+                    cardId={card.id}
+                    cardName={card.name}
+                    linkedKey={loungeCardKey}
+                    onLinked={(key) => { setLoungeCardKey(key); onUpdated?.() }}
+                    onUnlinked={() => { setLoungeCardKey(null); onUpdated?.() }}
                   />
                 </div>
               </div>
