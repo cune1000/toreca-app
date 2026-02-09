@@ -87,6 +87,9 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState(30)
   const [shinsokuItemId, setShinsokuItemId] = useState<string | null>(card?.shinsoku_item_id || null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [imageUploading, setImageUploading] = useState(false)
+  const [cardImageUrl, setCardImageUrl] = useState(card?.image_url || null)
 
   // 表示切り替え用state
   const [showPurchase, setShowPurchase] = useState(true)
@@ -126,8 +129,79 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     if (card?.id) {
       fetchPrices()
       fetchSnkrdunkSales()
+      setCardImageUrl(card?.image_url || null)
     }
   }, [card?.id])
+
+  // 画像リサイズ
+  const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = document.createElement('img')
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = Math.round(height * maxSize / width)
+            width = maxSize
+          } else {
+            width = Math.round(width * maxSize / height)
+            height = maxSize
+          }
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      }
+      img.src = base64
+    })
+  }
+
+  // 画像ドラッグ&ドロップアップロード
+  const handleImageDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const file = e.dataTransfer.files[0]
+    if (!file || !file.type.startsWith('image/')) return
+
+    setImageUploading(true)
+    try {
+      const reader = new FileReader()
+      const base64Raw = await new Promise<string>((resolve) => {
+        reader.onload = (e) => resolve(e.target?.result as string)
+        reader.readAsDataURL(file)
+      })
+
+      const base64 = await resizeImage(base64Raw)
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: base64,
+          fileName: `${card.id}_${Date.now()}.jpg`
+        }),
+      })
+
+      if (!res.ok) throw new Error(res.status === 413 ? '画像が大きすぎます' : `エラー: ${res.status}`)
+
+      const data = await res.json()
+      if (data.success) {
+        // DBのimage_urlを更新
+        await supabase.from('cards').update({ image_url: data.url }).eq('id', card.id)
+        setCardImageUrl(data.url)
+        onUpdated?.()
+      }
+    } catch (err: any) {
+      alert('アップロードエラー: ' + err.message)
+    } finally {
+      setImageUploading(false)
+    }
+  }
 
   const fetchPrices = async () => {
     setLoading(true)
@@ -647,11 +721,52 @@ export default function CardDetail({ card, onClose, onUpdated }) {
       <div className="bg-white rounded-2xl w-[90vw] max-w-[1400px] max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* ヘッダー */}
         <div className="p-6 border-b border-gray-100 flex items-start gap-6">
-          {card?.image_url ? (
-            <img src={card.image_url} alt={card.name} className="w-40 h-56 object-cover rounded-xl shadow-lg" />
-          ) : (
-            <div className="w-40 h-56 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">No Image</div>
-          )}
+          <div
+            className={`relative group cursor-pointer ${isDragging ? 'ring-4 ring-blue-400 ring-offset-2' : ''
+              }`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+            onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleImageDrop}
+            onClick={() => {
+              const input = document.createElement('input')
+              input.type = 'file'
+              input.accept = 'image/*'
+              input.onchange = (e: any) => {
+                const file = e.target.files[0]
+                if (file) {
+                  const dt = new DataTransfer()
+                  dt.items.add(file)
+                  handleImageDrop({ preventDefault: () => { }, stopPropagation: () => { }, dataTransfer: dt } as any)
+                }
+              }
+              input.click()
+            }}
+          >
+            {cardImageUrl ? (
+              <img src={cardImageUrl} alt={card.name} className="w-40 h-56 object-cover rounded-xl shadow-lg" />
+            ) : (
+              <div className="w-40 h-56 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">No Image</div>
+            )}
+            {/* ドラッグオーバーレイ */}
+            {isDragging && (
+              <div className="absolute inset-0 bg-blue-500/30 rounded-xl flex items-center justify-center">
+                <p className="text-white font-bold text-sm bg-blue-600 px-3 py-1.5 rounded-lg">ドロップ</p>
+              </div>
+            )}
+            {/* アップロード中 */}
+            {imageUploading && (
+              <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {/* ホバーヒント */}
+            {!isDragging && !imageUploading && (
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl flex items-center justify-center transition-colors">
+                <p className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 px-2 py-1 rounded">📷 画像変更</p>
+              </div>
+            )}
+          </div>
           <div className="flex-1">
             <div className="flex items-start justify-between">
               <div>
