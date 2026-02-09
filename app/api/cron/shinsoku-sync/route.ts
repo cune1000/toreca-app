@@ -30,10 +30,16 @@ export async function GET(request: NextRequest) {
 
             if (items.length === 0) continue
 
-            // バッチupsert（500件ずつ）
+            // 重複item_idを除去（APIが同一商品を複数ページで返す場合がある）
+            const uniqueMap = new Map<string, typeof items[0]>()
+            for (const item of items) {
+                uniqueMap.set(item.item_id, item)
+            }
+            const uniqueItems = Array.from(uniqueMap.values())
+            console.log(`[shinsoku-sync] Got ${items.length} items (${uniqueItems.length} unique) for ${brand}`)
             const batchSize = 500
-            for (let i = 0; i < items.length; i += batchSize) {
-                const batch = items.slice(i, i + batchSize).map(item => ({
+            for (let i = 0; i < uniqueItems.length; i += batchSize) {
+                const batch = uniqueItems.slice(i, i + batchSize).map(item => ({
                     item_id: item.item_id,
                     name: item.name,
                     name_processed: item.name_processed || item.name,
