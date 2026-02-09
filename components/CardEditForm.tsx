@@ -127,6 +127,32 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     fetchSmallCategories()
   }, [form.category_medium_id])
 
+  // 画像リサイズ（Vercel 4.5MB制限対策）
+  const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = document.createElement('img')
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = Math.round(height * maxSize / width)
+            width = maxSize
+          } else {
+            width = Math.round(width * maxSize / height)
+            height = maxSize
+          }
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      }
+      img.src = base64
+    })
+  }
+
   // 画像選択
   const handleImageSelect = async (e) => {
     const file = e.target.files?.[0]
@@ -134,7 +160,8 @@ export default function CardEditForm({ card, onClose, onSaved }) {
 
     const reader = new FileReader()
     reader.onload = async (e) => {
-      const base64 = e.target?.result as string
+      const base64Raw = e.target?.result as string
+      const base64 = await resizeImage(base64Raw)
       setImagePreview(base64)
 
       setUploading(true)
@@ -147,6 +174,12 @@ export default function CardEditForm({ card, onClose, onSaved }) {
             fileName: `${card.id}_${Date.now()}.jpg`
           }),
         })
+
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(res.status === 413 ? '画像が大きすぎます。もう少し小さい画像をお試しください。' : `サーバーエラー: ${res.status}`)
+        }
+
         const data = await res.json()
 
         if (data.success) {
