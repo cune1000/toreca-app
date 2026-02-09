@@ -10,7 +10,7 @@ const supabase = createClient(
 // POST /api/shinsoku/link { card_id, shinsoku_item_id }
 export async function POST(request: NextRequest) {
     try {
-        const { card_id, shinsoku_item_id } = await request.json()
+        const { card_id, shinsoku_item_id, shinsoku_condition } = await request.json()
 
         if (!card_id || !shinsoku_item_id) {
             return NextResponse.json({
@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
             .from('cards')
             .update({
                 shinsoku_item_id,
+                shinsoku_condition: shinsoku_condition || 'S',
                 shinsoku_linked_at: new Date().toISOString(),
             })
             .eq('id', card_id)
@@ -55,6 +56,7 @@ export async function DELETE(request: NextRequest) {
             .from('cards')
             .update({
                 shinsoku_item_id: null,
+                shinsoku_condition: null,
                 shinsoku_linked_at: null,
             })
             .eq('id', card_id)

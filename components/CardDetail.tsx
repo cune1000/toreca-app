@@ -87,6 +87,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState(30)
   const [shinsokuItemId, setShinsokuItemId] = useState<string | null>(card?.shinsoku_item_id || null)
+  const [shinsokuCondition, setShinsokuCondition] = useState<string>(card?.shinsoku_condition || 'S')
   const [isDragging, setIsDragging] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
   const [cardImageUrl, setCardImageUrl] = useState(card?.image_url || null)
@@ -225,7 +226,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         .eq('card_id', card.id),
       supabase
         .from('cards')
-        .select('shinsoku_item_id')
+        .select('shinsoku_item_id, shinsoku_condition')
         .eq('id', card.id)
         .single(),
     ])
@@ -234,6 +235,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     setSalePrices(saleRes.data || [])
     setSaleUrls(urlRes.data || [])
     setShinsokuItemId(cardRes.data?.shinsoku_item_id || null)
+    setShinsokuCondition(cardRes.data?.shinsoku_condition || 'S')
 
     setLoading(false)
   }
@@ -1441,8 +1443,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                     cardId={card.id}
                     cardName={card.name}
                     linkedItemId={shinsokuItemId}
-                    onLinked={(itemId) => { setShinsokuItemId(itemId); onUpdated?.() }}
-                    onUnlinked={() => { setShinsokuItemId(null); onUpdated?.() }}
+                    condition={shinsokuCondition}
+                    onLinked={(itemId, cond) => { setShinsokuItemId(itemId); setShinsokuCondition(cond); onUpdated?.() }}
+                    onUnlinked={() => { setShinsokuItemId(null); setShinsokuCondition('S'); onUpdated?.() }}
+                    onConditionChanged={(cond) => { setShinsokuCondition(cond); onUpdated?.() }}
                   />
                 </div>
               </div>

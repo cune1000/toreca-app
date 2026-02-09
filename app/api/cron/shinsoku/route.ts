@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
         // ① shinsoku_item_idが設定されているカードを取得
         const { data: linkedCards, error: cardsError } = await supabase
             .from('cards')
-            .select('id, name, shinsoku_item_id')
+            .select('id, name, shinsoku_item_id, shinsoku_condition')
             .not('shinsoku_item_id', 'is', null)
 
         if (cardsError) throw cardsError
@@ -67,8 +67,17 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
-                // Sランクの価格を取得
-                const priceYen = item.postal_purchase_price_s
+                // 選択ランクの価格を取得
+                const condition = card.shinsoku_condition || 'S'
+                const conditionMap: Record<string, string> = {
+                    'S': 'postal_purchase_price_s',
+                    'A': 'postal_purchase_price_a',
+                    'A-': 'postal_purchase_price_am',
+                    'B': 'postal_purchase_price_b',
+                    'C': 'postal_purchase_price_c',
+                }
+                const priceField = conditionMap[condition] || 'postal_purchase_price_s'
+                const priceYen = item[priceField as keyof typeof item] as number | null
                 if (priceYen === null || priceYen === undefined || priceYen <= 0) {
                     skippedCount++
                     continue
