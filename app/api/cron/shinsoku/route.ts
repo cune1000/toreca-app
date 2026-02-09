@@ -67,28 +67,23 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
-                // 選択ランクの価格を取得
-                const condition = card.shinsoku_condition || 'S'
-                const conditionMap: Record<string, string> = {
-                    'S': 'postal_purchase_price_s',
-                    'A': 'postal_purchase_price_a',
-                    'A-': 'postal_purchase_price_am',
-                    'B': 'postal_purchase_price_b',
-                    'C': 'postal_purchase_price_c',
-                }
-                const priceField = conditionMap[condition] || 'postal_purchase_price_s'
-                const priceYen = item[priceField as keyof typeof item] as number | null
+                // Sランク（最高品質）の価格を取得
+                const priceYen = item.postal_purchase_price_s
                 if (priceYen === null || priceYen === undefined || priceYen <= 0) {
                     skippedCount++
                     continue
                 }
 
-                // 前回の価格を取得（同じshop_idの最新レコード）
+                // カードの状態（素体/PSA/未開封/開封済み）
+                const condition = card.shinsoku_condition || 'normal'
+
+                // 前回の価格を取得（同じshop_id・同じconditionの最新レコード）
                 const { data: lastPrice } = await supabase
                     .from('purchase_prices')
                     .select('price')
                     .eq('card_id', card.id)
                     .eq('shop_id', shop.id)
+                    .eq('condition', condition)
                     .order('created_at', { ascending: false })
                     .limit(1)
                     .single()
@@ -99,6 +94,7 @@ export async function GET(request: NextRequest) {
                         card_id: card.id,
                         shop_id: shop.id,
                         price: priceYen,
+                        condition: condition,
                     })
                     updatedCount++
                 } else {
