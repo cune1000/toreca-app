@@ -51,7 +51,7 @@ export async function fetchShinsokuItems(
             type,
             brand,
             page: page.toString(),
-            limit: '40',
+            limit: '100',
         })
 
         const res = await fetch(`${SHINSOKU_API_BASE}/items?${params}`)
@@ -64,8 +64,8 @@ export async function fetchShinsokuItems(
         hasMore = json.data.has_more
         page++
 
-        // レート制限対策: 500ms待機
-        await new Promise(r => setTimeout(r, 500))
+        // レート制限対策: 200ms待機
+        await new Promise(r => setTimeout(r, 200))
     }
 
     return allItems
