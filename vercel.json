@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/shinsoku-sync",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/toreca-lounge",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

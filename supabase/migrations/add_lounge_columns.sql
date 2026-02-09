@@ -13,10 +13,9 @@ COMMENT ON COLUMN cards.lounge_card_key IS 'トレカラウンジの一意キー
 COMMENT ON COLUMN cards.lounge_linked_at IS 'トレカラウンジと紐付けた日時';
 
 -- purchase_shopsにトレカラウンジを登録
-INSERT INTO purchase_shops (name, url, notes)
+INSERT INTO purchase_shops (name, status)
 VALUES (
   'トレカラウンジ（郵送買取）',
-  'https://kaitori.toreca-lounge.com/',
-  '自動スクレイピング対象。RSCストリーム解析方式。'
+  'active'
 )
 ON CONFLICT DO NOTHING;
