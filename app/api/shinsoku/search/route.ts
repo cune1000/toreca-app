@@ -22,11 +22,20 @@ export async function GET(request: NextRequest) {
             }, { status: 400 })
         }
 
-        // DBキャッシュから検索（ilike = 部分一致検索）
+        // DBキャッシュから検索
+        // スペース・全角スペースで分割してAND検索（各キーワードを部分一致）
+        const keywords = query.split(/[\s　]+/).filter(k => k.length >= 1)
+
         let dbQuery = supabase
             .from('shinsoku_items')
             .select('*')
-            .ilike('name', `%${query}%`)
+
+        // 各キーワードでilike AND検索
+        for (const kw of keywords) {
+            dbQuery = dbQuery.or(`name.ilike.%${kw}%,name_processed.ilike.%${kw}%`)
+        }
+
+        dbQuery = dbQuery
             .order('price_s', { ascending: false, nullsFirst: false })
             .limit(50)
 
