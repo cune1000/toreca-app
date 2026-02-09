@@ -44,11 +44,11 @@ export async function GET(request: NextRequest) {
                     image_url: item.image_url_public || null,
                     tags: item.tags || [],
                     is_full_amount: item.is_full_amount_flag || false,
-                    price_s: toYen(item.postal_purchase_price_s),
-                    price_a: toYen(item.postal_purchase_price_a),
-                    price_am: toYen(item.postal_purchase_price_am),
-                    price_b: toYen(item.postal_purchase_price_b),
-                    price_c: toYen(item.postal_purchase_price_c),
+                    price_s: item.postal_purchase_price_s,
+                    price_a: item.postal_purchase_price_a,
+                    price_am: item.postal_purchase_price_am,
+                    price_b: item.postal_purchase_price_b,
+                    price_c: item.postal_purchase_price_c,
                     synced_at: new Date().toISOString(),
                 }))
 

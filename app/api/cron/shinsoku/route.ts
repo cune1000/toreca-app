@@ -68,8 +68,8 @@ export async function GET(request: NextRequest) {
                 }
 
                 // Sランクの価格を取得
-                const priceYen = toYen(item.postal_purchase_price_s)
-                if (priceYen === null || priceYen <= 0) {
+                const priceYen = item.postal_purchase_price_s
+                if (priceYen === null || priceYen === undefined || priceYen <= 0) {
                     skippedCount++
                     continue
                 }
