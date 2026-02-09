@@ -49,6 +49,8 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, condition
     const [total, setTotal] = useState(0)
     const [autoSearched, setAutoSearched] = useState(false)
     const [selectedCondition, setSelectedCondition] = useState(condition)
+    const [showManualInput, setShowManualInput] = useState(false)
+    const [manualId, setManualId] = useState('')
 
     const formatPrice = (p: number | null) => p != null ? `¥${p.toLocaleString()}` : '-'
 
@@ -174,8 +176,8 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, condition
                                     key={c.value}
                                     onClick={() => changeCondition(c.value)}
                                     className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${selectedCondition === c.value
-                                            ? `${c.color} text-white`
-                                            : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'
+                                        ? `${c.color} text-white`
+                                        : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'
                                         }`}
                                 >
                                     {c.label}
@@ -209,7 +211,60 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, condition
                 <p className="text-xs text-red-500">{error}</p>
             )}
 
-            {/* 状態選択（未紐付け時） */}
+            {/* 手動ID入力 */}
+            {!currentLinked && (
+                <div>
+                    <button
+                        onClick={() => setShowManualInput(!showManualInput)}
+                        className="text-xs text-gray-400 hover:text-blue-500 underline"
+                    >
+                        {showManualInput ? '▲ 手動入力を閉じる' : '▼ 検索で見つからない場合は手動でIDを入力'}
+                    </button>
+                    {showManualInput && (
+                        <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                            <p className="text-[10px] text-gray-400">
+                                シンソクのサイトで商品ページを開き、URLの末尾のID（例: IAP2300026051）を貼り付けてください
+                            </p>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={manualId}
+                                    onChange={e => setManualId(e.target.value.trim())}
+                                    placeholder="例: IAP2300026051"
+                                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                                />
+                                <button
+                                    onClick={() => { if (manualId) link(manualId) }}
+                                    disabled={!manualId || linking}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                                >
+                                    {linking ? '処理中...' : '紐付ける'}
+                                </button>
+                            </div>
+                            {/* 手動入力時も状態選択 */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500">カード状態:</span>
+                                <div className="flex gap-1">
+                                    {CONDITIONS.map(c => (
+                                        <button
+                                            key={c.value}
+                                            onClick={() => setSelectedCondition(c.value)}
+                                            className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${selectedCondition === c.value
+                                                ? `${c.color} text-white`
+                                                : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'
+                                                }`}
+                                        >
+                                            {c.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 状態選択（未紐付け時・検索結果表示時） */}
             {!currentLinked && results.length > 0 && (
                 <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">カード状態:</span>
@@ -219,8 +274,8 @@ export default function ShinsokuLink({ cardId, cardName, linkedItemId, condition
                                 key={c.value}
                                 onClick={() => setSelectedCondition(c.value)}
                                 className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${selectedCondition === c.value
-                                        ? `${c.color} text-white`
-                                        : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'
+                                    ? `${c.color} text-white`
+                                    : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-400'
                                     }`}
                             >
                                 {c.label}
