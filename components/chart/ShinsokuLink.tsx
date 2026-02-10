@@ -37,7 +37,7 @@ interface Props {
     onLinksChanged?: () => void
 }
 
-const LABEL_OPTIONS = ['素体', 'PSA10', '未開封', '開封済み']
+const LABELS = ['素体', 'PSA10', '未開封', '開封済み']
 
 export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソク（郵送買取）', links, onLinksChanged }: Props) {
     const [query, setQuery] = useState(cardName || '')
@@ -45,7 +45,6 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
     const [searching, setSearching] = useState(false)
     const [linking, setLinking] = useState(false)
     const [error, setError] = useState('')
-    const [selectedLabel, setSelectedLabel] = useState('素体')
     const [autoSearched, setAutoSearched] = useState(false)
     const [showManualInput, setShowManualInput] = useState(false)
     const [manualId, setManualId] = useState('')
@@ -118,7 +117,8 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
         }
     }
 
-    const isLinked = (itemId: string) => links.some(l => l.external_key === itemId)
+    // このアイテムにどのラベルが紐付け済みか
+    const getLinkedLabels = (itemId: string) => links.filter(l => l.external_key === itemId).map(l => l.label)
 
     return (
         <div className="space-y-3">
@@ -163,18 +163,6 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 
-            {/* ラベル選択 */}
-            <div className="flex gap-1.5 items-center">
-                <span className="text-xs text-gray-500">ラベル:</span>
-                <select
-                    value={selectedLabel}
-                    onChange={e => setSelectedLabel(e.target.value)}
-                    className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
-                >
-                    {LABEL_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-            </div>
-
             {/* 手動ID入力 */}
             <div>
                 <button
@@ -185,7 +173,7 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                 </button>
                 {showManualInput && (
                     <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3">
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center">
                             <input
                                 type="text"
                                 value={manualId}
@@ -193,14 +181,21 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                                 placeholder="item_id (例: IAP2500002298)"
                                 className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
                             />
-                            <button
-                                onClick={() => { if (manualId) addLink(manualId, selectedLabel) }}
-                                disabled={!manualId || linking}
-                                className="px-3 py-2 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 disabled:opacity-50 whitespace-nowrap"
-                            >
-                                追加
-                            </button>
                         </div>
+                        {manualId && (
+                            <div className="flex gap-1.5 mt-2">
+                                {LABELS.map(label => (
+                                    <button
+                                        key={label}
+                                        onClick={() => addLink(manualId, label)}
+                                        disabled={linking}
+                                        className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 disabled:opacity-50"
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -208,44 +203,53 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
             {/* 検索結果 */}
             {results.length > 0 && (
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {results.map(item => (
-                        <div
-                            key={item.item_id}
-                            className={`border rounded-xl p-3 ${isLinked(item.item_id)
-                                ? 'border-green-300 bg-green-50'
-                                : 'border-gray-200 bg-white hover:border-gray-300'
-                                }`}
-                        >
-                            <div className="flex gap-3">
-                                <img src={item.image_url} alt="" className="w-14 h-20 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                        {item.modelno && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">{item.modelno}</span>}
-                                        {item.rarity && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{item.rarity}</span>}
+                    {results.map(item => {
+                        const linkedLabels = getLinkedLabels(item.item_id)
+                        return (
+                            <div
+                                key={item.item_id}
+                                className={`border rounded-xl p-3 ${linkedLabels.length > 0
+                                    ? 'border-green-300 bg-green-50'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                            >
+                                <div className="flex gap-3">
+                                    <img src={item.image_url} alt="" className="w-14 h-20 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {item.modelno && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">{item.modelno}</span>}
+                                            {item.rarity && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{item.rarity}</span>}
+                                        </div>
+                                        <div className="flex gap-2 mt-1.5 text-[10px] text-gray-500">
+                                            <span>S: {formatPrice(item.prices?.s)}</span>
+                                            <span>A: {formatPrice(item.prices?.a)}</span>
+                                            <span>B: {formatPrice(item.prices?.b)}</span>
+                                        </div>
+                                        {/* ラベルボタン群 */}
+                                        <div className="flex gap-1.5 mt-2">
+                                            {LABELS.map(label => {
+                                                const isThisLinked = linkedLabels.includes(label)
+                                                return (
+                                                    <button
+                                                        key={label}
+                                                        onClick={() => addLink(item.item_id, label)}
+                                                        disabled={linking || isThisLinked}
+                                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${isThisLinked
+                                                            ? 'bg-green-200 text-green-700 cursor-default'
+                                                            : 'bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50'
+                                                            }`}
+                                                    >
+                                                        {isThisLinked ? `✅ ${label}` : label}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2 mt-1.5 text-[10px] text-gray-500">
-                                        <span>S: {formatPrice(item.prices?.s)}</span>
-                                        <span>A: {formatPrice(item.prices?.a)}</span>
-                                        <span>B: {formatPrice(item.prices?.b)}</span>
-                                    </div>
-                                </div>
-                                <div className="flex-shrink-0 flex items-center">
-                                    {isLinked(item.item_id) ? (
-                                        <span className="text-xs text-green-600 font-medium px-3 py-2">✅ 紐付済</span>
-                                    ) : (
-                                        <button
-                                            onClick={() => addLink(item.item_id, selectedLabel)}
-                                            disabled={linking}
-                                            className="px-3 py-2 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 disabled:opacity-50"
-                                        >
-                                            紐付ける
-                                        </button>
-                                    )}
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
 
