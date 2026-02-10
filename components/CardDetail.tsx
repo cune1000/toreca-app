@@ -87,9 +87,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [showEditForm, setShowEditForm] = useState(false)
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState(30)
-  const [shinsokuItemId, setShinsokuItemId] = useState<string | null>(card?.shinsoku_item_id || null)
-  const [shinsokuCondition, setShinsokuCondition] = useState<string>(card?.shinsoku_condition || 'S')
-  const [loungeCardKey, setLoungeCardKey] = useState<string | null>(card?.lounge_card_key || null)
+  const [purchaseLinks, setPurchaseLinks] = useState<any[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
   const [cardImageUrl, setCardImageUrl] = useState(card?.image_url || null)
@@ -132,9 +130,23 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     if (card?.id) {
       fetchPrices()
       fetchSnkrdunkSales()
+      fetchPurchaseLinks()
       setCardImageUrl(card?.image_url || null)
     }
   }, [card?.id])
+
+  // 買取紐付けを取得
+  const fetchPurchaseLinks = async () => {
+    try {
+      const res = await fetch(`/api/purchase-links?card_id=${card.id}`)
+      const json = await res.json()
+      if (json.success) {
+        setPurchaseLinks(json.data || [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch purchase links:', err)
+    }
+  }
 
   // 画像リサイズ
   const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
@@ -209,7 +221,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const fetchPrices = async () => {
     setLoading(true)
 
-    const [purchaseRes, saleRes, urlRes, cardRes] = await Promise.all([
+    const [purchaseRes, saleRes, urlRes] = await Promise.all([
       supabase
         .from('purchase_prices')
         .select('*, shop:shop_id(id, name, icon)')
@@ -226,18 +238,11 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         .from('card_sale_urls')
         .select('*, site:site_id(id, name, icon, url)')
         .eq('card_id', card.id),
-      supabase
-        .from('cards')
-        .select('shinsoku_item_id, shinsoku_condition')
-        .eq('id', card.id)
-        .single(),
     ])
 
     setPurchasePrices(purchaseRes.data || [])
     setSalePrices(saleRes.data || [])
     setSaleUrls(urlRes.data || [])
-    setShinsokuItemId(cardRes.data?.shinsoku_item_id || null)
-    setShinsokuCondition(cardRes.data?.shinsoku_condition || 'S')
 
     setLoading(false)
   }
@@ -1435,20 +1440,17 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 {/* シンソク買取 紐付け */}
                 <div>
                   <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                    <span className="text-orange-500">🔗</span>
+                    <span className="text-green-500">🔗</span>
                     シンソク買取 紐付け
                   </h3>
                   <p className="text-xs text-gray-400 mb-3">
-                    シンソクの商品と紐付けると、買取価格を自動追跡します（6時間ごと）
+                    シンソクの商品と紐付けると、買取価格を自動追跡します（6時間ごと）。複数紐付け可能です。
                   </p>
                   <ShinsokuLink
                     cardId={card.id}
                     cardName={card.name}
-                    linkedItemId={shinsokuItemId}
-                    condition={shinsokuCondition}
-                    onLinked={(itemId, cond) => { setShinsokuItemId(itemId); setShinsokuCondition(cond); onUpdated?.() }}
-                    onUnlinked={() => { setShinsokuItemId(null); setShinsokuCondition('S'); onUpdated?.() }}
-                    onConditionChanged={(cond) => { setShinsokuCondition(cond); onUpdated?.() }}
+                    links={purchaseLinks.filter((l: any) => l.shop?.name === 'シンソク（郵送買取）')}
+                    onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); onUpdated?.() }}
                   />
                 </div>
 
@@ -1459,14 +1461,13 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                     トレカラウンジ買取 紐付け
                   </h3>
                   <p className="text-xs text-gray-400 mb-3">
-                    トレカラウンジの商品と紐付けると、買取価格を自動追跡します
+                    トレカラウンジの商品と紐付けると、買取価格を自動追跡します。複数紐付け可能です。
                   </p>
                   <LoungeLink
                     cardId={card.id}
                     cardName={card.name}
-                    linkedKey={loungeCardKey}
-                    onLinked={(key) => { setLoungeCardKey(key); onUpdated?.() }}
-                    onUnlinked={() => { setLoungeCardKey(null); onUpdated?.() }}
+                    links={purchaseLinks.filter((l: any) => l.shop?.name === 'トレカラウンジ（郵送買取）')}
+                    onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); onUpdated?.() }}
                   />
                 </div>
               </div>

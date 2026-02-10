@@ -1,89 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { fetchShinsokuItems, toYen } from '@/lib/shinsoku'
+import { supabase } from '@/lib/supabase'
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+export const maxDuration = 60
 
-// シンソク買取価格 定期取得cron
-// GET /api/cron/shinsoku
 export async function GET(request: NextRequest) {
-    // cron認証チェック
     const authHeader = request.headers.get('authorization')
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        if (process.env.NODE_ENV !== 'development') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const startTime = Date.now()
+    const start = Date.now()
 
     try {
-        // ① shinsoku_item_idが設定されているカードを取得
-        const { data: linkedCards, error: cardsError } = await supabase
-            .from('cards')
-            .select('id, name, shinsoku_item_id, shinsoku_condition')
-            .not('shinsoku_item_id', 'is', null)
-
-        if (cardsError) throw cardsError
-
-        if (!linkedCards || linkedCards.length === 0) {
-            return NextResponse.json({
-                success: true,
-                message: 'No linked cards',
-                linked: 0,
-                updated: 0,
-                duration: Date.now() - startTime,
-            })
-        }
-
-        // ② シンソクAPIから全商品を取得（ポケモン）
-        const allItems = await fetchShinsokuItems('ポケモン', 'ALL')
-        const itemMap = new Map(allItems.map(item => [item.item_id, item]))
-
-        // ③ シンソクのshop_idを取得
+        // ① シンソクのshop_idを取得
         const { data: shop } = await supabase
             .from('purchase_shops')
             .select('id')
             .eq('name', 'シンソク（郵送買取）')
             .single()
 
-        if (!shop) {
-            throw new Error('シンソクがpurchase_shopsに未登録。マイグレーションSQLを実行してください。')
+        if (!shop) throw new Error('シンソクがpurchase_shopsに未登録')
+
+        // ② card_purchase_linksから紐付け済みカードを取得
+        const { data: links, error: linksError } = await supabase
+            .from('card_purchase_links')
+            .select('id, card_id, external_key, label, condition, card:card_id(name)')
+            .eq('shop_id', shop.id)
+
+        if (linksError) throw linksError
+
+        if (!links || links.length === 0) {
+            return NextResponse.json({ success: true, message: 'No linked cards', synced: 0 })
         }
 
         let updatedCount = 0
         let skippedCount = 0
         const errors: string[] = []
 
-        // ④ 各カードの価格を記録
-        for (const card of linkedCards) {
+        // ③ 各紐付けの価格を取得
+        for (const link of links) {
             try {
-                const item = itemMap.get(card.shinsoku_item_id)
-                if (!item) {
+                const itemId = link.external_key
+                const condition = link.condition || 'S'
+
+                // シンソクAPIから価格取得
+                const res = await fetch(`https://shinsoku-tcg.com/api/items/${itemId}`)
+                if (!res.ok) {
                     skippedCount++
                     continue
                 }
 
-                // Sランク（最高品質）の価格を取得
-                const priceYen = item.postal_purchase_price_s
-                if (priceYen === null || priceYen === undefined || priceYen <= 0) {
+                const itemData = await res.json()
+                const prices = itemData?.prices || {}
+                const conditionMap: Record<string, string> = { S: 's', A: 'a', 'A-': 'am', B: 'b', C: 'c' }
+                const priceKey = conditionMap[condition] || 's'
+                const priceYen = prices[priceKey]
+
+                if (!priceYen || priceYen === 0) {
                     skippedCount++
                     continue
                 }
 
-                // カードの状態（素体/PSA/未開封/開封済み）
-                const condition = card.shinsoku_condition || 'normal'
-
-                // 前回の価格を取得（同じshop_id・同じconditionの最新レコード）
+                // 前回の価格を取得
                 const { data: lastPrice } = await supabase
                     .from('purchase_prices')
                     .select('price')
-                    .eq('card_id', card.id)
+                    .eq('card_id', link.card_id)
                     .eq('shop_id', shop.id)
                     .eq('condition', condition)
+                    .eq('link_id', link.id)
                     .order('created_at', { ascending: false })
                     .limit(1)
                     .single()
@@ -91,58 +76,53 @@ export async function GET(request: NextRequest) {
                 // 価格変動があればINSERT
                 if (!lastPrice || lastPrice.price !== priceYen) {
                     await supabase.from('purchase_prices').insert({
-                        card_id: card.id,
+                        card_id: link.card_id,
                         shop_id: shop.id,
                         price: priceYen,
                         condition: condition,
+                        link_id: link.id,
                     })
                     updatedCount++
                 } else {
                     skippedCount++
                 }
             } catch (err: any) {
-                errors.push(`${card.name}: ${err.message}`)
+                const cardName = (link as any).card?.name || link.card_id
+                errors.push(`${cardName}(${link.label}): ${err.message}`)
             }
         }
 
-        // ⑤ ログ記録
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1)
+
         await supabase.from('cron_logs').insert({
             job_name: 'shinsoku_kaitori',
-            status: errors.length > 0 ? 'partial' : 'success',
+            status: 'success',
             details: {
-                linked_cards: linkedCards.length,
-                api_items: allItems.length,
+                total_links: links.length,
                 updated: updatedCount,
                 skipped: skippedCount,
+                elapsed: `${elapsed}s`,
                 errors: errors.length > 0 ? errors : undefined,
             },
-            executed_at: new Date().toISOString(),
         })
 
         return NextResponse.json({
             success: true,
-            linked: linkedCards.length,
-            fetched: allItems.length,
+            total_links: links.length,
             updated: updatedCount,
             skipped: skippedCount,
-            errors: errors.length,
-            duration: Date.now() - startTime,
+            elapsed: `${elapsed}s`,
+            errors: errors.length > 0 ? errors : undefined,
         })
     } catch (error: any) {
-        // エラーログ
-        try {
-            await supabase.from('cron_logs').insert({
-                job_name: 'shinsoku_kaitori',
-                status: 'error',
-                details: { error: error.message },
-                executed_at: new Date().toISOString(),
-            })
-        } catch { }
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
-        return NextResponse.json({
-            success: false,
-            error: error.message,
-            duration: Date.now() - startTime,
-        }, { status: 500 })
+        await supabase.from('cron_logs').insert({
+            job_name: 'shinsoku_kaitori',
+            status: 'error',
+            details: { error: error.message, elapsed: `${elapsed}s` },
+        })
+
+        return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

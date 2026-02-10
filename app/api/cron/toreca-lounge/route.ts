@@ -13,23 +13,7 @@ export async function GET(request: NextRequest) {
     const start = Date.now()
 
     try {
-        // ① 紐付け済みカードを取得
-        const { data: linkedCards, error: cardsError } = await supabase
-            .from('cards')
-            .select('id, name, lounge_card_key')
-            .not('lounge_card_key', 'is', null)
-
-        if (cardsError) throw cardsError
-
-        if (!linkedCards || linkedCards.length === 0) {
-            return NextResponse.json({ success: true, message: 'No linked cards', synced: 0 })
-        }
-
-        // ② トレカラウンジから全カードを取得
-        const loungeCards = await fetchAllLoungeCards()
-        const loungeMap = new Map(loungeCards.map(c => [c.key, c]))
-
-        // ③ トレカラウンジの shop_id を取得
+        // ① トレカラウンジのshop_idを取得
         const { data: shop } = await supabase
             .from('purchase_shops')
             .select('id')
@@ -38,21 +22,38 @@ export async function GET(request: NextRequest) {
 
         if (!shop) throw new Error('トレカラウンジがpurchase_shopsに未登録')
 
+        // ② card_purchase_linksから紐付け済みを取得
+        const { data: links, error: linksError } = await supabase
+            .from('card_purchase_links')
+            .select('id, card_id, external_key, label, condition, card:card_id(name)')
+            .eq('shop_id', shop.id)
+
+        if (linksError) throw linksError
+
+        if (!links || links.length === 0) {
+            return NextResponse.json({ success: true, message: 'No linked cards', synced: 0 })
+        }
+
+        // ③ トレカラウンジから全カードを取得
+        const loungeCards = await fetchAllLoungeCards()
+        const loungeMap = new Map(loungeCards.map(c => [c.key, c]))
+
         let updatedCount = 0
         const errors: string[] = []
 
-        // ④ 各カードの価格を記録
-        for (const card of linkedCards) {
+        // ④ 各紐付けの価格を記録
+        for (const link of links) {
             try {
-                const loungeCard = loungeMap.get(card.lounge_card_key)
+                const loungeCard = loungeMap.get(link.external_key)
                 if (!loungeCard || loungeCard.price === 0) continue
 
                 // 前回の価格を取得
                 const { data: lastPrice } = await supabase
                     .from('purchase_prices')
                     .select('price')
-                    .eq('card_id', card.id)
+                    .eq('card_id', link.card_id)
                     .eq('shop_id', shop.id)
+                    .eq('link_id', link.id)
                     .order('created_at', { ascending: false })
                     .limit(1)
                     .single()
@@ -60,26 +61,27 @@ export async function GET(request: NextRequest) {
                 // 価格変動があればINSERT
                 if (!lastPrice || lastPrice.price !== loungeCard.price) {
                     await supabase.from('purchase_prices').insert({
-                        card_id: card.id,
+                        card_id: link.card_id,
                         shop_id: shop.id,
                         price: loungeCard.price,
-                        condition: 'normal',
+                        condition: link.condition || 'normal',
+                        link_id: link.id,
                     })
                     updatedCount++
                 }
             } catch (err: any) {
-                errors.push(`${card.name}: ${err.message}`)
+                const cardName = (link as any).card?.name || link.card_id
+                errors.push(`${cardName}(${link.label}): ${err.message}`)
             }
         }
 
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
-        // ⑤ ログ記録
         await supabase.from('cron_logs').insert({
             job_name: 'toreca_lounge_kaitori',
             status: 'success',
             details: {
-                linked_cards: linkedCards.length,
+                total_links: links.length,
                 scraped_cards: loungeCards.length,
                 updated: updatedCount,
                 elapsed: `${elapsed}s`,
@@ -89,7 +91,7 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            linked: linkedCards.length,
+            total_links: links.length,
             scraped: loungeCards.length,
             updated: updatedCount,
             elapsed: `${elapsed}s`,

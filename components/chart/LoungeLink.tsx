@@ -14,27 +14,35 @@ interface LoungeResult {
     imageUrl: string
 }
 
+interface PurchaseLink {
+    id: string
+    external_key: string
+    label: string
+    condition: string
+    shop: { id: string; name: string }
+}
+
 interface Props {
     cardId: string
     cardName: string
-    linkedKey?: string | null
-    onLinked?: (key: string) => void
-    onUnlinked?: () => void
+    shopName?: string
+    links: PurchaseLink[]
+    onLinksChanged?: () => void
 }
 
-export default function LoungeLink({ cardId, cardName, linkedKey, onLinked, onUnlinked }: Props) {
+export default function LoungeLink({ cardId, cardName, shopName = 'トレカラウンジ（郵送買取）', links, onLinksChanged }: Props) {
     const [query, setQuery] = useState(cardName || '')
     const [results, setResults] = useState<LoungeResult[]>([])
     const [searching, setSearching] = useState(false)
     const [linking, setLinking] = useState(false)
     const [error, setError] = useState('')
-    const [selectedKey, setSelectedKey] = useState<string | null>(null)
     const [total, setTotal] = useState(0)
     const [autoSearched, setAutoSearched] = useState(false)
+    const [selectedLabel, setSelectedLabel] = useState('')
     const [showManualInput, setShowManualInput] = useState(false)
-    const [manualKey, setManualKey] = useState('')
     const [manualName, setManualName] = useState('')
     const [manualModelno, setManualModelno] = useState('')
+    const [manualLabel, setManualLabel] = useState('')
 
     const formatPrice = (p: number) => `¥${p.toLocaleString()}`
 
@@ -60,29 +68,30 @@ export default function LoungeLink({ cardId, cardName, linkedKey, onLinked, onUn
         }
     }
 
-    // マウント時に自動検索
     useEffect(() => {
-        if (!autoSearched && cardName && cardName.length >= 2 && !linkedKey) {
+        if (!autoSearched && cardName && cardName.length >= 2 && links.length === 0) {
             setAutoSearched(true)
             search(cardName)
         }
-    }, [cardName, linkedKey])
+    }, [cardName, links.length])
 
-    const link = async (key: string) => {
+    const addLink = async (externalKey: string, label: string) => {
         setLinking(true)
         try {
-            const res = await fetch('/api/toreca-lounge/link', {
+            const res = await fetch('/api/purchase-links', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     card_id: cardId,
-                    lounge_card_key: key,
+                    shop_name: shopName,
+                    external_key: externalKey,
+                    label: label || '素体',
+                    condition: 'normal',
                 }),
             })
             const json = await res.json()
             if (!json.success) throw new Error(json.error)
-            onLinked?.(key)
-            setSelectedKey(key)
+            onLinksChanged?.()
         } catch (err: any) {
             setError(err.message)
         } finally {
@@ -90,14 +99,13 @@ export default function LoungeLink({ cardId, cardName, linkedKey, onLinked, onUn
         }
     }
 
-    const unlink = async () => {
+    const removeLink = async (linkId: string) => {
         setLinking(true)
         try {
-            const res = await fetch(`/api/toreca-lounge/link?card_id=${cardId}`, { method: 'DELETE' })
+            const res = await fetch(`/api/purchase-links?link_id=${linkId}`, { method: 'DELETE' })
             const json = await res.json()
             if (!json.success) throw new Error(json.error)
-            onUnlinked?.()
-            setSelectedKey(null)
+            onLinksChanged?.()
         } catch (err: any) {
             setError(err.message)
         } finally {
@@ -105,26 +113,29 @@ export default function LoungeLink({ cardId, cardName, linkedKey, onLinked, onUn
         }
     }
 
-    const currentLinked = selectedKey || linkedKey
+    const isLinked = (key: string) => links.some(l => l.external_key === key)
 
     return (
         <div className="space-y-3">
-            {/* 紐付け済み表示 */}
-            {currentLinked && (
-                <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-orange-600 font-medium">🏪 トレカラウンジ紐付け済み</p>
-                            <p className="text-xs text-orange-500 mt-0.5">キー: {currentLinked}</p>
+            {/* 紐付け済みリスト */}
+            {links.length > 0 && (
+                <div className="space-y-2">
+                    {links.map(link => (
+                        <div key={link.id} className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-orange-600 font-medium">
+                                    🏪 {link.label || '素体'} — {link.external_key}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => removeLink(link.id)}
+                                disabled={linking}
+                                className="text-xs px-3 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-lg hover:bg-orange-50 disabled:opacity-50"
+                            >
+                                解除
+                            </button>
                         </div>
-                        <button
-                            onClick={unlink}
-                            disabled={linking}
-                            className="text-xs px-3 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-lg hover:bg-orange-50 disabled:opacity-50"
-                        >
-                            紐付け解除
-                        </button>
-                    </div>
+                    ))}
                 </div>
             )}
 
@@ -147,55 +158,67 @@ export default function LoungeLink({ cardId, cardName, linkedKey, onLinked, onUn
                 </button>
             </div>
 
-            {error && (
-                <p className="text-xs text-red-500">{error}</p>
-            )}
+            {error && <p className="text-xs text-red-500">{error}</p>}
+
+            {/* ラベル選択 */}
+            <div className="flex gap-2 items-center">
+                <span className="text-xs text-gray-500">ラベル:</span>
+                <input
+                    type="text"
+                    value={selectedLabel}
+                    onChange={e => setSelectedLabel(e.target.value)}
+                    placeholder="素体 / PSA10 等"
+                    className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                />
+            </div>
 
             {/* 手動キー入力 */}
-            {!currentLinked && (
-                <div>
-                    <button
-                        onClick={() => setShowManualInput(!showManualInput)}
-                        className="text-xs text-gray-400 hover:text-orange-500 underline"
-                    >
-                        {showManualInput ? '▲ 手動入力を閉じる' : '▼ 検索で見つからない場合は手動でキーを入力'}
-                    </button>
-                    {showManualInput && (
-                        <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
-                            <p className="text-[10px] text-gray-400">
-                                カード名と型番を入力してください（例: カード名「リーリエ」型番「397/SM-P」→ キー「リーリエ::397/SM-P」）
-                            </p>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={manualName}
-                                    onChange={e => setManualName(e.target.value)}
-                                    placeholder="カード名"
-                                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-100"
-                                />
-                                <input
-                                    type="text"
-                                    value={manualModelno}
-                                    onChange={e => setManualModelno(e.target.value)}
-                                    placeholder="型番"
-                                    className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-100"
-                                />
-                                <button
-                                    onClick={() => {
-                                        if (manualName && manualModelno) {
-                                            link(`${manualName}::${manualModelno}`)
-                                        }
-                                    }}
-                                    disabled={!manualName || !manualModelno || linking}
-                                    className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 whitespace-nowrap"
-                                >
-                                    {linking ? '処理中...' : '紐付ける'}
-                                </button>
-                            </div>
+            <div>
+                <button
+                    onClick={() => setShowManualInput(!showManualInput)}
+                    className="text-xs text-gray-400 hover:text-orange-500 underline"
+                >
+                    {showManualInput ? '▲ 手動入力を閉じる' : '▼ 手動でキーを入力'}
+                </button>
+                {showManualInput && (
+                    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={manualName}
+                                onChange={e => setManualName(e.target.value)}
+                                placeholder="カード名"
+                                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                            />
+                            <input
+                                type="text"
+                                value={manualModelno}
+                                onChange={e => setManualModelno(e.target.value)}
+                                placeholder="型番"
+                                className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                            />
+                            <input
+                                type="text"
+                                value={manualLabel}
+                                onChange={e => setManualLabel(e.target.value)}
+                                placeholder="ラベル"
+                                className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                            />
+                            <button
+                                onClick={() => {
+                                    if (manualName && manualModelno) {
+                                        addLink(`${manualName}::${manualModelno}`, manualLabel || '素体')
+                                    }
+                                }}
+                                disabled={!manualName || !manualModelno || linking}
+                                className="px-3 py-2 bg-orange-600 text-white rounded-lg text-xs font-medium hover:bg-orange-700 disabled:opacity-50 whitespace-nowrap"
+                            >
+                                追加
+                            </button>
                         </div>
-                    )}
-                </div>
-            )}
+                    </div>
+                )}
+            </div>
 
             {/* 検索結果 */}
             {results.length > 0 && (
@@ -205,65 +228,36 @@ export default function LoungeLink({ cardId, cardName, linkedKey, onLinked, onUn
                         {results.map(item => (
                             <div
                                 key={item.key}
-                                className={`border rounded-xl p-3 transition-colors ${currentLinked === item.key
+                                className={`border rounded-xl p-3 ${isLinked(item.key)
                                     ? 'border-orange-300 bg-orange-50'
                                     : 'border-gray-200 bg-white hover:border-gray-300'
                                     }`}
                             >
                                 <div className="flex gap-3">
-                                    {/* 画像 */}
                                     {item.imageUrl ? (
-                                        <img
-                                            src={item.imageUrl}
-                                            alt=""
-                                            className="w-14 h-20 object-cover rounded-lg flex-shrink-0 bg-gray-100"
-                                        />
+                                        <img src={item.imageUrl} alt="" className="w-14 h-20 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
                                     ) : (
-                                        <div className="w-14 h-20 bg-gray-100 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
-                                            🃏
-                                        </div>
+                                        <div className="w-14 h-20 bg-gray-100 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">🃏</div>
                                     )}
-
-                                    {/* 情報 */}
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
                                         <div className="flex flex-wrap gap-1 mt-1">
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                                                {item.modelno}
-                                            </span>
-                                            {item.grade && (
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                                                    {item.grade}
-                                                </span>
-                                            )}
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">{item.modelno}</span>
+                                            {item.grade && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">{item.grade}</span>}
                                             {item.productFormat && item.productFormat !== 'NORMAL' && (
-                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${item.productFormat === 'PSA' ? 'bg-purple-100 text-purple-700' :
-                                                    item.productFormat === 'BOX' ? 'bg-amber-100 text-amber-700' :
-                                                        'bg-gray-100 text-gray-600'
-                                                    }`}>
-                                                    {item.productFormat}
-                                                </span>
-                                            )}
-                                            {item.rarity && (
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
-                                                    {item.rarity}
-                                                </span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">{item.productFormat}</span>
                                             )}
                                         </div>
-
-                                        {/* 価格 */}
                                         <div className="mt-2">
                                             <span className="text-sm font-bold text-orange-600">{formatPrice(item.price)}</span>
                                         </div>
                                     </div>
-
-                                    {/* 紐付けボタン */}
-                                    <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1">
-                                        {currentLinked === item.key ? (
-                                            <span className="text-xs text-orange-600 font-medium px-3 py-2">🏪 紐付け済</span>
+                                    <div className="flex-shrink-0 flex items-center">
+                                        {isLinked(item.key) ? (
+                                            <span className="text-xs text-orange-600 font-medium px-3 py-2">🏪 紐付済</span>
                                         ) : (
                                             <button
-                                                onClick={() => link(item.key)}
+                                                onClick={() => addLink(item.key, selectedLabel || '素体')}
                                                 disabled={linking}
                                                 className="px-3 py-2 bg-orange-600 text-white rounded-lg text-xs font-medium hover:bg-orange-700 disabled:opacity-50"
                                             >
@@ -272,25 +266,17 @@ export default function LoungeLink({ cardId, cardName, linkedKey, onLinked, onUn
                                         )}
                                     </div>
                                 </div>
-
-                                <p className="text-[10px] text-gray-300 mt-1">{item.key}</p>
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* 検索中 */}
             {searching && (
                 <div className="py-4 text-center">
                     <div className="inline-block w-5 h-5 border-2 border-gray-200 border-t-orange-600 rounded-full animate-spin" />
-                    <p className="text-xs text-gray-400 mt-2">候補を検索中...</p>
+                    <p className="text-xs text-gray-400 mt-2">検索中...</p>
                 </div>
-            )}
-
-            {/* 候補なし */}
-            {autoSearched && !searching && results.length === 0 && !error && !currentLinked && (
-                <p className="text-xs text-gray-400 text-center py-2">候補が見つかりませんでした。キーワードを変えて検索してください。</p>
             )}
         </div>
     )

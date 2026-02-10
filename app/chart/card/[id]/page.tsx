@@ -24,7 +24,7 @@ export default function CardDetailPage({ params }: Props) {
     const [priceData, setPriceData] = useState<Record<string, PricePoint[]>>({})
     const [purchasePrices, setPurchasePrices] = useState<PurchaseShopPrice[]>([])
     const [tab, setTab] = useState<'chart' | 'purchase' | 'shinsoku'>('chart')
-    const [shinsokuItemId, setShinsokuItemId] = useState<string | null>(null)
+    const [purchaseLinks, setPurchaseLinks] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [cardId, setCardId] = useState<string>('')
 
@@ -38,14 +38,13 @@ export default function CardDetailPage({ params }: Props) {
         async function fetchData() {
             setLoading(true)
 
-            const [cardData, history30, history90, history1y, historyAll, purchases, shinsokuRes] = await Promise.all([
+            const [cardData, history30, history90, history1y, historyAll, purchases] = await Promise.all([
                 getCardDetail(cardId),
                 getPriceHistory(cardId, '30d'),
                 getPriceHistory(cardId, '90d'),
                 getPriceHistory(cardId, '1y'),
                 getPriceHistory(cardId, 'all'),
                 getPurchasePrices(cardId),
-                supabase.from('cards').select('shinsoku_item_id').eq('id', cardId).single(),
             ])
 
             setCard(cardData)
@@ -56,12 +55,25 @@ export default function CardDetailPage({ params }: Props) {
                 'all': historyAll,
             })
             setPurchasePrices(purchases)
-            setShinsokuItemId(shinsokuRes.data?.shinsoku_item_id || null)
+            fetchPurchaseLinks()
             setLoading(false)
         }
 
         fetchData()
     }, [cardId])
+
+    const fetchPurchaseLinks = async () => {
+        if (!cardId) return
+        try {
+            const res = await fetch(`/api/purchase-links?card_id=${cardId}`)
+            const json = await res.json()
+            if (json.success) {
+                setPurchaseLinks(json.data || [])
+            }
+        } catch (err) {
+            console.error('Failed to fetch purchase links:', err)
+        }
+    }
 
     if (loading) {
         return (
@@ -206,7 +218,7 @@ export default function CardDetailPage({ params }: Props) {
                         {[
                             { key: 'chart' as const, label: '📊 チャート' },
                             { key: 'purchase' as const, label: '🏪 買取価格' },
-                            { key: 'shinsoku' as const, label: `🔗 シンソク${shinsokuItemId ? ' ✅' : ''}` },
+                            { key: 'shinsoku' as const, label: `🔗 紐付け${purchaseLinks.length > 0 ? ' ✅' : ''}` },
                         ].map(t => (
                             <button
                                 key={t.key}
@@ -270,9 +282,8 @@ export default function CardDetailPage({ params }: Props) {
                             <ShinsokuLink
                                 cardId={cardId}
                                 cardName={card.name}
-                                linkedItemId={shinsokuItemId}
-                                onLinked={(itemId) => setShinsokuItemId(itemId)}
-                                onUnlinked={() => setShinsokuItemId(null)}
+                                links={purchaseLinks.filter((l: any) => l.shop?.name === 'シンソク（郵送買取）')}
+                                onLinksChanged={() => fetchPurchaseLinks()}
                             />
                         </>
                     )}
