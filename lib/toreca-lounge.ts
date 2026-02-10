@@ -96,7 +96,7 @@ function parseProductsFromHtml(html: string): LoungeCard[] {
                     grade: grade || '',
                     productFormat: productFormat || '',
                     price,
-                    key: `${name}::${modelno}`,
+                    key: `${name}::${modelno}::${grade || ''}::${productFormat || ''}`,
                     imageUrl: decodeUnicode(imageUrl || ''),
                 })
             }
@@ -126,8 +126,10 @@ function parseProductsFromHtml(html: string): LoungeCard[] {
             const price = parseInt(buyPrice, 10) || 0
 
             // 既に方法1で取得済みなら重複スキップ
-            const key = `${name}::${modelno}`
-            const alreadyExists = cards.some(c => c.key === key && c.price === price)
+            const grade = extractField(chunk, 'grade') || ''
+            const productFormat = extractField(chunk, 'productFormat') || ''
+            const key = `${name}::${modelno}::${grade}::${productFormat}`
+            const alreadyExists = cards.some(c => c.key === key)
 
             if (name && price > 0 && !alreadyExists) {
                 cards.push({
@@ -135,8 +137,8 @@ function parseProductsFromHtml(html: string): LoungeCard[] {
                     name,
                     modelno,
                     rarity: decodeUnicode(extractField(chunk, 'rarity') || ''),
-                    grade: extractField(chunk, 'grade') || '',
-                    productFormat: extractField(chunk, 'productFormat') || '',
+                    grade,
+                    productFormat,
                     price,
                     key,
                     imageUrl: decodeUnicode(extractField(chunk, 'imageUrl') || ''),
