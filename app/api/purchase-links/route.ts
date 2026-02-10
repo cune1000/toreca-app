@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'card_id と external_key が必要です' }, { status: 400 })
         }
 
-        // shop_idまたはshop_nameでショップを特定
+        // shop_idまたはshop_nameでショップを特定（なければ自動作成）
         let resolvedShopId = shop_id
         if (!resolvedShopId && shop_name) {
             const { data: shop } = await supabase
@@ -42,7 +42,17 @@ export async function POST(request: NextRequest) {
                 .select('id')
                 .eq('name', shop_name)
                 .single()
-            if (shop) resolvedShopId = shop.id
+            if (shop) {
+                resolvedShopId = shop.id
+            } else {
+                // ショップが未登録なら自動作成
+                const { data: newShop } = await supabase
+                    .from('purchase_shops')
+                    .insert({ name: shop_name, status: 'active' })
+                    .select('id')
+                    .single()
+                if (newShop) resolvedShopId = newShop.id
+            }
         }
 
         if (!resolvedShopId) {
