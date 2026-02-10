@@ -84,28 +84,31 @@ function parseProductsFromHtml(html: string): LoungeCard[] {
         const buyPrice = extractField(chunk, 'buyPrice')
         const imageUrl = extractField(chunk, 'imageUrl')
 
-        if (productName && buyPrice && productId) {
-            // productIdで重複除去（RSCストリーム内の2重データ対策）
-            if (!seenProductIds.has(productId)) {
-                seenProductIds.add(productId)
+        if (productName && buyPrice) {
+            const name = decodeUnicode(productName)
+            const modelno = decodeUnicode(modelNumber || '')
+            const price = parseInt(buyPrice, 10) || 0
 
-                const name = decodeUnicode(productName)
-                const modelno = decodeUnicode(modelNumber || '')
-                const price = parseInt(buyPrice, 10) || 0
+            // productIdまたはkeyで重複除去（RSCストリーム内の2重データ対策）
+            const dedupKey = productId || `${name}::${modelno}::${grade || ''}::${price}`
+            if (seenProductIds.has(dedupKey)) {
+                searchStart = idx + marker.length
+                continue
+            }
+            seenProductIds.add(dedupKey)
 
-                if (name && price > 0) {
-                    cards.push({
-                        productId,
-                        name,
-                        modelno,
-                        rarity: decodeUnicode(rarity || ''),
-                        grade: grade || '',
-                        productFormat: productFormat || '',
-                        price,
-                        key: `${name}::${modelno}::${grade || ''}::${productFormat || ''}`,
-                        imageUrl: decodeUnicode(imageUrl || ''),
-                    })
-                }
+            if (name && price > 0) {
+                cards.push({
+                    productId: productId || '',
+                    name,
+                    modelno,
+                    rarity: decodeUnicode(rarity || ''),
+                    grade: grade || '',
+                    productFormat: productFormat || '',
+                    price,
+                    key: `${name}::${modelno}::${grade || ''}::${productFormat || ''}`,
+                    imageUrl: decodeUnicode(imageUrl || ''),
+                })
             }
         }
 
