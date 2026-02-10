@@ -3,6 +3,7 @@
  * 
  * /products ページのNext.js RSCストリームから
  * JSON商品データを正規表現で抽出する方式
+ * 全ページをループして取得（1ページ約50件）
  */
 
 const BASE_URL = 'https://kaitori.toreca-lounge.com'
@@ -20,37 +21,57 @@ export interface LoungeCard {
 }
 
 /**
- * /products ページからRSCストリーム内のJSON商品データを抽出
+ * /products ページからRSCストリーム内のJSON商品データを全ページ抽出
  */
 export async function fetchAllLoungeCards(): Promise<LoungeCard[]> {
-    const res = await fetch(`${BASE_URL}/products`, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html',
-        },
-    })
+    const cards: LoungeCard[] = []
+    const MAX_PAGES = 50  // 安全上限
 
-    if (!res.ok) {
-        throw new Error(`Failed to fetch toreca-lounge: ${res.status}`)
+    for (let page = 1; page <= MAX_PAGES; page++) {
+        const url = `${BASE_URL}/products?page=${page}`
+        const res = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html',
+            },
+        })
+
+        if (!res.ok) {
+            throw new Error(`Failed to fetch toreca-lounge page ${page}: ${res.status}`)
+        }
+
+        const html = await res.text()
+        const pageCards = parseProductsFromHtml(html)
+
+        if (pageCards.length === 0) {
+            break  // データがなければ最終ページ
+        }
+
+        cards.push(...pageCards)
     }
 
-    const html = await res.text()
+    return cards
+}
+
+/**
+ * HTML文字列からRSCストリーム内のproductデータを正規表現で抽出
+ */
+function parseProductsFromHtml(html: string): LoungeCard[] {
     const cards: LoungeCard[] = []
 
     // RSCストリーム内の product JSON を抽出
-    // HTMLのscriptタグ内では JSON が \\\" でエスケープされている
-    // パターン: \\"product\\":{\\"productFormat\\":\\"...\\",...}
+    // HTMLのscriptタグ内では JSON が \" でエスケープされている
     const q = '\\\\"'  // エスケープされたクォート \"
     const productRegex = new RegExp(
-        `${q}product${q}:\\{` +
-        `${q}productFormat${q}:${q}([^\\\\]*)${q},` +
-        `${q}productId${q}:${q}([^\\\\]*)${q},` +
-        `${q}productName${q}:${q}([^\\\\]*)${q},` +
-        `${q}grade${q}:${q}([^\\\\]*)${q},` +
-        `${q}modelNumber${q}:${q}([^\\\\]*)${q},` +
-        `${q}rarity${q}:${q}([^\\\\]*)${q},` +
-        `${q}buyPrice${q}:${q}([^\\\\]*)${q},` +
-        `${q}imageUrl${q}:${q}([^\\\\]*)${q}`,
+        `${q}product${q}:\\\\{` +
+        `${q}productFormat${q}:${q}([^\\\\\\\\]*)${q},` +
+        `${q}productId${q}:${q}([^\\\\\\\\]*)${q},` +
+        `${q}productName${q}:${q}([^\\\\\\\\]*)${q},` +
+        `${q}grade${q}:${q}([^\\\\\\\\]*)${q},` +
+        `${q}modelNumber${q}:${q}([^\\\\\\\\]*)${q},` +
+        `${q}rarity${q}:${q}([^\\\\\\\\]*)${q},` +
+        `${q}buyPrice${q}:${q}([^\\\\\\\\]*)${q},` +
+        `${q}imageUrl${q}:${q}([^\\\\\\\\]*)${q}`,
         'g'
     )
 
@@ -58,7 +79,6 @@ export async function fetchAllLoungeCards(): Promise<LoungeCard[]> {
     while ((match = productRegex.exec(html)) !== null) {
         const [, productFormat, productId, productName, grade, modelNumber, rarity, buyPrice, imageUrl] = match
 
-        // Unicode エスケープをデコード
         const name = decodeUnicode(productName)
         const modelno = decodeUnicode(modelNumber)
         const price = parseInt(buyPrice, 10) || 0
