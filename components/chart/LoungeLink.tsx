@@ -30,12 +30,7 @@ interface Props {
     onLinksChanged?: () => void
 }
 
-const LABEL_OPTIONS = [
-    { value: '素体', label: '素体' },
-    { value: 'PSA10', label: 'PSA10' },
-    { value: '未開封', label: '未開封' },
-    { value: '開封済み', label: '開封済み' },
-]
+const LABEL_OPTIONS = ['素体', 'PSA10', '未開封', '開封済み']
 
 export default function LoungeLink({ cardId, cardName, shopName = 'トレカラウンジ（郵送買取）', links, onLinksChanged }: Props) {
     const [query, setQuery] = useState(cardName || '')
@@ -50,7 +45,6 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
     const [showManualInput, setShowManualInput] = useState(false)
     const [manualName, setManualName] = useState('')
     const [manualModelno, setManualModelno] = useState('')
-    const [manualLabel, setManualLabel] = useState('素体')
 
     const formatPrice = (p: number) => `¥${p.toLocaleString()}`
 
@@ -94,8 +88,8 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                     card_id: cardId,
                     shop_name: shopName,
                     external_key: externalKey,
-                    label: label,
-                    condition: 'normal',
+                    label,
+                    condition: label,
                 }),
             })
             const json = await res.json()
@@ -131,11 +125,9 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                 <div className="space-y-2">
                     {links.map(link => (
                         <div key={link.id} className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
-                            <div>
-                                <p className="text-xs text-orange-600 font-medium">
-                                    🏪 {link.label || '素体'} — {link.external_key}
-                                </p>
-                            </div>
+                            <p className="text-xs text-orange-600 font-medium">
+                                🏪 {link.label} — {link.external_key}
+                            </p>
                             <button
                                 onClick={() => removeLink(link.id)}
                                 disabled={linking}
@@ -169,7 +161,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 
-            {/* ラベル選択（ドロップダウン） */}
+            {/* ラベル選択 */}
             <div className="flex gap-1.5 items-center">
                 <span className="text-xs text-gray-500">ラベル:</span>
                 <select
@@ -177,7 +169,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                     onChange={e => setSelectedLabel(e.target.value)}
                     className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
                 >
-                    {LABEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    {LABEL_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
             </div>
 
@@ -190,7 +182,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                     {showManualInput ? '▲ 手動入力を閉じる' : '▼ 手動でキーを入力'}
                 </button>
                 {showManualInput && (
-                    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3">
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -206,18 +198,9 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                                 placeholder="型番"
                                 className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm"
                             />
-                            <select
-                                value={manualLabel}
-                                onChange={e => setManualLabel(e.target.value)}
-                                className="px-2 py-2 border border-gray-200 rounded-lg text-sm"
-                            >
-                                {LABEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
                             <button
                                 onClick={() => {
-                                    if (manualName && manualModelno) {
-                                        addLink(`${manualName}::${manualModelno}`, manualLabel)
-                                    }
+                                    if (manualName && manualModelno) addLink(`${manualName}::${manualModelno}`, selectedLabel)
                                 }}
                                 disabled={!manualName || !manualModelno || linking}
                                 className="px-3 py-2 bg-orange-600 text-white rounded-lg text-xs font-medium hover:bg-orange-700 disabled:opacity-50 whitespace-nowrap"
@@ -284,7 +267,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
             {searching && (
                 <div className="py-4 text-center">
                     <div className="inline-block w-5 h-5 border-2 border-gray-200 border-t-orange-600 rounded-full animate-spin" />
-                    <p className="text-xs text-gray-400 mt-2">全ページ取得中...（30秒程度かかります）</p>
+                    <p className="text-xs text-gray-400 mt-2">全ページ取得中...</p>
                 </div>
             )}
         </div>
