@@ -3,7 +3,7 @@
  * 
  * /products ページのNext.js RSCストリームから
  * JSON商品データを抽出する方式
- * 全ページをループして取得（1ページ約50件）
+ * 全ページをループして取得（1ページ約72件）
  */
 
 const BASE_URL = 'https://kaitori.toreca-lounge.com'
@@ -56,19 +56,13 @@ export async function fetchAllLoungeCards(): Promise<LoungeCard[]> {
 /**
  * HTML文字列からRSCストリーム内のproductデータを抽出
  * 
- * RSCストリームはscriptタグ内のJavaScript文字列として埋め込まれている：
- * self.__next_f.push([1,"...\"product\":{\"productFormat\":\"PSA\",...}..."])
- * 
- * HTML上では \" がエスケープされた状態で、
- * 実際のテキストには \"product\":{\"productFormat\":\"PSA\",...} のように現れる
+ * 複数のマーカーパターンを試して、全カードを確実に抽出する
  */
 function parseProductsFromHtml(html: string): LoungeCard[] {
     const cards: LoungeCard[] = []
 
-    // "product":{ で始まるJSON風ブロックを探す
-    // HTML内では \" がリテラルの \" として現れる
-    // シンプルにindexOfで位置を探し、手動でフィールドを抽出する
-    const marker = '\\"product\\":{\\"productFormat\\":\\"'
+    // 方法1: \"product\":{ マーカーで探す（フィールド順序問わず）
+    const marker = '\\\"product\\\":{'
     let searchStart = 0
 
     while (true) {
@@ -76,7 +70,7 @@ function parseProductsFromHtml(html: string): LoungeCard[] {
         if (idx === -1) break
 
         // この位置から十分な範囲を抽出
-        const chunk = html.substring(idx, idx + 1000)
+        const chunk = html.substring(idx, idx + 2000)
 
         // 各フィールドを個別に抽出
         const productFormat = extractField(chunk, 'productFormat')
@@ -111,23 +105,84 @@ function parseProductsFromHtml(html: string): LoungeCard[] {
         searchStart = idx + marker.length
     }
 
+    // 方法2: buyPrice マーカーで追加探索（方法1で漏れたものを拾う）
+    const buyPriceMarker = '\\\"buyPrice\\\":\\\"'
+    searchStart = 0
+
+    while (true) {
+        const idx = html.indexOf(buyPriceMarker, searchStart)
+        if (idx === -1) break
+
+        // buyPriceの前後2000文字を取得してフィールド抽出
+        const chunkStart = Math.max(0, idx - 1000)
+        const chunk = html.substring(chunkStart, idx + 1000)
+
+        const productName = extractField(chunk, 'productName')
+        const buyPrice = extractField(chunk, 'buyPrice')
+
+        if (productName && buyPrice) {
+            const name = decodeUnicode(productName)
+            const modelno = decodeUnicode(extractField(chunk, 'modelNumber') || '')
+            const price = parseInt(buyPrice, 10) || 0
+
+            // 既に方法1で取得済みなら重複スキップ
+            const key = `${name}::${modelno}`
+            const alreadyExists = cards.some(c => c.key === key && c.price === price)
+
+            if (name && price > 0 && !alreadyExists) {
+                cards.push({
+                    productId: extractField(chunk, 'productId') || '',
+                    name,
+                    modelno,
+                    rarity: decodeUnicode(extractField(chunk, 'rarity') || ''),
+                    grade: extractField(chunk, 'grade') || '',
+                    productFormat: extractField(chunk, 'productFormat') || '',
+                    price,
+                    key,
+                    imageUrl: decodeUnicode(extractField(chunk, 'imageUrl') || ''),
+                })
+            }
+        }
+
+        searchStart = idx + buyPriceMarker.length
+    }
+
     return cards
 }
 
 /**
  * エスケープされたJSON風テキストからフィールド値を抽出
- * パターン: \\"fieldName\\":\\"value\\"
+ * パターン: \\\"fieldName\\\":\\\"value\\\"
+ * 数値の場合: \\\"fieldName\\\":value も対応
  */
 function extractField(chunk: string, fieldName: string): string | null {
-    const pattern = `\\"${fieldName}\\":\\"`
-    const start = chunk.indexOf(pattern)
-    if (start === -1) return null
+    // 文字列値: \\\"fieldName\\\":\\\"value\\\"
+    const strPattern = `\\\"${fieldName}\\\":\\\"`
+    const strStart = chunk.indexOf(strPattern)
+    if (strStart !== -1) {
+        const valueStart = strStart + strPattern.length
+        const valueEnd = chunk.indexOf('\\\"', valueStart)
+        if (valueEnd !== -1) {
+            return chunk.substring(valueStart, valueEnd)
+        }
+    }
 
-    const valueStart = start + pattern.length
-    const valueEnd = chunk.indexOf('\\"', valueStart)
-    if (valueEnd === -1) return null
+    // 数値値: \\\"fieldName\\\":123
+    const numPattern = `\\\"${fieldName}\\\":`
+    const numStart = chunk.indexOf(numPattern)
+    if (numStart !== -1) {
+        const valueStart = numStart + numPattern.length
+        // 数値の終端を探す
+        let end = valueStart
+        while (end < chunk.length && /[0-9]/.test(chunk[end])) {
+            end++
+        }
+        if (end > valueStart) {
+            return chunk.substring(valueStart, end)
+        }
+    }
 
-    return chunk.substring(valueStart, valueEnd)
+    return null
 }
 
 /**
