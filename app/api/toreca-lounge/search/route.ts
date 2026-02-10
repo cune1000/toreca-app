@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchAllLoungeCards } from '@/lib/toreca-lounge'
-
-export const maxDuration = 60
+import { supabase } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
     try {
@@ -15,25 +13,46 @@ export async function GET(request: NextRequest) {
             }, { status: 400 })
         }
 
-        // トレカラウンジから全カードを取得（全ページ）
-        const allCards = await fetchAllLoungeCards()
-
-        // キーワード分割AND検索
+        // DBキャッシュから検索（LIKE検索、AND条件）
         const keywords = query.split(/[\s　]+/).filter(k => k.length > 0)
-        const filtered = allCards.filter(card => {
-            const searchTarget = `${card.name} ${card.modelno} ${card.grade} ${card.rarity}`.toLowerCase()
-            return keywords.every(kw => searchTarget.includes(kw.toLowerCase()))
-        })
 
-        // 価格降順でソート
-        filtered.sort((a, b) => b.price - a.price)
+        let dbQuery = supabase
+            .from('lounge_cards_cache')
+            .select('*')
+            .order('price', { ascending: false })
+
+        // 各キーワードでILIKEフィルタ
+        for (const kw of keywords) {
+            dbQuery = dbQuery.ilike('name', `%${kw}%`)
+        }
+
+        const { data, error, count } = await dbQuery.limit(50)
+
+        if (error) throw error
+
+        // 全件数を取得
+        const { count: totalCount } = await supabase
+            .from('lounge_cards_cache')
+            .select('*', { count: 'exact', head: true })
+
+        const items = (data || []).map(row => ({
+            productId: row.product_id,
+            name: row.name,
+            modelno: row.modelno,
+            rarity: row.rarity,
+            grade: row.grade,
+            productFormat: row.product_format,
+            price: row.price,
+            key: row.card_key,
+            imageUrl: row.image_url,
+        }))
 
         return NextResponse.json({
             success: true,
             data: {
-                items: filtered.slice(0, 50),
-                total: filtered.length,
-                allCount: allCards.length,
+                items,
+                total: items.length,
+                allCount: totalCount || 0,
             },
         })
     } catch (error: any) {

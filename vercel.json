@@ -27,6 +27,10 @@
     {
       "path": "/api/cron/toreca-lounge",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/lounge-cache",
+      "schedule": "30 */6 * * *"
     }
   ]
 }
