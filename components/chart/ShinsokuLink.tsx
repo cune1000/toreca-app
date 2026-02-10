@@ -37,6 +37,13 @@ interface Props {
     onLinksChanged?: () => void
 }
 
+const LABEL_OPTIONS = [
+    { value: '素体', label: '素体' },
+    { value: 'PSA10', label: 'PSA10' },
+    { value: '未開封', label: '未開封' },
+    { value: '開封済み', label: '開封済み' },
+]
+
 const CONDITION_OPTIONS = [
     { value: 'S', label: 'S (美品)' },
     { value: 'A', label: 'A' },
@@ -52,11 +59,11 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
     const [linking, setLinking] = useState(false)
     const [error, setError] = useState('')
     const [selectedCondition, setSelectedCondition] = useState('S')
-    const [selectedLabel, setSelectedLabel] = useState('')
+    const [selectedLabel, setSelectedLabel] = useState('素体')
     const [autoSearched, setAutoSearched] = useState(false)
     const [showManualInput, setShowManualInput] = useState(false)
     const [manualId, setManualId] = useState('')
-    const [manualLabel, setManualLabel] = useState('')
+    const [manualLabel, setManualLabel] = useState('素体')
 
     const formatPrice = (p: number | null) => p != null ? `¥${p.toLocaleString()}` : '-'
 
@@ -98,7 +105,7 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                     card_id: cardId,
                     shop_name: shopName,
                     external_key: externalKey,
-                    label: label || condition,
+                    label: label,
                     condition,
                 }),
             })
@@ -173,6 +180,30 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 
+            {/* ラベル + 状態選択（ドロップダウン） */}
+            <div className="flex gap-3 items-center">
+                <div className="flex gap-1.5 items-center">
+                    <span className="text-xs text-gray-500">ラベル:</span>
+                    <select
+                        value={selectedLabel}
+                        onChange={e => setSelectedLabel(e.target.value)}
+                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                    >
+                        {LABEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                </div>
+                <div className="flex gap-1.5 items-center">
+                    <span className="text-xs text-gray-500">状態:</span>
+                    <select
+                        value={selectedCondition}
+                        onChange={e => setSelectedCondition(e.target.value)}
+                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                    >
+                        {CONDITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                </div>
+            </div>
+
             {/* 手動ID入力 */}
             <div>
                 <button
@@ -191,23 +222,16 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                                 placeholder="item_id (例: IAP2500002298)"
                                 className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
                             />
-                            <input
-                                type="text"
+                            <select
                                 value={manualLabel}
                                 onChange={e => setManualLabel(e.target.value)}
-                                placeholder="ラベル (例: PSA10)"
-                                className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                            />
-                            <select
-                                value={selectedCondition}
-                                onChange={e => setSelectedCondition(e.target.value)}
                                 className="px-2 py-2 border border-gray-200 rounded-lg text-sm"
                             >
-                                {CONDITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                {LABEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
                             <button
                                 onClick={() => {
-                                    if (manualId) addLink(manualId, manualLabel || selectedCondition, selectedCondition)
+                                    if (manualId) addLink(manualId, manualLabel, selectedCondition)
                                 }}
                                 disabled={!manualId || linking}
                                 className="px-3 py-2 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 disabled:opacity-50 whitespace-nowrap"
@@ -217,26 +241,6 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                         </div>
                     </div>
                 )}
-            </div>
-
-            {/* 状態 + ラベル選択 */}
-            <div className="flex gap-2 items-center">
-                <span className="text-xs text-gray-500">状態:</span>
-                <select
-                    value={selectedCondition}
-                    onChange={e => setSelectedCondition(e.target.value)}
-                    className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
-                >
-                    {CONDITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <span className="text-xs text-gray-500 ml-2">ラベル:</span>
-                <input
-                    type="text"
-                    value={selectedLabel}
-                    onChange={e => setSelectedLabel(e.target.value)}
-                    placeholder="PSA10 / 素体 等"
-                    className="w-24 px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
-                />
             </div>
 
             {/* 検索結果 */}
@@ -270,7 +274,7 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                                         <span className="text-xs text-green-600 font-medium px-3 py-2">✅ 紐付済</span>
                                     ) : (
                                         <button
-                                            onClick={() => addLink(item.item_id, selectedLabel || selectedCondition, selectedCondition)}
+                                            onClick={() => addLink(item.item_id, selectedLabel, selectedCondition)}
                                             disabled={linking}
                                             className="px-3 py-2 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 disabled:opacity-50"
                                         >

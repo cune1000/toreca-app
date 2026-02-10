@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchAllLoungeCards } from '@/lib/toreca-lounge'
 
+export const maxDuration = 60
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url)
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest) {
             }, { status: 400 })
         }
 
-        // トレカラウンジから全カードを取得
+        // トレカラウンジから全カードを取得（全ページ）
         const allCards = await fetchAllLoungeCards()
 
         // キーワード分割AND検索

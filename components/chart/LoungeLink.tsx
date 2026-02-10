@@ -30,6 +30,13 @@ interface Props {
     onLinksChanged?: () => void
 }
 
+const LABEL_OPTIONS = [
+    { value: '素体', label: '素体' },
+    { value: 'PSA10', label: 'PSA10' },
+    { value: '未開封', label: '未開封' },
+    { value: '開封済み', label: '開封済み' },
+]
+
 export default function LoungeLink({ cardId, cardName, shopName = 'トレカラウンジ（郵送買取）', links, onLinksChanged }: Props) {
     const [query, setQuery] = useState(cardName || '')
     const [results, setResults] = useState<LoungeResult[]>([])
@@ -37,12 +44,13 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
     const [linking, setLinking] = useState(false)
     const [error, setError] = useState('')
     const [total, setTotal] = useState(0)
+    const [allCount, setAllCount] = useState(0)
     const [autoSearched, setAutoSearched] = useState(false)
-    const [selectedLabel, setSelectedLabel] = useState('')
+    const [selectedLabel, setSelectedLabel] = useState('素体')
     const [showManualInput, setShowManualInput] = useState(false)
     const [manualName, setManualName] = useState('')
     const [manualModelno, setManualModelno] = useState('')
-    const [manualLabel, setManualLabel] = useState('')
+    const [manualLabel, setManualLabel] = useState('素体')
 
     const formatPrice = (p: number) => `¥${p.toLocaleString()}`
 
@@ -61,6 +69,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
             if (!json.success) throw new Error(json.error)
             setResults(json.data.items)
             setTotal(json.data.total)
+            setAllCount(json.data.allCount)
         } catch (err: any) {
             setError(err.message)
         } finally {
@@ -85,7 +94,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                     card_id: cardId,
                     shop_name: shopName,
                     external_key: externalKey,
-                    label: label || '素体',
+                    label: label,
                     condition: 'normal',
                 }),
             })
@@ -160,16 +169,16 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 
-            {/* ラベル選択 */}
-            <div className="flex gap-2 items-center">
+            {/* ラベル選択（ドロップダウン） */}
+            <div className="flex gap-1.5 items-center">
                 <span className="text-xs text-gray-500">ラベル:</span>
-                <input
-                    type="text"
+                <select
                     value={selectedLabel}
                     onChange={e => setSelectedLabel(e.target.value)}
-                    placeholder="素体 / PSA10 等"
-                    className="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
-                />
+                    className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                >
+                    {LABEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
             </div>
 
             {/* 手動キー入力 */}
@@ -197,17 +206,17 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                                 placeholder="型番"
                                 className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm"
                             />
-                            <input
-                                type="text"
+                            <select
                                 value={manualLabel}
                                 onChange={e => setManualLabel(e.target.value)}
-                                placeholder="ラベル"
-                                className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                            />
+                                className="px-2 py-2 border border-gray-200 rounded-lg text-sm"
+                            >
+                                {LABEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
                             <button
                                 onClick={() => {
                                     if (manualName && manualModelno) {
-                                        addLink(`${manualName}::${manualModelno}`, manualLabel || '素体')
+                                        addLink(`${manualName}::${manualModelno}`, manualLabel)
                                     }
                                 }}
                                 disabled={!manualName || !manualModelno || linking}
@@ -223,7 +232,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
             {/* 検索結果 */}
             {results.length > 0 && (
                 <div>
-                    <p className="text-xs text-gray-400 mb-2">{total}件の候補</p>
+                    <p className="text-xs text-gray-400 mb-2">{total}件の候補（全{allCount}件中）</p>
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {results.map(item => (
                             <div
@@ -257,7 +266,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                                             <span className="text-xs text-orange-600 font-medium px-3 py-2">🏪 紐付済</span>
                                         ) : (
                                             <button
-                                                onClick={() => addLink(item.key, selectedLabel || '素体')}
+                                                onClick={() => addLink(item.key, selectedLabel)}
                                                 disabled={linking}
                                                 className="px-3 py-2 bg-orange-600 text-white rounded-lg text-xs font-medium hover:bg-orange-700 disabled:opacity-50"
                                             >
@@ -275,7 +284,7 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
             {searching && (
                 <div className="py-4 text-center">
                     <div className="inline-block w-5 h-5 border-2 border-gray-200 border-t-orange-600 rounded-full animate-spin" />
-                    <p className="text-xs text-gray-400 mt-2">検索中...</p>
+                    <p className="text-xs text-gray-400 mt-2">全ページ取得中...（30秒程度かかります）</p>
                 </div>
             )}
         </div>
