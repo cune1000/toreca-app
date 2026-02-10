@@ -20,15 +20,26 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'No cards fetched' }, { status: 500 })
         }
 
-        // ② 既存キャッシュを全削除してから一括INSERT
+        // ② card_keyで重複除去（同じキーなら高い方を残す）
+        const cardMap = new Map<string, typeof allCards[0]>()
+        for (const card of allCards) {
+            const existing = cardMap.get(card.key)
+            if (!existing || card.price > existing.price) {
+                cardMap.set(card.key, card)
+            }
+        }
+        const uniqueCards = Array.from(cardMap.values())
+
+        // ③ 既存キャッシュを全削除してから一括INSERT
         await supabase.from('lounge_cards_cache').delete().neq('id', 0)
 
         // 50件ずつバッチINSERT
         const batchSize = 50
         let insertedCount = 0
+        let errorCount = 0
 
-        for (let i = 0; i < allCards.length; i += batchSize) {
-            const batch = allCards.slice(i, i + batchSize).map(card => ({
+        for (let i = 0; i < uniqueCards.length; i += batchSize) {
+            const batch = uniqueCards.slice(i, i + batchSize).map(card => ({
                 product_id: card.productId,
                 name: card.name,
                 modelno: card.modelno,
@@ -47,6 +58,7 @@ export async function GET(request: NextRequest) {
 
             if (error) {
                 console.error(`Batch ${i} error:`, error)
+                errorCount++
             } else {
                 insertedCount += batch.length
             }
@@ -59,7 +71,10 @@ export async function GET(request: NextRequest) {
             status: 'success',
             details: {
                 scraped: allCards.length,
+                unique: uniqueCards.length,
+                duplicates: allCards.length - uniqueCards.length,
                 cached: insertedCount,
+                errors: errorCount,
                 elapsed: `${elapsed}s`,
             },
         })
@@ -67,7 +82,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             scraped: allCards.length,
+            unique: uniqueCards.length,
+            duplicates: allCards.length - uniqueCards.length,
             cached: insertedCount,
+            errors: errorCount,
             elapsed: `${elapsed}s`,
         })
     } catch (error: any) {
