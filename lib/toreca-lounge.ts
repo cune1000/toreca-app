@@ -3,7 +3,7 @@
  * 
  * /products ページのNext.js RSCストリームから
  * JSON商品データを抽出する方式
- * 全ページをループして取得（1ページ約72件）
+ * 全ページをループして取得（1ページ48件 × 最大50ページ）
  */
 
 const BASE_URL = 'https://kaitori.toreca-lounge.com'
@@ -16,7 +16,7 @@ export interface LoungeCard {
     grade: string          // "PSA10", "" など
     productFormat: string  // "PSA", "NORMAL" など
     price: number
-    key: string            // "カード名::型番" の一意キー
+    key: string            // "カード名::型番::grade::format" の一意キー
     imageUrl: string
 }
 
@@ -56,12 +56,14 @@ export async function fetchAllLoungeCards(): Promise<LoungeCard[]> {
 /**
  * HTML文字列からRSCストリーム内のproductデータを抽出
  * 
- * 複数のマーカーパターンを試して、全カードを確実に抽出する
+ * RSCストリームは同じデータがレンダリング用とハイドレーション用で
+ * 2回含まれるため、productIdで重複除去する
  */
 function parseProductsFromHtml(html: string): LoungeCard[] {
     const cards: LoungeCard[] = []
+    const seenProductIds = new Set<string>()
 
-    // 方法1: \"product\":{ マーカーで探す（フィールド順序問わず）
+    // \\\"product\\\":{ マーカーで探す（フィールド順序問わず）
     const marker = '\\\"product\\\":{'
     let searchStart = 0
 
@@ -82,71 +84,32 @@ function parseProductsFromHtml(html: string): LoungeCard[] {
         const buyPrice = extractField(chunk, 'buyPrice')
         const imageUrl = extractField(chunk, 'imageUrl')
 
-        if (productName && buyPrice) {
-            const name = decodeUnicode(productName)
-            const modelno = decodeUnicode(modelNumber || '')
-            const price = parseInt(buyPrice, 10) || 0
+        if (productName && buyPrice && productId) {
+            // productIdで重複除去（RSCストリーム内の2重データ対策）
+            if (!seenProductIds.has(productId)) {
+                seenProductIds.add(productId)
 
-            if (name && price > 0) {
-                cards.push({
-                    productId: productId || '',
-                    name,
-                    modelno,
-                    rarity: decodeUnicode(rarity || ''),
-                    grade: grade || '',
-                    productFormat: productFormat || '',
-                    price,
-                    key: `${name}::${modelno}::${grade || ''}::${productFormat || ''}`,
-                    imageUrl: decodeUnicode(imageUrl || ''),
-                })
+                const name = decodeUnicode(productName)
+                const modelno = decodeUnicode(modelNumber || '')
+                const price = parseInt(buyPrice, 10) || 0
+
+                if (name && price > 0) {
+                    cards.push({
+                        productId,
+                        name,
+                        modelno,
+                        rarity: decodeUnicode(rarity || ''),
+                        grade: grade || '',
+                        productFormat: productFormat || '',
+                        price,
+                        key: `${name}::${modelno}::${grade || ''}::${productFormat || ''}`,
+                        imageUrl: decodeUnicode(imageUrl || ''),
+                    })
+                }
             }
         }
 
         searchStart = idx + marker.length
-    }
-
-    // 方法2: buyPrice マーカーで追加探索（方法1で漏れたものを拾う）
-    const buyPriceMarker = '\\\"buyPrice\\\":\\\"'
-    searchStart = 0
-
-    while (true) {
-        const idx = html.indexOf(buyPriceMarker, searchStart)
-        if (idx === -1) break
-
-        // buyPriceの前後2000文字を取得してフィールド抽出
-        const chunkStart = Math.max(0, idx - 1000)
-        const chunk = html.substring(chunkStart, idx + 1000)
-
-        const productName = extractField(chunk, 'productName')
-        const buyPrice = extractField(chunk, 'buyPrice')
-
-        if (productName && buyPrice) {
-            const name = decodeUnicode(productName)
-            const modelno = decodeUnicode(extractField(chunk, 'modelNumber') || '')
-            const price = parseInt(buyPrice, 10) || 0
-
-            // 既に方法1で取得済みなら重複スキップ
-            const grade = extractField(chunk, 'grade') || ''
-            const productFormat = extractField(chunk, 'productFormat') || ''
-            const key = `${name}::${modelno}::${grade}::${productFormat}`
-            const alreadyExists = cards.some(c => c.key === key)
-
-            if (name && price > 0 && !alreadyExists) {
-                cards.push({
-                    productId: extractField(chunk, 'productId') || '',
-                    name,
-                    modelno,
-                    rarity: decodeUnicode(extractField(chunk, 'rarity') || ''),
-                    grade,
-                    productFormat,
-                    price,
-                    key,
-                    imageUrl: decodeUnicode(extractField(chunk, 'imageUrl') || ''),
-                })
-            }
-        }
-
-        searchStart = idx + buyPriceMarker.length
     }
 
     return cards
