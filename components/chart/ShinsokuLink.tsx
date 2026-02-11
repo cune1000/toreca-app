@@ -48,8 +48,31 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
     const [autoSearched, setAutoSearched] = useState(false)
     const [showManualInput, setShowManualInput] = useState(false)
     const [manualId, setManualId] = useState('')
+    const [linkedDetails, setLinkedDetails] = useState<Record<string, ShinsokuResult>>({})
 
     const formatPrice = (p: number | null) => p != null ? `¥${p.toLocaleString()}` : '-'
+
+    // 紐付け済みアイテムの画像・詳細を検索結果からマッチング
+    useEffect(() => {
+        if (results.length > 0 && links.length > 0) {
+            const newDetails: Record<string, ShinsokuResult> = { ...linkedDetails }
+            for (const link of links) {
+                const match = results.find(r => r.item_id === link.external_key)
+                if (match) {
+                    newDetails[link.external_key] = match
+                }
+            }
+            setLinkedDetails(newDetails)
+        }
+    }, [results, links])
+
+    // 紐付けがあるが詳細がない場合、自動検索
+    useEffect(() => {
+        if (links.length > 0 && Object.keys(linkedDetails).length === 0 && !autoSearched && cardName && cardName.length >= 2) {
+            setAutoSearched(true)
+            search(cardName)
+        }
+    }, [links.length, linkedDetails])
 
     const search = async (q?: string) => {
         const searchQuery = q || query
@@ -125,20 +148,45 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
             {/* 紐付け済みリスト */}
             {links.length > 0 && (
                 <div className="space-y-2">
-                    {links.map(link => (
-                        <div key={link.id} className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
-                            <p className="text-xs text-green-600 font-medium">
-                                🔗 {link.label} — {link.external_key}
-                            </p>
-                            <button
-                                onClick={() => removeLink(link.id)}
-                                disabled={linking}
-                                className="text-xs px-3 py-1.5 bg-white border border-green-200 text-green-600 rounded-lg hover:bg-green-50 disabled:opacity-50"
-                            >
-                                解除
-                            </button>
-                        </div>
-                    ))}
+                    {links.map(link => {
+                        const detail = linkedDetails[link.external_key]
+                        return (
+                            <div key={link.id} className="bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 flex items-center gap-3">
+                                {/* 画像 */}
+                                {detail?.image_url ? (
+                                    <img src={detail.image_url} alt="" className="w-10 h-14 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
+                                ) : (
+                                    <div className="w-10 h-14 bg-green-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">🃏</div>
+                                )}
+                                {/* カード情報 */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-gray-900 truncate">
+                                        {detail?.name || link.external_key}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-200 text-green-700 font-medium">{link.label}</span>
+                                        {detail?.modelno && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">{detail.modelno}</span>}
+                                        {detail?.rarity && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{detail.rarity}</span>}
+                                    </div>
+                                    {detail && (
+                                        <div className="flex gap-2 mt-0.5 text-[10px] text-gray-500">
+                                            <span>S: {formatPrice(detail.prices?.s)}</span>
+                                            <span>A: {formatPrice(detail.prices?.a)}</span>
+                                            <span>B: {formatPrice(detail.prices?.b)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                {/* 解除ボタン */}
+                                <button
+                                    onClick={() => removeLink(link.id)}
+                                    disabled={linking}
+                                    className="text-xs px-3 py-1.5 bg-white border border-green-200 text-green-600 rounded-lg hover:bg-green-50 disabled:opacity-50 flex-shrink-0"
+                                >
+                                    解除
+                                </button>
+                            </div>
+                        )
+                    })}
                 </div>
             )}
 

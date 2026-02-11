@@ -44,8 +44,33 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
     const [showManualInput, setShowManualInput] = useState(false)
     const [manualName, setManualName] = useState('')
     const [manualModelno, setManualModelno] = useState('')
+    const [linkedDetails, setLinkedDetails] = useState<Record<string, LoungeResult>>({})
 
     const formatPrice = (p: number) => `¥${p.toLocaleString()}`
+
+    // 紐付け済みアイテムの画像・詳細をキャッシュから取得
+    useEffect(() => {
+        if (links.length === 0) return
+        const keys = links.map(l => l.external_key).filter(k => !linkedDetails[k])
+        if (keys.length === 0) return
+
+        const fetchDetails = async () => {
+            try {
+                const res = await fetch(`/api/toreca-lounge/search?keys=${encodeURIComponent(keys.join(','))}`)
+                const json = await res.json()
+                if (json.success && json.data?.items) {
+                    const newDetails: Record<string, LoungeResult> = { ...linkedDetails }
+                    for (const item of json.data.items) {
+                        newDetails[item.key] = item
+                    }
+                    setLinkedDetails(newDetails)
+                }
+            } catch (e) {
+                // 画像取得失敗は無視
+            }
+        }
+        fetchDetails()
+    }, [links])
 
     const search = async (q?: string) => {
         const searchQuery = q || query
@@ -117,25 +142,55 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
 
     const getLinkedLabels = (key: string) => links.filter(l => l.external_key === key).map(l => l.label)
 
+    // external_keyからカード名を抽出（フォールバック用）
+    const parseKeyName = (key: string) => {
+        const parts = key.split('::')
+        return { name: parts[0] || key, modelno: parts[1] || '', grade: parts[2] || '', format: parts[3] || '' }
+    }
+
     return (
         <div className="space-y-3">
             {/* 紐付け済みリスト */}
             {links.length > 0 && (
                 <div className="space-y-2">
-                    {links.map(link => (
-                        <div key={link.id} className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
-                            <p className="text-xs text-orange-600 font-medium">
-                                🏪 {link.label} — {link.external_key}
-                            </p>
-                            <button
-                                onClick={() => removeLink(link.id)}
-                                disabled={linking}
-                                className="text-xs px-3 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-lg hover:bg-orange-50 disabled:opacity-50"
-                            >
-                                解除
-                            </button>
-                        </div>
-                    ))}
+                    {links.map(link => {
+                        const detail = linkedDetails[link.external_key]
+                        const parsed = parseKeyName(link.external_key)
+                        return (
+                            <div key={link.id} className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5 flex items-center gap-3">
+                                {/* 画像 */}
+                                {detail?.imageUrl ? (
+                                    <img src={detail.imageUrl} alt="" className="w-10 h-14 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
+                                ) : (
+                                    <div className="w-10 h-14 bg-orange-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">🃏</div>
+                                )}
+                                {/* カード情報 */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-gray-900 truncate">
+                                        {detail?.name || parsed.name}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-700 font-medium">{link.label}</span>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">{detail?.modelno || parsed.modelno}</span>
+                                        {(detail?.grade || parsed.grade) && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">{detail?.grade || parsed.grade}</span>
+                                        )}
+                                    </div>
+                                    {detail && (
+                                        <p className="text-xs font-bold text-orange-600 mt-0.5">{formatPrice(detail.price)}</p>
+                                    )}
+                                </div>
+                                {/* 解除ボタン */}
+                                <button
+                                    onClick={() => removeLink(link.id)}
+                                    disabled={linking}
+                                    className="text-xs px-3 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-lg hover:bg-orange-50 disabled:opacity-50 flex-shrink-0"
+                                >
+                                    解除
+                                </button>
+                            </div>
+                        )
+                    })}
                 </div>
             )}
 
