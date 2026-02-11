@@ -42,8 +42,9 @@ export async function fetchAllLoungeCards(): Promise<LoungeCard[]> {
 
         const rawHtml = await res.text()
         // RSCストリームは複数の<script>タグに分割される
-        // データが途中で切れるため、分割境界を除去して結合する
-        const html = rawHtml.replace(/<\/script><script>self\.__next_f\.push\(\[1,"/g, '')
+        // 境界パターン: ...data"])</script><script>self.__next_f.push([1,"data...
+        // "])</script><script>self.__next_f.push([1," を除去して結合する
+        const html = rawHtml.replace(/"\]\)<\/script><script>self\.__next_f\.push\(\[1,"/g, '')
         const pageCards = parseProductsFromHtml(html)
 
         if (pageCards.length === 0) {
