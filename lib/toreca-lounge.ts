@@ -28,7 +28,7 @@ export async function fetchAllLoungeCards(): Promise<LoungeCard[]> {
     const MAX_PAGES = 50
 
     for (let page = 1; page <= MAX_PAGES; page++) {
-        const url = `${BASE_URL}/products?page=${page}`
+        const url = `${BASE_URL}/products/pokemon?page=${page}`
         const res = await fetch(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
