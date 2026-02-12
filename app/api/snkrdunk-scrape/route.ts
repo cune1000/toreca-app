@@ -34,11 +34,15 @@ export async function POST(req: Request) {
         }
 
         console.log(`[SnkrdunkAPI] Starting fetch for apparelId=${apparelId}, cardId=${cardId}`)
+        const timings: Record<string, number> = {}
+        let t = Date.now()
 
         // ① 商品情報を取得して商品タイプを判定
         const productInfo = await getProductInfo(apparelId)
         const productType = productInfo.isBox ? 'box' : 'single'
-        console.log(`[SnkrdunkAPI] Product: ${productInfo.localizedName} (${productType})`)
+        timings['1_getProductInfo'] = Date.now() - t
+        t = Date.now()
+        console.log(`[SnkrdunkAPI] Product: ${productInfo.localizedName} (${productType}) [${timings['1_getProductInfo']}ms]`)
 
         // ② card_sale_urls の apparel_id を更新（初回のみ）
         await supabase
@@ -47,18 +51,21 @@ export async function POST(req: Request) {
             .eq('card_id', cardId)
             .eq('product_url', url)
             .is('apparel_id', null)
+        timings['2_updateApparelId'] = Date.now() - t
+        t = Date.now()
 
         // ③ 売買履歴を取得
         // backfill=true: 全ページ取得（初回用）、デフォルト: 1ページ（20件）のみ
         let salesHistory: SnkrdunkSaleRecord[]
         if (backfill) {
             salesHistory = await getAllSalesHistory(apparelId, 10, 50)
-            console.log(`[SnkrdunkAPI] Backfill: ${salesHistory.length} sales records`)
         } else {
             const result = await getSalesHistory(apparelId, 1, 20)
             salesHistory = result.history
-            console.log(`[SnkrdunkAPI] Fetched ${salesHistory.length} recent sales`)
         }
+        timings['3_getSalesHistory'] = Date.now() - t
+        t = Date.now()
+        console.log(`[SnkrdunkAPI] Fetched ${salesHistory.length} sales [${timings['3_getSalesHistory']}ms]`)
 
         if (salesHistory.length === 0) {
             return NextResponse.json({
@@ -101,13 +108,16 @@ export async function POST(req: Request) {
             }
         }).filter(Boolean) as any[]
 
-        console.log(`[SnkrdunkAPI] Processed ${processedData.length} valid records from ${salesHistory.length} raw`)
+        timings['4_processData'] = Date.now() - t
+        t = Date.now()
 
         // ⑤ 既存データを取得（重複判定用）
         const { data: existingData } = await supabase
             .from('snkrdunk_sales_history')
             .select('grade, price, sold_at, user_icon_number')
             .eq('card_id', cardId)
+        timings['5_fetchExisting'] = Date.now() - t
+        t = Date.now()
 
         // ⑥ 重複判定して新規のみ抽出
         const newData: any[] = []
@@ -150,6 +160,8 @@ export async function POST(req: Request) {
                 scraped_at: new Date().toISOString(),
             })
         }
+        timings['6_dedup'] = Date.now() - t
+        t = Date.now()
 
         // ⑦ バッチINSERT（50件ずつ）
         let insertedCount = 0
@@ -161,7 +173,6 @@ export async function POST(req: Request) {
 
             if (error) {
                 console.error(`[Batch insert error] ${error.code}: ${error.message}`)
-                // バッチ失敗時は1件ずつフォールバック
                 for (const item of batch) {
                     const { error: singleErr } = await supabase
                         .from('snkrdunk_sales_history')
@@ -177,8 +188,9 @@ export async function POST(req: Request) {
                 insertedCount += batch.length
             }
         }
+        timings['7_dbInsert'] = Date.now() - t
 
-        console.log(`[SnkrdunkAPI] DB write: inserted=${insertedCount}, skipped=${skippedCount}`)
+        console.log(`[SnkrdunkAPI] DB write: inserted=${insertedCount}, skipped=${skippedCount}`, timings)
 
         return NextResponse.json({
             success: true,
@@ -189,6 +201,7 @@ export async function POST(req: Request) {
             total: processedData.length,
             inserted: insertedCount,
             skipped: skippedCount,
+            timings,
         })
     } catch (error: any) {
         console.error('[SnkrdunkAPI] Error:', error)
@@ -208,3 +221,4 @@ function extractIconNumber(imageUrl: string): number | null {
     const match = imageUrl.match(/user-icon-(\d+)\./)
     return match ? parseInt(match[1], 10) : null
 }
+
