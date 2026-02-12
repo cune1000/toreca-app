@@ -52,21 +52,50 @@ export interface SnkrdunkListing {
 // ============================================================================
 
 async function snkrdunkFetch(url: string): Promise<Response> {
+    const TIMEOUT_MS = 15000 // 15秒タイムアウト
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
     const headers: Record<string, string> = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'Accept': 'application/json',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+        'Referer': 'https://snkrdunk.com/',
     }
 
-    if (ZENROWS_API_KEY) {
-        // ZenRows プロキシ経由
-        const zenrowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(url)}`
-        console.log(`[SnkrdunkAPI] Fetching via ZenRows: ${url}`)
-        return fetch(zenrowsUrl)
-    }
+    try {
+        let res: Response
 
-    // 直接呼び出し
-    console.log(`[SnkrdunkAPI] Fetching directly: ${url}`)
-    return fetch(url, { headers })
+        if (ZENROWS_API_KEY) {
+            // ZenRows プロキシ経由
+            const zenrowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(url)}`
+            console.log(`[SnkrdunkAPI] Fetching via ZenRows: ${url}`)
+            res = await fetch(zenrowsUrl, { signal: controller.signal })
+        } else {
+            // 直接呼び出し
+            console.log(`[SnkrdunkAPI] Fetching directly: ${url}`)
+            res = await fetch(url, { headers, signal: controller.signal })
+        }
+
+        console.log(`[SnkrdunkAPI] Response: ${res.status} ${res.statusText}, content-type: ${res.headers.get('content-type')}`)
+
+        // JSONでない場合（Cloudflareチャレンジ等）はエラー
+        const contentType = res.headers.get('content-type') || ''
+        if (res.ok && !contentType.includes('application/json')) {
+            const body = await res.text()
+            console.error(`[SnkrdunkAPI] Non-JSON response (${contentType}): ${body.substring(0, 500)}`)
+            throw new Error(`APIがJSON以外を返しました (${contentType})。Cloudflare/WAFでブロックされている可能性があります`)
+        }
+
+        return res
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            throw new Error(`API呼び出しが${TIMEOUT_MS / 1000}秒でタイムアウトしました: ${url}`)
+        }
+        throw error
+    } finally {
+        clearTimeout(timeout)
+    }
 }
 
 // ============================================================================
