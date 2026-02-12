@@ -37,13 +37,13 @@ export async function POST(request: NextRequest) {
         // shop_idまたはshop_nameでショップを特定（なければ自動作成）
         let resolvedShopId = shop_id
         if (!resolvedShopId && shop_name) {
-            const { data: shop } = await supabase
+            const { data: shops } = await supabase
                 .from('purchase_shops')
                 .select('id')
                 .eq('name', shop_name)
-                .single()
-            if (shop) {
-                resolvedShopId = shop.id
+                .limit(1)
+            if (shops && shops.length > 0) {
+                resolvedShopId = shops[0].id
             } else {
                 // ショップが未登録なら自動作成
                 const { data: newShop } = await supabase
