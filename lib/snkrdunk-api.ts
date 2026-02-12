@@ -70,11 +70,11 @@ async function snkrdunkFetch(url: string): Promise<Response> {
             // ZenRows プロキシ経由
             const zenrowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(url)}`
             console.log(`[SnkrdunkAPI] Fetching via ZenRows: ${url}`)
-            res = await fetch(zenrowsUrl, { signal: controller.signal })
+            res = await fetch(zenrowsUrl, { signal: controller.signal, cache: 'no-store' })
         } else {
             // 直接呼び出し
             console.log(`[SnkrdunkAPI] Fetching directly: ${url}`)
-            res = await fetch(url, { headers, signal: controller.signal })
+            res = await fetch(url, { headers, signal: controller.signal, cache: 'no-store' })
         }
 
         console.log(`[SnkrdunkAPI] Response: ${res.status} ${res.statusText}, content-type: ${res.headers.get('content-type')}`)
