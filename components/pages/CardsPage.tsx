@@ -89,6 +89,9 @@ export default function CardsPage({
   const [inlineUrlSuccess, setInlineUrlSuccess] = useState<Record<string, boolean>>({})
   const [inlineUrlError, setInlineUrlError] = useState<Record<string, string>>({})
 
+  // 買取紐付け状態（card_purchase_links）
+  const [cardPurchaseLinks, setCardPurchaseLinks] = useState<Record<string, string[]>>({})
+
   const ITEMS_PER_PAGE = 50
 
   // =============================================================================
@@ -104,7 +107,7 @@ export default function CardsPage({
     fetchSaleSites()
   }, [])
 
-  // カード一覧が変わったら登録URL情報を取得
+  // カード一覧が変わったら登録URL情報 + 買取紐付け情報を取得
   useEffect(() => {
     const fetchCardSaleUrls = async () => {
       if (filteredCards.length === 0) return
@@ -122,7 +125,27 @@ export default function CardsPage({
         setCardSaleUrls(map)
       }
     }
+    const fetchPurchaseLinks = async () => {
+      if (filteredCards.length === 0) return
+      const cardIds = filteredCards.map(c => c.id)
+      const { data } = await supabase
+        .from('card_purchase_links')
+        .select('card_id, shop:shop_id(name)')
+        .in('card_id', cardIds)
+      if (data) {
+        const map: Record<string, string[]> = {}
+        data.forEach((link: any) => {
+          const shopName = link.shop?.name || ''
+          if (!map[link.card_id]) map[link.card_id] = []
+          if (!map[link.card_id].includes(shopName)) {
+            map[link.card_id].push(shopName)
+          }
+        })
+        setCardPurchaseLinks(map)
+      }
+    }
     fetchCardSaleUrls()
+    fetchPurchaseLinks()
   }, [filteredCards, refreshKey])
 
   // URL自動サイト特定
@@ -748,6 +771,7 @@ export default function CardsPage({
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
                   <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">シンソク</th>
+                  <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">ラウンジ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -831,8 +855,15 @@ export default function CardsPage({
                     <td className="px-4 py-2 text-sm text-gray-600" onClick={() => onSelectCard(card)}>{card.card_number || '−'}</td>
                     <td className="px-4 py-2 text-center" onClick={() => onSelectCard(card)}>{getStatusBadge(card.id)}</td>
                     <td className="px-3 py-2 text-center" onClick={() => onSelectCard(card)}>
-                      {card.shinsoku_item_id ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700" title={`ID: ${card.shinsoku_item_id}`}>✅</span>
+                      {(cardPurchaseLinks[card.id] || []).some(s => s.includes('シンソク')) ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">✅</span>
+                      ) : (
+                        <span className="text-gray-300 text-sm">−</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center" onClick={() => onSelectCard(card)}>
+                      {(cardPurchaseLinks[card.id] || []).some(s => s.includes('ラウンジ')) ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-700">✅</span>
                       ) : (
                         <span className="text-gray-300 text-sm">−</span>
                       )}
