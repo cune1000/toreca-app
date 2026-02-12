@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { parseRelativeTime, normalizeGrade, parsePrice } from '@/lib/scraping/helpers'
-import { TORECA_SCRAPER_URL } from '@/lib/config'
+import { parseRelativeTime, normalizeGrade } from '@/lib/scraping/helpers'
+import {
+    extractApparelId,
+    getProductInfo,
+    getSalesHistory,
+    getAllSalesHistory,
+    type SnkrdunkSaleRecord,
+} from '@/lib/snkrdunk-api'
 
 /**
- * スニーカーダンクの売買履歴をスクレイピング
- * toreca-scraper（Railway）を呼び出してスクレイピング
+ * スニダン売買履歴をAPI経由で取得してDBに保存
+ * 手動実行用エンドポイント
  */
 export async function POST(req: Request) {
     try {
@@ -18,70 +24,159 @@ export async function POST(req: Request) {
             )
         }
 
-        console.log(`[Snkrdunk] Scraping via toreca-scraper: ${url}`)
-
-        // toreca-scraperを呼び出してスクレイピング
-        const scrapeResponse = await fetch(`${TORECA_SCRAPER_URL}/api/snkrdunk-scrape`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
-        })
-
-        if (!scrapeResponse.ok) {
-            throw new Error(`Scraper failed: ${scrapeResponse.statusText}`)
+        // URLからapparelIdを抽出
+        const apparelId = extractApparelId(url)
+        if (!apparelId) {
+            return NextResponse.json(
+                { success: false, error: 'URLからapparelIdを抽出できません' },
+                { status: 400 }
+            )
         }
 
-        const scrapeData = await scrapeResponse.json()
+        console.log(`[SnkrdunkAPI] Starting fetch for apparelId=${apparelId}, cardId=${cardId}`)
 
-        if (!scrapeData.success) {
-            throw new Error(scrapeData.error || 'Scraping failed')
+        // ① 商品情報を取得して商品タイプを判定
+        const productInfo = await getProductInfo(apparelId)
+        const productType = productInfo.isBox ? 'box' : 'single'
+        console.log(`[SnkrdunkAPI] Product: ${productInfo.localizedName} (${productType})`)
+
+        // ② card_sale_urls の apparel_id を更新（初回のみ）
+        await supabase
+            .from('card_sale_urls')
+            .update({ apparel_id: apparelId })
+            .eq('card_id', cardId)
+            .eq('product_url', url)
+            .is('apparel_id', null)
+
+        // ③ 売買履歴を取得（全ページ）
+        const salesHistory = await getAllSalesHistory(apparelId, 5, 50)
+        console.log(`[SnkrdunkAPI] Fetched ${salesHistory.length} sales records`)
+
+        if (salesHistory.length === 0) {
+            return NextResponse.json({
+                success: true,
+                apparelId,
+                productType,
+                productName: productInfo.localizedName,
+                total: 0,
+                inserted: 0,
+                skipped: 0,
+                message: 'No sales history found',
+            })
         }
 
-        // バックグラウンド処理の場合: ジョブIDを返す
-        if (scrapeData.jobId) {
-            console.log(`[Snkrdunk] Background job started: ${scrapeData.jobId}`)
+        // ④ データを整形
+        const now = new Date()
+        const processedData = salesHistory.map((item: SnkrdunkSaleRecord) => {
+            // 日時パース（相対時刻 or 絶対日付）
+            const soldAt = parseRelativeTime(item.date, now)
+            if (!soldAt) return null
 
-            // ポーリング処理
-            const pollInterval = 2000 // 2秒ごと
-            const maxAttempts = 60 // 最大2分
-            let attempts = 0
+            // グレード正規化
+            // シングル: condition ("PSA10", "A" etc) を使う
+            // BOX: size ("1個", "2個" etc) を使う
+            const gradeSource = productType === 'box' ? item.size : item.condition
+            const grade = normalizeGrade(gradeSource)
+            if (!grade) return null
 
-            const pollJob = async (): Promise<any> => {
-                attempts++
+            if (!item.price || item.price === 0) return null
 
-                const statusRes = await fetch(`${TORECA_SCRAPER_URL}/scrape/status/${scrapeData.jobId}`)
-                const statusData = await statusRes.json()
+            return {
+                grade,
+                price: item.price,
+                sold_at: soldAt.toISOString(),
+                product_type: productType,
+                size: item.size || null,
+                condition: item.condition || null,
+                label: item.label || null,
+                user_icon_number: extractIconNumber(item.imageUrl),
+            }
+        }).filter(Boolean) as any[]
 
-                if (statusData.status === 'completed') {
-                    // 成功: 結果を処理
-                    const salesHistory = statusData.result?.sales || []
-                    console.log(`[Snkrdunk] Job completed: ${salesHistory.length} sales`)
+        console.log(`[SnkrdunkAPI] Processed ${processedData.length} valid records from ${salesHistory.length} raw`)
 
-                    // データベースに保存
-                    return await processSalesHistory(cardId, salesHistory)
-                } else if (statusData.status === 'failed') {
-                    // 失敗
-                    throw new Error(statusData.error || 'Scraping failed')
-                } else if (attempts >= maxAttempts) {
-                    // タイムアウト
-                    throw new Error('Timeout: Job took too long')
-                }
+        // ⑤ 既存データを取得（重複判定用）
+        const { data: existingData } = await supabase
+            .from('snkrdunk_sales_history')
+            .select('grade, price, sold_at, user_icon_number')
+            .eq('card_id', cardId)
 
-                // まだ処理中: 再度ポーリング
-                await new Promise(resolve => setTimeout(resolve, pollInterval))
-                return pollJob()
+        // ⑥ 重複判定して新規のみ抽出
+        let insertedCount = 0
+        let skippedCount = 0
+
+        for (const sale of processedData) {
+            let isDuplicate = false
+
+            if (sale.user_icon_number) {
+                // アイコン番号がある場合: グレード・価格・アイコン番号で判定
+                isDuplicate = existingData?.some(existing =>
+                    existing.grade === sale.grade &&
+                    existing.price === sale.price &&
+                    existing.user_icon_number === sale.user_icon_number
+                ) || false
+            } else {
+                // アイコン番号がない場合: 時刻も含めて判定
+                isDuplicate = existingData?.some(existing =>
+                    existing.grade === sale.grade &&
+                    existing.price === sale.price &&
+                    existing.sold_at === sale.sold_at &&
+                    !existing.user_icon_number
+                ) || false
             }
 
-            return await pollJob()
+            if (isDuplicate) {
+                skippedCount++
+                continue
+            }
+
+            const insertData: any = {
+                card_id: cardId,
+                grade: sale.grade,
+                price: sale.price,
+                sold_at: sale.sold_at,
+                product_type: sale.product_type,
+                size: sale.size,
+                condition: sale.condition,
+                label: sale.label,
+                sequence_number: 0,
+                scraped_at: new Date().toISOString(),
+            }
+
+            if (sale.user_icon_number !== null) {
+                insertData.user_icon_number = sale.user_icon_number
+            }
+
+            const { error } = await supabase
+                .from('snkrdunk_sales_history')
+                .insert(insertData)
+
+            if (error) {
+                if (error.code === '23505') {
+                    // 重複エラー（UNIQUE制約）
+                    skippedCount++
+                } else {
+                    console.error(`[Insert error] ${error.code}: ${error.message}`, insertData)
+                }
+            } else {
+                insertedCount++
+            }
         }
 
-        // 同期処理の場合(後方互換性)
-        const salesHistory = scrapeData.sales || []
-        console.log(`[Snkrdunk] Received ${salesHistory.length} sales from scraper`)
+        console.log(`[SnkrdunkAPI] DB write: inserted=${insertedCount}, skipped=${skippedCount}`)
 
-        return await processSalesHistory(cardId, salesHistory)
+        return NextResponse.json({
+            success: true,
+            apparelId,
+            productType,
+            productName: productInfo.localizedName,
+            minPrice: productInfo.minPrice,
+            total: processedData.length,
+            inserted: insertedCount,
+            skipped: skippedCount,
+        })
     } catch (error: any) {
-        console.error('Scraping error:', error)
+        console.error('[SnkrdunkAPI] Error:', error)
         return NextResponse.json(
             { success: false, error: error.message },
             { status: 500 }
@@ -90,138 +185,11 @@ export async function POST(req: Request) {
 }
 
 /**
- * 売買履歴をデータベースに保存
+ * ユーザーアイコンURLからアイコン番号を抽出
+ * 例: "https://assets.snkrdunk.com/.../user-icon-18.png" → 18
  */
-async function processSalesHistory(cardId: string, salesHistory: any[]) {
-    if (salesHistory.length === 0) {
-        return NextResponse.json({
-            success: true,
-            total: 0,
-            inserted: 0,
-            skipped: 0,
-            message: 'No sales history found'
-        })
-    }
-
-    // データを整形（アイコン番号も含む）
-    const now = new Date()
-    const scrapedData: Array<{
-        grade: string
-        price: number
-        sold_at: string
-        user_icon_number: number | null
-    }> = []
-
-    salesHistory.forEach((item: any) => {
-        const soldAt = parseRelativeTime(item.date, now)
-        if (!soldAt) return
-
-        const grade = normalizeGrade(item.size)
-        if (!grade) return
-
-        const price = item.price
-        if (!price) return
-
-        scrapedData.push({
-            grade,
-            price,
-            sold_at: soldAt.toISOString(),
-            user_icon_number: item.userIconNumber || null
-        })
-    })
-
-    // 既存データを取得
-    const { data: existingData } = await supabase
-        .from('snkrdunk_sales_history')
-        .select('grade, price, sold_at, user_icon_number')
-        .eq('card_id', cardId)
-
-    // 新規データのみを抽出（user_icon_numberベースの重複判定）
-    const newData: any[] = []
-    let skippedCount = 0
-
-    console.log(`[Debug] Total scraped: ${scrapedData.length}, Existing data: ${existingData?.length || 0}`)
-
-    for (let i = 0; i < scrapedData.length; i++) {
-        const sale = scrapedData[i]
-
-        // 重複チェック
-        let isDuplicate = false
-
-        if (sale.user_icon_number) {
-            // アイコン番号がある場合: グレード・価格・アイコン番号で判定
-            isDuplicate = existingData?.some(existing =>
-                existing.grade === sale.grade &&
-                existing.price === sale.price &&
-                existing.user_icon_number === sale.user_icon_number
-            ) || false
-        } else {
-            // アイコン番号がない場合: 従来通り時刻も含めて判定
-            isDuplicate = existingData?.some(existing =>
-                existing.grade === sale.grade &&
-                existing.price === sale.price &&
-                existing.sold_at === sale.sold_at &&
-                !existing.user_icon_number
-            ) || false
-        }
-
-        if (!isDuplicate) {
-            newData.push({
-                card_id: cardId,
-                grade: sale.grade,
-                price: sale.price,
-                sold_at: sale.sold_at,
-                user_icon_number: sale.user_icon_number,
-                sequence_number: 0, // 互換性のため残す
-                scraped_at: new Date().toISOString()
-            })
-            console.log(`[Debug] Added to newData: ${sale.grade} ¥${sale.price} icon:${sale.user_icon_number}`)
-        } else {
-            skippedCount++
-            console.log(`[Duplicate detected] ${sale.grade} ¥${sale.price} icon:${sale.user_icon_number}`)
-        }
-    }
-
-    console.log(`[Debug] newData count: ${newData.length}, skipped: ${skippedCount}`)
-
-    // 新規データのみ挿入
-    let insertedCount = 0
-    for (const item of newData) {
-        const insertData: any = {
-            card_id: item.card_id,
-            grade: item.grade,
-            price: item.price,
-            sold_at: item.sold_at,
-            sequence_number: item.sequence_number,
-            scraped_at: item.scraped_at
-        }
-
-        // 新しいカラムは存在する場合のみ追加
-        if (item.user_icon_number !== null && item.user_icon_number !== undefined) {
-            insertData.user_icon_number = item.user_icon_number
-        }
-
-        const { error } = await supabase
-            .from('snkrdunk_sales_history')
-            .insert(insertData)
-
-        if (error) {
-            // 重複エラー（23505）は無視、それ以外はログ出力
-            if (error.code === '23505') {
-                console.log(`[DB duplicate] ${item.grade} ¥${item.price} icon:${item.user_icon_number}`)
-                skippedCount++
-            } else {
-                console.error(`[Insert error] ${error.code}: ${error.message}`, insertData)
-            }
-        } else {
-            insertedCount++
-        }
-    }
-
-    return NextResponse.json({
-        success: true,
-        total: scrapedData.length,
-        inserted: insertedCount,
-        skipped: skippedCount
-    })
+function extractIconNumber(imageUrl: string): number | null {
+    if (!imageUrl) return null
+    const match = imageUrl.match(/user-icon-(\d+)\./)
+    return match ? parseInt(match[1], 10) : null
 }
