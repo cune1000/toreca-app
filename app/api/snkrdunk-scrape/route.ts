@@ -15,7 +15,7 @@ import {
  */
 export async function POST(req: Request) {
     try {
-        const { cardId, url } = await req.json()
+        const { cardId, url, backfill } = await req.json()
 
         if (!cardId || !url) {
             return NextResponse.json(
@@ -48,9 +48,17 @@ export async function POST(req: Request) {
             .eq('product_url', url)
             .is('apparel_id', null)
 
-        // ③ 売買履歴を取得（全ページ）
-        const salesHistory = await getAllSalesHistory(apparelId, 5, 50)
-        console.log(`[SnkrdunkAPI] Fetched ${salesHistory.length} sales records`)
+        // ③ 売買履歴を取得
+        // backfill=true: 全ページ取得（初回用）、デフォルト: 1ページ（20件）のみ
+        let salesHistory: SnkrdunkSaleRecord[]
+        if (backfill) {
+            salesHistory = await getAllSalesHistory(apparelId, 10, 50)
+            console.log(`[SnkrdunkAPI] Backfill: ${salesHistory.length} sales records`)
+        } else {
+            const result = await getSalesHistory(apparelId, 1, 20)
+            salesHistory = result.history
+            console.log(`[SnkrdunkAPI] Fetched ${salesHistory.length} recent sales`)
+        }
 
         if (salesHistory.length === 0) {
             return NextResponse.json({
@@ -102,21 +110,19 @@ export async function POST(req: Request) {
             .eq('card_id', cardId)
 
         // ⑥ 重複判定して新規のみ抽出
-        let insertedCount = 0
+        const newData: any[] = []
         let skippedCount = 0
 
         for (const sale of processedData) {
             let isDuplicate = false
 
             if (sale.user_icon_number) {
-                // アイコン番号がある場合: グレード・価格・アイコン番号で判定
                 isDuplicate = existingData?.some(existing =>
                     existing.grade === sale.grade &&
                     existing.price === sale.price &&
                     existing.user_icon_number === sale.user_icon_number
                 ) || false
             } else {
-                // アイコン番号がない場合: 時刻も含めて判定
                 isDuplicate = existingData?.some(existing =>
                     existing.grade === sale.grade &&
                     existing.price === sale.price &&
@@ -130,7 +136,7 @@ export async function POST(req: Request) {
                 continue
             }
 
-            const insertData: any = {
+            newData.push({
                 card_id: cardId,
                 grade: sale.grade,
                 price: sale.price,
@@ -139,27 +145,36 @@ export async function POST(req: Request) {
                 size: sale.size,
                 condition: sale.condition,
                 label: sale.label,
+                user_icon_number: sale.user_icon_number,
                 sequence_number: 0,
                 scraped_at: new Date().toISOString(),
-            }
+            })
+        }
 
-            if (sale.user_icon_number !== null) {
-                insertData.user_icon_number = sale.user_icon_number
-            }
-
-            const { error } = await supabase
+        // ⑦ バッチINSERT（50件ずつ）
+        let insertedCount = 0
+        for (let i = 0; i < newData.length; i += 50) {
+            const batch = newData.slice(i, i + 50)
+            const { error, count } = await supabase
                 .from('snkrdunk_sales_history')
-                .insert(insertData)
+                .insert(batch)
 
             if (error) {
-                if (error.code === '23505') {
-                    // 重複エラー（UNIQUE制約）
-                    skippedCount++
-                } else {
-                    console.error(`[Insert error] ${error.code}: ${error.message}`, insertData)
+                console.error(`[Batch insert error] ${error.code}: ${error.message}`)
+                // バッチ失敗時は1件ずつフォールバック
+                for (const item of batch) {
+                    const { error: singleErr } = await supabase
+                        .from('snkrdunk_sales_history')
+                        .insert(item)
+                    if (singleErr) {
+                        if (singleErr.code === '23505') skippedCount++
+                        else console.error(`[Insert error] ${singleErr.code}: ${singleErr.message}`)
+                    } else {
+                        insertedCount++
+                    }
                 }
             } else {
-                insertedCount++
+                insertedCount += batch.length
             }
         }
 
