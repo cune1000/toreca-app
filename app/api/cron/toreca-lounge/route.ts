@@ -14,12 +14,13 @@ export async function GET(request: NextRequest) {
 
     try {
         // ① トレカラウンジのshop_idを取得
-        const { data: shop } = await supabase
+        const { data: shops } = await supabase
             .from('purchase_shops')
             .select('id')
             .eq('name', 'トレカラウンジ（郵送買取）')
-            .single()
+            .limit(1)
 
+        const shop = shops?.[0]
         if (!shop) throw new Error('トレカラウンジがpurchase_shopsに未登録')
 
         // ② card_purchase_linksから紐付け済みを取得
