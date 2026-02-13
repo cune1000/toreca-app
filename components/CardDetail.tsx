@@ -735,22 +735,36 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null
 
-    // 値があるエントリのみ表示
-    const validEntries = payload.filter((entry: any) => entry.value !== null && entry.value !== undefined)
+    // 値があるエントリのみ表示し、価格の高い順にソート
+    const validEntries = payload
+      .filter((entry: any) => entry.value !== null && entry.value !== undefined)
+      .sort((a: any, b: any) => {
+        const aIsStock = a.dataKey.startsWith('stock')
+        const bIsStock = b.dataKey.startsWith('stock')
+        if (aIsStock !== bIsStock) return aIsStock ? 1 : -1
+        return (b.value || 0) - (a.value || 0)
+      })
     if (validEntries.length === 0) return null
 
     return (
-      <div className="bg-white border rounded-lg shadow-lg p-3 text-sm">
-        <p className="font-medium text-gray-700 mb-2">{label}</p>
-        {validEntries.map((entry: any, index: number) => {
-          const isStock = entry.dataKey.startsWith('stock')
-          return (
-            <div key={index} className="flex items-center gap-2">
-              <span style={{ color: entry.color }}>{isStock ? '◇' : '●'}</span>
-              <span>{entry.name}: {isStock ? `${entry.value}個` : `¥${entry.value?.toLocaleString()}`}</span>
-            </div>
-          )
-        })}
+      <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl px-4 py-3 text-sm" style={{ minWidth: 180 }}>
+        <p className="font-medium text-gray-300 mb-2 text-xs border-b border-gray-700 pb-1.5">{label}</p>
+        <div className="space-y-1">
+          {validEntries.map((entry: any, index: number) => {
+            const isStock = entry.dataKey.startsWith('stock')
+            return (
+              <div key={index} className="flex items-center justify-between gap-4">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                  <span className="text-gray-400 text-xs">{entry.name}</span>
+                </span>
+                <span className="font-mono font-semibold text-white text-xs">
+                  {isStock ? `${entry.value}個` : `¥${entry.value?.toLocaleString()}`}
+                </span>
+              </div>
+            )
+          })}
+        </div>
       </div>
     )
   }
@@ -984,14 +998,16 @@ export default function CardDetail({ card, onClose, onUpdated }) {
               {chartData.length > 0 ? (
                 <div className="bg-white border rounded-xl p-4">
                   <h3 className="font-bold text-gray-800 mb-4">価格・在庫推移</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={chartData} margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={chartData} margin={{ top: 10, right: 60, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
                       <YAxis
                         yAxisId="price"
                         orientation="left"
-                        tick={{ fontSize: 11 }}
+                        tick={{ fontSize: 10, fill: '#9ca3af' }}
+                        tickLine={false}
+                        axisLine={false}
                         tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
                         domain={['auto', 'auto']}
                       />
@@ -999,7 +1015,9 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         <YAxis
                           yAxisId="stock"
                           orientation="right"
-                          tick={{ fontSize: 11 }}
+                          tick={{ fontSize: 10, fill: '#9ca3af' }}
+                          tickLine={false}
+                          axisLine={false}
                           tickFormatter={(v) => `${v}個`}
                           domain={[0, 'auto']}
                         />
@@ -1016,9 +1034,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                             type="monotone"
                             dataKey={`purchase_${condition}`}
                             stroke={config.color}
-                            strokeWidth={2}
+                            strokeWidth={2.5}
                             name={`買取(${config.label})`}
-                            dot={{ r: 3 }}
+                            dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
+                            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
                             connectNulls
                           />
                         )
@@ -1037,9 +1056,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                               type="monotone"
                               dataKey={`price_${site.id}`}
                               stroke={color}
-                              strokeWidth={2}
+                              strokeWidth={2.5}
                               name={`${site.name}(価格)`}
-                              dot={{ r: 3 }}
+                              dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
+                              activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
                               connectNulls
                             />
                           )
@@ -1055,10 +1075,11 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                             type="monotone"
                             dataKey={`sale_grade_${grade}`}
                             stroke={config.color}
-                            strokeWidth={2}
-                            strokeDasharray="6 3"
+                            strokeWidth={2.5}
+                            strokeDasharray="8 4"
                             name={config.label}
-                            dot={{ r: 4, fill: config.color }}
+                            dot={chartData.length > 30 ? false : { r: 5, strokeWidth: 2, fill: '#fff' }}
+                            activeDot={{ r: 7, strokeWidth: 2, fill: '#fff' }}
                             connectNulls
                           />
                         )
@@ -1087,9 +1108,9 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         })}
                     </LineChart>
                   </ResponsiveContainer>
-                  <div className="flex justify-center gap-6 mt-3 text-xs text-gray-500">
-                    <span>● 価格（左軸）</span>
-                    <span>◇ 在庫（右軸）</span>
+                  <div className="flex justify-center gap-6 mt-4 text-xs text-gray-400">
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-500 inline-block rounded"></span> 価格（左軸）</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-500 inline-block rounded" style={{ borderTop: '2px dashed #9ca3af' }}></span> 在庫（右軸）</span>
                   </div>
                 </div>
               ) : (
@@ -1238,12 +1259,14 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                     <RefreshCw className="animate-spin text-purple-500" size={32} />
                   </div>
                 ) : snkrdunkChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={snkrdunkChartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={snkrdunkChartData} margin={{ top: 10, right: 20, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
                       <YAxis
-                        tick={{ fontSize: 11 }}
+                        tick={{ fontSize: 10, fill: '#9ca3af' }}
+                        tickLine={false}
+                        axisLine={false}
                         tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
                         domain={['auto', 'auto']}
                       />
@@ -1260,9 +1283,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                               type="monotone"
                               dataKey={`grade_${grade}`}
                               stroke={color}
-                              strokeWidth={2}
+                              strokeWidth={2.5}
                               name={grade}
-                              dot={{ r: 3 }}
+                              dot={snkrdunkChartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
+                              activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
                               connectNulls
                             />
                           )
