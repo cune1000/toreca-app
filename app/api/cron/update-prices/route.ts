@@ -99,6 +99,7 @@ async function scrapeViaRailway(url: string, mode: string = 'light') {
 interface SnkrdunkPriceResult {
   prices: { grade: string; price: number }[]
   overallMin: number | null
+  totalListings: number  // 全出品数
 }
 async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceResult> {
   const apparelId = extractApparelId(productUrl)
@@ -109,10 +110,18 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
   const productInfo = await getProductInfo(apparelId)
   const productType = productInfo.isBox ? 'box' : 'single'
   const prices: { grade: string; price: number }[] = []
+  let totalListings = 0
+  let overallMin: number | null = null
 
   if (productType === 'single') {
     // シングル: 出品一覧からグレード別最安値を取得
     const listings = await getListings(apparelId, 'single', 1, 50)
+    totalListings = listings.length
+
+    // 全体最安値（全出品の中から）
+    if (listings.length > 0) {
+      overallMin = Math.min(...listings.map(l => l.price))
+    }
 
     // PSA10最安値
     const psa10Items = listings.filter(l => l.condition.includes('PSA10'))
@@ -132,12 +141,11 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
     // BOX: productInfoのminPriceを使用
     if (productInfo.minPrice) {
       prices.push({ grade: 'BOX', price: productInfo.minPrice })
+      overallMin = productInfo.minPrice
     }
   }
 
-  const overallMin = prices.length > 0 ? Math.min(...prices.map(p => p.price)) : null
-
-  return { prices, overallMin }
+  return { prices, overallMin, totalListings }
 }
 
 // cron_logsに記録
@@ -254,11 +262,11 @@ export async function GET(request: NextRequest) {
         let gradePrices: { grade: string; price: number }[] = []
 
         if (isSnkrdunk) {
-          // 新API方式: グレード別最安値を取得
+          // 新API方式: グレード別最安値 + 全体最安値 + 出品数を取得
           const result = await scrapeSnkrdunkPrices(site.product_url)
           gradePrices = result.prices
           newPrice = result.overallMin
-          newStock = null // スニダンは在庫概念なし
+          newStock = result.totalListings  // 全出品数を在庫として記録
         } else {
           // 既存のRailway方式
           const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
@@ -355,6 +363,16 @@ export async function GET(request: NextRequest) {
           // 価格または在庫が変動した場合のみ履歴に追加
           if (priceChanged || stockChanged) {
             if (gradePrices.length > 0) {
+              // スニダン: 全体最安値 + 出品数（grade=null）を保存
+              await supabase
+                .from('sale_prices')
+                .insert({
+                  card_id: site.card_id,
+                  site_id: site.site_id,
+                  price: newPrice,
+                  stock: newStock,
+                  grade: null,
+                })
               // スニダン: グレード別に保存
               for (const gp of gradePrices) {
                 await supabase
@@ -527,11 +545,11 @@ export async function POST(request: NextRequest) {
         let gradePrices: { grade: string; price: number }[] = []
 
         if (isSnkrdunk) {
-          // 新API方式: グレード別最安値を取得
+          // 新API方式: グレード別最安値 + 全体最安値 + 出品数を取得
           const result = await scrapeSnkrdunkPrices(site.product_url)
           gradePrices = result.prices
           newPrice = result.overallMin
-          newStock = null // スニダンは在庫概念なし
+          newStock = result.totalListings  // 全出品数を在庫として記録
         } else {
           // 既存のRailway方式
           const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
@@ -624,6 +642,16 @@ export async function POST(request: NextRequest) {
 
           if (priceChanged || stockChanged) {
             if (gradePrices.length > 0) {
+              // スニダン: 全体最安値 + 出品数（grade=null）を保存
+              await supabase
+                .from('sale_prices')
+                .insert({
+                  card_id: site.card_id,
+                  site_id: site.site_id,
+                  price: newPrice,
+                  stock: newStock,
+                  grade: null,
+                })
               // スニダン: グレード別に保存
               for (const gp of gradePrices) {
                 await supabase
