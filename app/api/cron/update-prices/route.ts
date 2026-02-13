@@ -95,6 +95,51 @@ async function scrapeViaRailway(url: string, mode: string = 'light') {
   return await res.json()
 }
 
+// スニダンAPIでグレード別最安値を取得
+interface SnkrdunkPriceResult {
+  prices: { grade: string; price: number }[]
+  overallMin: number | null
+}
+async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceResult> {
+  const apparelId = extractApparelId(productUrl)
+  if (!apparelId) {
+    throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
+  }
+
+  const productInfo = await getProductInfo(apparelId)
+  const productType = productInfo.isBox ? 'box' : 'single'
+  const prices: { grade: string; price: number }[] = []
+
+  if (productType === 'single') {
+    // シングル: 出品一覧からグレード別最安値を取得
+    const listings = await getListings(apparelId, 'single', 1, 50)
+
+    // PSA10最安値
+    const psa10Items = listings.filter(l => l.condition.includes('PSA10'))
+    if (psa10Items.length > 0) {
+      prices.push({ grade: 'PSA10', price: Math.min(...psa10Items.map(l => l.price)) })
+    }
+
+    // 状態A最安値
+    const gradeAItems = listings.filter(l =>
+      (l.condition.startsWith('A') || l.condition.includes('A（')) &&
+      !l.condition.includes('PSA')
+    )
+    if (gradeAItems.length > 0) {
+      prices.push({ grade: 'A', price: Math.min(...gradeAItems.map(l => l.price)) })
+    }
+  } else {
+    // BOX: productInfoのminPriceを使用
+    if (productInfo.minPrice) {
+      prices.push({ grade: 'BOX', price: productInfo.minPrice })
+    }
+  }
+
+  const overallMin = prices.length > 0 ? Math.min(...prices.map(p => p.price)) : null
+
+  return { prices, overallMin }
+}
+
 // cron_logsに記録
 async function logCronResult(
   cardSaleUrlId: string,
@@ -206,33 +251,19 @@ export async function GET(request: NextRequest) {
 
         let newPrice: number | null = null
         let newStock: number | null = null
+        let gradePrices: { grade: string; price: number }[] = []
 
         if (isSnkrdunk) {
-          // 新API方式: スニダンAPIから最安値を取得
-          const apparelId = extractApparelId(site.product_url)
-          if (!apparelId) {
-            throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
-          }
-
-          const productInfo = await getProductInfo(apparelId)
-          const productType = productInfo.isBox ? 'box' : 'single'
-
-          if (productType === 'single') {
-            const listings = await getListings(apparelId, 'single', 1, 50)
-            if (listings.length > 0) {
-              newPrice = Math.min(...listings.map(l => l.price))
-              newStock = listings.length
-            }
-          } else {
-            newPrice = productInfo.minPrice
-            newStock = 1
-          }
+          // 新API方式: グレード別最安値を取得
+          const result = await scrapeSnkrdunkPrices(site.product_url)
+          gradePrices = result.prices
+          newPrice = result.overallMin
+          newStock = null // スニダンは在庫概念なし
         } else {
           // 既存のRailway方式
           const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
 
           if (!scrapeResult.success) {
-            // エラー時：30分後リトライ
             results.errors++
             const errorMsg = scrapeResult.error || 'Scrape failed'
             const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
@@ -323,14 +354,29 @@ export async function GET(request: NextRequest) {
 
           // 価格または在庫が変動した場合のみ履歴に追加
           if (priceChanged || stockChanged) {
-            await supabase
-              .from('sale_prices')
-              .insert({
-                card_id: site.card_id,
-                site_id: site.site_id,
-                price: newPrice,
-                stock: newStock
-              })
+            if (gradePrices.length > 0) {
+              // スニダン: グレード別に保存
+              for (const gp of gradePrices) {
+                await supabase
+                  .from('sale_prices')
+                  .insert({
+                    card_id: site.card_id,
+                    site_id: site.site_id,
+                    price: gp.price,
+                    grade: gp.grade,
+                  })
+              }
+            } else {
+              // 通常サイト: grade無しで保存
+              await supabase
+                .from('sale_prices')
+                .insert({
+                  card_id: site.card_id,
+                  site_id: site.site_id,
+                  price: newPrice,
+                  stock: newStock
+                })
+            }
           }
 
           results.details.push({
@@ -478,29 +524,14 @@ export async function POST(request: NextRequest) {
 
         let newPrice: number | null = null
         let newStock: number | null = null
+        let gradePrices: { grade: string; price: number }[] = []
 
         if (isSnkrdunk) {
-          // 新API方式: スニダンAPIから最安値を取得
-          const apparelId = extractApparelId(site.product_url)
-          if (!apparelId) {
-            throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
-          }
-
-          const productInfo = await getProductInfo(apparelId)
-          const productType = productInfo.isBox ? 'box' : 'single'
-
-          if (productType === 'single') {
-            // シングル: 出品一覧から最安値を取得
-            const listings = await getListings(apparelId, 'single', 1, 50)
-            if (listings.length > 0) {
-              newPrice = Math.min(...listings.map(l => l.price))
-              newStock = listings.length
-            }
-          } else {
-            // BOX: productInfoのminPriceを使用
-            newPrice = productInfo.minPrice
-            newStock = 1
-          }
+          // 新API方式: グレード別最安値を取得
+          const result = await scrapeSnkrdunkPrices(site.product_url)
+          gradePrices = result.prices
+          newPrice = result.overallMin
+          newStock = null // スニダンは在庫概念なし
         } else {
           // 既存のRailway方式
           const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
@@ -547,10 +578,6 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Railway方式のcondition分岐はisSnkrdunk分岐の中に移動済み
-
-        // (条件分岐はisSnkrdunk分岐の中に移動済み)
-
         if (newPrice !== null && newPrice !== undefined) {
           const priceChanged = oldPrice !== newPrice
           const stockChanged = oldStock !== newStock
@@ -596,14 +623,29 @@ export async function POST(request: NextRequest) {
             .eq('id', site.id)
 
           if (priceChanged || stockChanged) {
-            await supabase
-              .from('sale_prices')
-              .insert({
-                card_id: site.card_id,
-                site_id: site.site_id,
-                price: newPrice,
-                stock: newStock
-              })
+            if (gradePrices.length > 0) {
+              // スニダン: グレード別に保存
+              for (const gp of gradePrices) {
+                await supabase
+                  .from('sale_prices')
+                  .insert({
+                    card_id: site.card_id,
+                    site_id: site.site_id,
+                    price: gp.price,
+                    grade: gp.grade,
+                  })
+              }
+            } else {
+              // 通常サイト
+              await supabase
+                .from('sale_prices')
+                .insert({
+                  card_id: site.card_id,
+                  site_id: site.site_id,
+                  price: newPrice,
+                  stock: newStock
+                })
+            }
           }
 
           results.details.push({
