@@ -49,7 +49,7 @@ async function scrapeSnkrdunk(url: string) {
 
     // PSA10
     const psa10 = listings.filter(l =>
-      l.condition?.toUpperCase() === 'PSA10'
+      l.condition?.includes('PSA10')
     )
     if (psa10.length > 0) {
       prices.push({ grade: 'PSA10', price: Math.min(...psa10.map(l => l.price)) })
@@ -57,7 +57,8 @@ async function scrapeSnkrdunk(url: string) {
 
     // 状態A
     const gradeA = listings.filter(l =>
-      l.condition?.toUpperCase() === 'A'
+      (l.condition?.startsWith('A') || l.condition?.includes('A（')) &&
+      !l.condition?.includes('PSA')
     )
     if (gradeA.length > 0) {
       prices.push({ grade: 'A', price: Math.min(...gradeA.map(l => l.price)) })
