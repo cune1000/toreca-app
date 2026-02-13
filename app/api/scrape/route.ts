@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  getListings,
+  getProductInfo,
+} from '@/lib/snkrdunk-api'
 
-// Railway経由でスクレイピング
+// Railway経由でスクレイピング（スニダン以外）
 async function scrapeViaRailway(url: string, mode: string = 'auto') {
   const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
 
@@ -22,6 +26,64 @@ async function scrapeViaRailway(url: string, mode: string = 'auto') {
   }
 }
 
+// スニダンAPIで価格取得
+async function scrapeSnkrdunk(url: string) {
+  const match = url.match(/\/apparels\/(\d+)/)
+  if (!match) throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
+  const apparelId = parseInt(match[1], 10)
+
+  const info = await getProductInfo(apparelId)
+  const productType: 'single' | 'box' = info?.isBox ? 'box' : 'single'
+
+  const prices: { grade: string; price: number }[] = []
+  let totalListings = 0
+  let overallMin: number | null = null
+
+  if (productType === 'single') {
+    const listings = await getListings(apparelId, 'single', 1, 50)
+    totalListings = listings.length
+
+    if (listings.length > 0) {
+      overallMin = Math.min(...listings.map(l => l.price))
+    }
+
+    // PSA10
+    const psa10 = listings.filter(l =>
+      l.condition?.toUpperCase() === 'PSA10'
+    )
+    if (psa10.length > 0) {
+      prices.push({ grade: 'PSA10', price: Math.min(...psa10.map(l => l.price)) })
+    }
+
+    // 状態A
+    const gradeA = listings.filter(l =>
+      l.condition?.toUpperCase() === 'A'
+    )
+    if (gradeA.length > 0) {
+      prices.push({ grade: 'A', price: Math.min(...gradeA.map(l => l.price)) })
+    }
+  } else {
+    const listings = await getListings(apparelId, 'box', 1, 50)
+    totalListings = listings.length
+    if (listings.length > 0) {
+      overallMin = Math.min(...listings.map(l => l.price))
+      prices.push({ grade: 'BOX', price: overallMin })
+    }
+  }
+
+  return {
+    success: true,
+    price: overallMin,
+    stock: totalListings,
+    gradePrices: prices,
+    source: 'snkrdunk-api',
+  }
+}
+
+function isSnkrdunkUrl(url: string): boolean {
+  return url.includes('snkrdunk.com')
+}
+
 export async function POST(request: NextRequest) {
   const { url, mode = 'auto' } = await request.json()
 
@@ -30,7 +92,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await scrapeViaRailway(url, mode)
+    // スニダンURLの場合はAPIを直接使用
+    const result = isSnkrdunkUrl(url)
+      ? await scrapeSnkrdunk(url)
+      : await scrapeViaRailway(url, mode)
 
     if (result.success) {
       return NextResponse.json(result)
@@ -53,20 +118,22 @@ export async function GET(request: NextRequest) {
 
   if (!url) {
     return NextResponse.json({
-      message: 'Price scraping API (via Railway)',
+      message: 'Price scraping API (Railway + SnkrdunkAPI)',
       usage: 'POST with { url: "https://...", mode: "auto|light|browser" }',
       modes: {
         auto: '軽量版を試して、失敗したらブラウザ版でリトライ',
         light: '軽量版のみ（高速）',
         browser: 'ブラウザ版のみ（確実）'
       },
-      supported: ['snkrdunk.com', 'torecacamp-pokemon.com', 'cardrush-pokemon.jp'],
+      supported: ['snkrdunk.com (API直接)', 'torecacamp-pokemon.com', 'cardrush-pokemon.jp'],
       railway: process.env.RAILWAY_SCRAPER_URL ? 'configured' : 'not configured'
     })
   }
 
   try {
-    const result = await scrapeViaRailway(url, mode)
+    const result = isSnkrdunkUrl(url)
+      ? await scrapeSnkrdunk(url)
+      : await scrapeViaRailway(url, mode)
 
     if (result.success) {
       return NextResponse.json(result)
