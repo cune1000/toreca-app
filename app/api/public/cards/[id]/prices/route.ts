@@ -53,19 +53,19 @@ export async function GET(
             .gte('sold_at', cutoffStr)
             .order('sold_at', { ascending: true })
 
-        // 買取価格を取得
+        // 買取価格を取得（label付き）
         const { data: purchaseData } = await supabase
             .from('purchase_prices')
-            .select('price, created_at')
+            .select('price, created_at, link:link_id(label)')
             .eq('card_id', cardId)
             .gt('price', 0)
             .gte('created_at', cutoffStr)
             .order('created_at', { ascending: true })
 
-        // 販売価格を取得
+        // 販売価格を取得（grade付き）
         const { data: saleData } = await supabase
             .from('sale_prices')
-            .select('price, created_at')
+            .select('price, grade, created_at')
             .eq('card_id', cardId)
             .gt('price', 0)
             .gte('created_at', cutoffStr)
@@ -76,19 +76,25 @@ export async function GET(
             psa10_prices: number[]
             a_prices: number[]
             box_prices: number[]
-            purchase_prices: number[]
-            sale_prices: number[]
+            // 販売最安値（grade別）
+            psa10_sale: number[]
+            a_sale: number[]
+            box_sale: number[]
+            // 買取価格（状態別）
+            purchase_normal: number[]
+            purchase_psa10: number[]
+            purchase_sealed: number[]
+            purchase_opened: number[]
         }> = {}
 
         const ensureDate = (dateStr: string) => {
             const d = new Date(dateStr).toISOString().split('T')[0]
             if (!byDate[d]) {
                 byDate[d] = {
-                    psa10_prices: [],
-                    a_prices: [],
-                    box_prices: [],
-                    purchase_prices: [],
-                    sale_prices: [],
+                    psa10_prices: [], a_prices: [], box_prices: [],
+                    psa10_sale: [], a_sale: [], box_sale: [],
+                    purchase_normal: [], purchase_psa10: [],
+                    purchase_sealed: [], purchase_opened: [],
                 }
             }
             return byDate[d]
@@ -108,14 +114,27 @@ export async function GET(
             }
         }
 
-        // 買取価格
-        for (const p of (purchaseData || [])) {
-            ensureDate(p.created_at).purchase_prices.push(p.price)
+        // 販売価格（grade別）
+        for (const s of (saleData || [])) {
+            const entry = ensureDate(s.created_at)
+            if (s.grade === 'PSA10') entry.psa10_sale.push(s.price)
+            else if (s.grade === 'A') entry.a_sale.push(s.price)
+            else if (s.grade === 'BOX') entry.box_sale.push(s.price)
         }
 
-        // 販売価格
-        for (const s of (saleData || [])) {
-            ensureDate(s.created_at).sale_prices.push(s.price)
+        // 買取価格（状態別）
+        for (const p of (purchaseData || [])) {
+            const entry = ensureDate(p.created_at)
+            const label = (p.link as any)?.label || ''
+            if (label.includes('PSA10') || label.includes('psa10')) {
+                entry.purchase_psa10.push(p.price)
+            } else if (label.includes('未開封')) {
+                entry.purchase_sealed.push(p.price)
+            } else if (label.includes('開封')) {
+                entry.purchase_opened.push(p.price)
+            } else {
+                entry.purchase_normal.push(p.price)
+            }
         }
 
         // 平均計算
@@ -125,15 +144,15 @@ export async function GET(
             .map(([date, entry]) => ({
                 date,
                 psa10_avg: avg(entry.psa10_prices),
-                psa10_count: entry.psa10_prices.length || null,
                 a_avg: avg(entry.a_prices),
-                a_count: entry.a_prices.length || null,
                 box_avg: avg(entry.box_prices),
-                box_count: entry.box_prices.length || null,
-                purchase_avg: avg(entry.purchase_prices),
-                purchase_count: entry.purchase_prices.length || null,
-                sale_avg: avg(entry.sale_prices),
-                sale_count: entry.sale_prices.length || null,
+                psa10_sale: avg(entry.psa10_sale),
+                a_sale: avg(entry.a_sale),
+                box_sale: avg(entry.box_sale),
+                purchase_normal: avg(entry.purchase_normal),
+                purchase_psa10: avg(entry.purchase_psa10),
+                purchase_sealed: avg(entry.purchase_sealed),
+                purchase_opened: avg(entry.purchase_opened),
             }))
             .sort((a, b) => a.date.localeCompare(b.date))
 

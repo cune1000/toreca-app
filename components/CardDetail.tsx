@@ -224,13 +224,13 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     const [purchaseRes, saleRes, urlRes] = await Promise.all([
       supabase
         .from('purchase_prices')
-        .select('*, shop:shop_id(id, name, icon)')
+        .select('*, shop:shop_id(id, name, icon), link:link_id(label)')
         .eq('card_id', card.id)
         .order('created_at', { ascending: false })
         .limit(200),
       supabase
         .from('sale_prices')
-        .select('*, site:site_id(id, name, icon)')
+        .select('*, site:site_id(id, name, icon), grade')
         .eq('card_id', card.id)
         .order('created_at', { ascending: false })
         .limit(200),
@@ -1410,6 +1410,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         <thead className="bg-gray-50 sticky top-0">
                           <tr>
                             <th className="text-left px-3 py-2">サイト</th>
+                            <th className="text-center px-3 py-2">グレード</th>
                             <th className="text-right px-3 py-2">価格</th>
                             <th className="text-right px-3 py-2">在庫</th>
                             <th className="text-right px-3 py-2">日時</th>
@@ -1421,6 +1422,11 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                             return (
                               <tr key={i} className="hover:bg-gray-50">
                                 <td className="px-3 py-2">{p.site?.name || '-'}</td>
+                                <td className="px-3 py-2 text-center">
+                                  {p.grade ? (
+                                    <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-700">{p.grade}</span>
+                                  ) : '-'}
+                                </td>
                                 <td className="px-3 py-2 text-right font-medium">¥{p.price.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-right text-gray-500">{p.stock ?? '-'}</td>
                                 <td className="px-3 py-2 text-right text-gray-500">

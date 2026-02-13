@@ -19,6 +19,23 @@ const PERIOD_OPTIONS = [
     { label: '全期間', days: null },
 ]
 
+// カラー定義
+const COLORS = {
+    // スニダン売買履歴（実線・エリア）
+    psa10_trade: '#8b5cf6',    // 紫
+    a_trade: '#10b981',        // 緑
+    box_trade: '#f59e0b',      // オレンジ
+    // 販売最安値（点線）
+    psa10_sale: '#c084fc',     // 薄紫
+    a_sale: '#6ee7b7',         // 薄緑
+    box_sale: '#fcd34d',       // 薄オレンジ
+    // 買取価格（破線）
+    purchase_normal: '#3b82f6', // 青（素体）
+    purchase_psa10: '#6366f1',  // インディゴ（PSA10）
+    purchase_sealed: '#ec4899', // ピンク（未開封）
+    purchase_opened: '#14b8a6', // ティール（開封）
+}
+
 export default function MarketChart({ cardId }: MarketChartProps) {
     const [snkrdunkSales, setSnkrdunkSales] = useState<any[]>([])
     const [purchasePrices, setPurchasePrices] = useState<any[]>([])
@@ -42,18 +59,18 @@ export default function MarketChart({ cardId }: MarketChartProps) {
             .gt('price', 0)
             .order('sold_at', { ascending: true })
 
-        // 買取価格を取得（そのカードの全データ）
+        // 買取価格を取得（link経由でlabelを取得）
         const { data: purchaseData } = await supabase
             .from('purchase_prices')
-            .select('price, created_at')
+            .select('price, stock, created_at, link:link_id(label)')
             .eq('card_id', cardId)
             .gt('price', 0)
             .order('created_at', { ascending: true })
 
-        // 販売価格を取得（そのカードの全データ）
+        // 販売価格を取得（grade付き）
         const { data: saleData } = await supabase
             .from('sale_prices')
-            .select('price, created_at')
+            .select('price, grade, created_at')
             .eq('card_id', cardId)
             .gt('price', 0)
             .order('created_at', { ascending: true })
@@ -72,6 +89,15 @@ export default function MarketChart({ cardId }: MarketChartProps) {
         return items.filter(item => new Date(item[dateKey]) >= cutoff)
     }
 
+    // 買取のlabelを正規化
+    const normalizePurchaseLabel = (item: any): string => {
+        const label = (item.link as any)?.label || ''
+        if (label.includes('PSA10') || label.includes('psa10')) return 'PSA10'
+        if (label.includes('未開封')) return '未開封'
+        if (label.includes('開封')) return '開封'
+        return '素体'
+    }
+
     // 日次集約チャートデータ
     const chartData = useMemo(() => {
         const filteredSales = filterByPeriod(snkrdunkSales, 'sold_at')
@@ -81,24 +107,31 @@ export default function MarketChart({ cardId }: MarketChartProps) {
         const byDate: Record<string, {
             date: string
             rawDate: string
-            psa10_prices: number[]
-            box_prices: number[]
-            a_prices: number[]
-            purchase_prices: number[]
-            sale_prices: number[]
+            // スニダン売買履歴
+            psa10_trade: number[]
+            a_trade: number[]
+            box_trade: number[]
+            // 販売最安値
+            psa10_sale: number[]
+            a_sale: number[]
+            box_sale: number[]
+            // 買取価格（状態別）
+            purchase_normal: number[]
+            purchase_psa10: number[]
+            purchase_sealed: number[]
+            purchase_opened: number[]
         }> = {}
 
         const ensureDate = (rawDate: string) => {
-            const dateStr = new Date(rawDate).toLocaleDateString('sv-SE') // YYYY-MM-DD
+            const dateStr = new Date(rawDate).toLocaleDateString('sv-SE')
             if (!byDate[dateStr]) {
                 byDate[dateStr] = {
                     date: new Date(rawDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }),
                     rawDate: dateStr,
-                    psa10_prices: [],
-                    box_prices: [],
-                    a_prices: [],
-                    purchase_prices: [],
-                    sale_prices: [],
+                    psa10_trade: [], a_trade: [], box_trade: [],
+                    psa10_sale: [], a_sale: [], box_sale: [],
+                    purchase_normal: [], purchase_psa10: [],
+                    purchase_sealed: [], purchase_opened: [],
                 }
             }
             return byDate[dateStr]
@@ -108,78 +141,95 @@ export default function MarketChart({ cardId }: MarketChartProps) {
         for (const sale of filteredSales) {
             const entry = ensureDate(sale.sold_at)
             if (sale.grade === 'PSA10') {
-                entry.psa10_prices.push(sale.price)
+                entry.psa10_trade.push(sale.price)
             } else if (sale.grade === 'A') {
-                entry.a_prices.push(sale.price)
+                entry.a_trade.push(sale.price)
             } else if (sale.grade?.includes('個') || sale.grade?.includes('BOX')) {
-                // 「5個」→ 5, 「1BOX」→ 1, 「3BOX」→ 3 のように数量を抽出
                 const match = sale.grade.match(/(\d+)/)
                 const quantity = match ? parseInt(match[1]) : 1
-                // 1BOXあたりの価格に換算
-                const pricePerBox = Math.round(sale.price / quantity)
-                entry.box_prices.push(pricePerBox)
+                entry.box_trade.push(Math.round(sale.price / quantity))
             }
         }
 
-        // 買取価格を日次集約
-        for (const p of filteredPurchases) {
-            const entry = ensureDate(p.created_at)
-            entry.purchase_prices.push(p.price)
-        }
-
-        // 販売価格を日次集約
+        // 販売最安値を日次集約（grade別）
         for (const s of filteredSalePrices) {
             const entry = ensureDate(s.created_at)
-            entry.sale_prices.push(s.price)
+            if (s.grade === 'PSA10') {
+                entry.psa10_sale.push(s.price)
+            } else if (s.grade === 'A') {
+                entry.a_sale.push(s.price)
+            } else if (s.grade === 'BOX') {
+                entry.box_sale.push(s.price)
+            }
         }
 
-        // 平均値を計算
+        // 買取価格を日次集約（状態別）
+        for (const p of filteredPurchases) {
+            const entry = ensureDate(p.created_at)
+            const label = normalizePurchaseLabel(p)
+            if (label === 'PSA10') {
+                entry.purchase_psa10.push(p.price)
+            } else if (label === '未開封') {
+                entry.purchase_sealed.push(p.price)
+            } else if (label === '開封') {
+                entry.purchase_opened.push(p.price)
+            } else {
+                entry.purchase_normal.push(p.price)
+            }
+        }
+
         const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null
 
         return Object.values(byDate)
             .map(entry => ({
                 date: entry.date,
                 rawDate: entry.rawDate,
-                psa10_avg: avg(entry.psa10_prices),
-                box_avg: avg(entry.box_prices),
-                a_avg: avg(entry.a_prices),
-                purchase_avg: avg(entry.purchase_prices),
-                sale_avg: avg(entry.sale_prices),
-                psa10_count: entry.psa10_prices.length || null,
-                box_count: entry.box_prices.length || null,
-                a_count: entry.a_prices.length || null,
-                purchase_count: entry.purchase_prices.length || null,
-                sale_count: entry.sale_prices.length || null,
+                // 売買履歴
+                psa10_trade: avg(entry.psa10_trade),
+                a_trade: avg(entry.a_trade),
+                box_trade: avg(entry.box_trade),
+                // 販売最安値
+                psa10_sale: avg(entry.psa10_sale),
+                a_sale: avg(entry.a_sale),
+                box_sale: avg(entry.box_sale),
+                // 買取価格
+                purchase_normal: avg(entry.purchase_normal),
+                purchase_psa10: avg(entry.purchase_psa10),
+                purchase_sealed: avg(entry.purchase_sealed),
+                purchase_opened: avg(entry.purchase_opened),
             }))
             .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
     }, [snkrdunkSales, purchasePrices, salePrices, selectedDays])
 
     // データの存在チェック
-    const hasPSA10 = chartData.some(d => d.psa10_avg !== null)
-    const hasBox = chartData.some(d => d.box_avg !== null)
-    const hasA = chartData.some(d => d.a_avg !== null)
-    const hasPurchase = chartData.some(d => d.purchase_avg !== null)
-    const hasSale = chartData.some(d => d.sale_avg !== null)
-    const hasAnyData = hasPSA10 || hasBox || hasA || hasPurchase || hasSale
+    const hasPSA10Trade = chartData.some(d => d.psa10_trade !== null)
+    const hasATrade = chartData.some(d => d.a_trade !== null)
+    const hasBoxTrade = chartData.some(d => d.box_trade !== null)
+    const hasPSA10Sale = chartData.some(d => d.psa10_sale !== null)
+    const hasASale = chartData.some(d => d.a_sale !== null)
+    const hasBoxSale = chartData.some(d => d.box_sale !== null)
+    const hasPurchaseNormal = chartData.some(d => d.purchase_normal !== null)
+    const hasPurchasePSA10 = chartData.some(d => d.purchase_psa10 !== null)
+    const hasPurchaseSealed = chartData.some(d => d.purchase_sealed !== null)
+    const hasPurchaseOpened = chartData.some(d => d.purchase_opened !== null)
+    const hasAnyData = hasPSA10Trade || hasATrade || hasBoxTrade ||
+        hasPSA10Sale || hasASale || hasBoxSale ||
+        hasPurchaseNormal || hasPurchasePSA10 || hasPurchaseSealed || hasPurchaseOpened
 
     // カスタムツールチップ
     const ChartTooltip = ({ active, payload, label }: any) => {
         if (!active || !payload || !payload.length) return null
-        const data = payload[0]?.payload
         return (
-            <div className="bg-white border rounded-lg shadow-lg p-3 text-sm">
+            <div className="bg-white border rounded-lg shadow-lg p-3 text-sm max-w-xs">
                 <p className="font-medium text-gray-700 mb-2">{label}</p>
                 {payload.map((entry: any, index: number) => (
-                    <div key={index} className="flex items-center gap-2">
-                        <span style={{ color: entry.color }}>●</span>
-                        <span>{entry.name}: ¥{entry.value?.toLocaleString()}</span>
-                    </div>
+                    entry.value !== null && entry.value !== undefined && (
+                        <div key={index} className="flex items-center gap-2">
+                            <span style={{ color: entry.color }}>●</span>
+                            <span className="truncate">{entry.name}: ¥{entry.value?.toLocaleString()}</span>
+                        </div>
+                    )
                 ))}
-                {data?.psa10_count > 0 && <div className="text-xs text-gray-400 mt-1">PSA10: {data.psa10_count}件</div>}
-                {data?.a_count > 0 && <div className="text-xs text-gray-400">状態A: {data.a_count}件</div>}
-                {data?.box_count > 0 && <div className="text-xs text-gray-400">BOX: {data.box_count}件</div>}
-                {data?.purchase_count > 0 && <div className="text-xs text-gray-400">買取: {data.purchase_count}件</div>}
-                {data?.sale_count > 0 && <div className="text-xs text-gray-400">販売: {data.sale_count}件</div>}
             </div>
         )
     }
@@ -222,21 +272,31 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                 ))}
             </div>
 
+            {/* 凡例 */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                {hasPSA10Trade && <span><span style={{ color: COLORS.psa10_trade }}>━</span> PSA10 売買</span>}
+                {hasATrade && <span><span style={{ color: COLORS.a_trade }}>━</span> 状態A 売買</span>}
+                {hasBoxTrade && <span><span style={{ color: COLORS.box_trade }}>━</span> BOX 売買</span>}
+                {hasPSA10Sale && <span><span style={{ color: COLORS.psa10_sale }}>┅</span> PSA10 販売最安</span>}
+                {hasASale && <span><span style={{ color: COLORS.a_sale }}>┅</span> 状態A 販売最安</span>}
+                {hasBoxSale && <span><span style={{ color: COLORS.box_sale }}>┅</span> BOX 販売最安</span>}
+                {hasPurchaseNormal && <span><span style={{ color: COLORS.purchase_normal }}>- -</span> 素体 買取</span>}
+                {hasPurchasePSA10 && <span><span style={{ color: COLORS.purchase_psa10 }}>- -</span> PSA10 買取</span>}
+                {hasPurchaseSealed && <span><span style={{ color: COLORS.purchase_sealed }}>- -</span> 未開封 買取</span>}
+                {hasPurchaseOpened && <span><span style={{ color: COLORS.purchase_opened }}>- -</span> 開封 買取</span>}
+            </div>
+
             {/* グラフ */}
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={350}>
                 <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                     <defs>
                         <linearGradient id="psa10Fill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
-                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
+                            <stop offset="5%" stopColor={COLORS.psa10_trade} stopOpacity={0.15} />
+                            <stop offset="95%" stopColor={COLORS.psa10_trade} stopOpacity={0.02} />
                         </linearGradient>
-                        <linearGradient id="purchaseFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
-                        </linearGradient>
-                        <linearGradient id="saleFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
-                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                        <linearGradient id="aFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={COLORS.a_trade} stopOpacity={0.1} />
+                            <stop offset="95%" stopColor={COLORS.a_trade} stopOpacity={0.02} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -247,78 +307,58 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                         domain={['auto', 'auto']}
                     />
                     <Tooltip content={<ChartTooltip />} />
-                    <Legend />
 
-                    {/* PSA10 平均売買価格 */}
-                    {hasPSA10 && (
-                        <Area
-                            type="monotone"
-                            dataKey="psa10_avg"
-                            stroke="#8b5cf6"
-                            strokeWidth={2.5}
-                            fill="url(#psa10Fill)"
-                            name="PSA10 平均売買"
-                            dot={{ r: 3, fill: '#8b5cf6' }}
-                            connectNulls
-                        />
+                    {/* === スニダン売買履歴（実線・エリア） === */}
+                    {hasPSA10Trade && (
+                        <Area type="monotone" dataKey="psa10_trade" stroke={COLORS.psa10_trade} strokeWidth={2.5}
+                            fill="url(#psa10Fill)" name="PSA10 売買" dot={{ r: 3, fill: COLORS.psa10_trade }} connectNulls />
+                    )}
+                    {hasATrade && (
+                        <Area type="monotone" dataKey="a_trade" stroke={COLORS.a_trade} strokeWidth={2}
+                            fill="url(#aFill)" name="状態A 売買" dot={{ r: 2, fill: COLORS.a_trade }} connectNulls />
+                    )}
+                    {hasBoxTrade && (
+                        <Area type="monotone" dataKey="box_trade" stroke={COLORS.box_trade} strokeWidth={2}
+                            fill="transparent" name="BOX 売買" dot={{ r: 2, fill: COLORS.box_trade }} connectNulls />
                     )}
 
-                    {/* 状態A 平均売買価格 */}
-                    {hasA && (
-                        <Area
-                            type="monotone"
-                            dataKey="a_avg"
-                            stroke="#10b981"
-                            strokeWidth={2}
-                            fill="transparent"
-                            name="状態A 平均売買"
-                            dot={{ r: 2, fill: '#10b981' }}
-                            connectNulls
-                        />
+                    {/* === 販売最安値（点線） === */}
+                    {hasPSA10Sale && (
+                        <Area type="monotone" dataKey="psa10_sale" stroke={COLORS.psa10_sale} strokeWidth={2}
+                            strokeDasharray="3 3" fill="transparent" name="PSA10 販売最安"
+                            dot={{ r: 2, fill: COLORS.psa10_sale }} connectNulls />
+                    )}
+                    {hasASale && (
+                        <Area type="monotone" dataKey="a_sale" stroke={COLORS.a_sale} strokeWidth={2}
+                            strokeDasharray="3 3" fill="transparent" name="状態A 販売最安"
+                            dot={{ r: 2, fill: COLORS.a_sale }} connectNulls />
+                    )}
+                    {hasBoxSale && (
+                        <Area type="monotone" dataKey="box_sale" stroke={COLORS.box_sale} strokeWidth={2}
+                            strokeDasharray="3 3" fill="transparent" name="BOX 販売最安"
+                            dot={{ r: 2, fill: COLORS.box_sale }} connectNulls />
                     )}
 
-                    {/* BOX 平均売買価格 */}
-                    {hasBox && (
-                        <Area
-                            type="monotone"
-                            dataKey="box_avg"
-                            stroke="#f59e0b"
-                            strokeWidth={2}
-                            fill="transparent"
-                            name="BOX 平均売買"
-                            dot={{ r: 2, fill: '#f59e0b' }}
-                            connectNulls
-                        />
+                    {/* === 買取価格（破線） === */}
+                    {hasPurchaseNormal && (
+                        <Area type="monotone" dataKey="purchase_normal" stroke={COLORS.purchase_normal} strokeWidth={2}
+                            strokeDasharray="8 4" fill="transparent" name="素体 買取"
+                            dot={{ r: 2, fill: COLORS.purchase_normal }} connectNulls />
                     )}
-
-                    {/* 平均販売価格 */}
-                    {hasSale && (
-                        <Area
-                            type="monotone"
-                            dataKey="sale_avg"
-                            stroke="#ef4444"
-                            strokeWidth={2}
-                            fill="url(#saleFill)"
-                            name="平均販売"
-                            dot={{ r: 2, fill: '#ef4444' }}
-                            connectNulls
-                        />
+                    {hasPurchasePSA10 && (
+                        <Area type="monotone" dataKey="purchase_psa10" stroke={COLORS.purchase_psa10} strokeWidth={2}
+                            strokeDasharray="8 4" fill="transparent" name="PSA10 買取"
+                            dot={{ r: 2, fill: COLORS.purchase_psa10 }} connectNulls />
                     )}
-
-
-                    {/* 平均買取価格 */}
-                    {hasPurchase && (
-                        <Area
-                            type="monotone"
-                            dataKey="purchase_avg"
-                            stroke="#3b82f6"
-                            strokeWidth={2}
-                            strokeDasharray="5 5"
-                            fill="url(#purchaseFill)"
-                            name="平均買取"
-                            dot={{ r: 2, fill: '#3b82f6' }}
-                            connectNulls
-                        />
+                    {hasPurchaseSealed && (
+                        <Area type="monotone" dataKey="purchase_sealed" stroke={COLORS.purchase_sealed} strokeWidth={2}
+                            strokeDasharray="8 4" fill="transparent" name="未開封 買取"
+                            dot={{ r: 2, fill: COLORS.purchase_sealed }} connectNulls />
+                    )}
+                    {hasPurchaseOpened && (
+                        <Area type="monotone" dataKey="purchase_opened" stroke={COLORS.purchase_opened} strokeWidth={2}
+                            strokeDasharray="8 4" fill="transparent" name="開封 買取"
+                            dot={{ r: 2, fill: COLORS.purchase_opened }} connectNulls />
                     )}
                 </AreaChart>
             </ResponsiveContainer>
