@@ -64,6 +64,34 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        // ⑤ lounge_known_keys に新規キーを登録（新商品検知用）
+        // 既存のcard_keyを取得
+        const { data: existingKeys } = await supabase
+            .from('lounge_known_keys')
+            .select('card_key')
+
+        const knownKeySet = new Set((existingKeys || []).map(k => k.card_key))
+        const newCards = uniqueCards.filter(c => !knownKeySet.has(c.key))
+        const newProductCount = newCards.length
+
+        // 新規キーをバッチINSERT
+        if (newCards.length > 0) {
+            const newKeyBatchSize = 100
+            for (let i = 0; i < newCards.length; i += newKeyBatchSize) {
+                const batch = newCards.slice(i, i + newKeyBatchSize).map(card => ({
+                    card_key: card.key,
+                    name: card.name,
+                    price: card.price,
+                    rarity: card.rarity || '',
+                    grade: card.grade || '',
+                }))
+
+                await supabase
+                    .from('lounge_known_keys')
+                    .upsert(batch, { onConflict: 'card_key' })
+            }
+        }
+
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
         await supabase.from('cron_logs').insert({
@@ -74,6 +102,7 @@ export async function GET(request: NextRequest) {
                 unique: uniqueCards.length,
                 duplicates: allCards.length - uniqueCards.length,
                 cached: insertedCount,
+                new_products: newProductCount,
                 errors: errorCount,
                 elapsed: `${elapsed}s`,
             },
@@ -85,6 +114,7 @@ export async function GET(request: NextRequest) {
             unique: uniqueCards.length,
             duplicates: allCards.length - uniqueCards.length,
             cached: insertedCount,
+            new_products: newProductCount,
             errors: errorCount,
             elapsed: `${elapsed}s`,
         })

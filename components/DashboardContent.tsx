@@ -10,7 +10,7 @@ import {
   getAllSaleSites
 } from '@/lib/api/dashboard'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Database, Store, Globe, Clock, Search, RefreshCw, TrendingUp, AlertCircle } from 'lucide-react'
+import { Database, Store, Globe, Clock, Search, RefreshCw, TrendingUp, AlertCircle, Sparkles } from 'lucide-react'
 
 interface Stats {
   cards: number
@@ -67,6 +67,9 @@ export default function DashboardContent({ onSelectCard }: DashboardContentProps
   const [priceIndexData, setPriceIndexData] = useState<any[]>([])
   const [indexDays, setIndexDays] = useState(7)
   const [selectedCard, setSelectedCard] = useState<SearchResult | null>(null)
+  const [newProducts, setNewProducts] = useState<any>({})
+  const [newProductDays, setNewProductDays] = useState(7)
+  const [newProductLoading, setNewProductLoading] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -93,6 +96,9 @@ export default function DashboardContent({ onSelectCard }: DashboardContentProps
     // 価格インデックス取得
     await fetchPriceIndex(indexDays)
 
+    // 新着商品取得
+    await fetchNewProducts(newProductDays)
+
     setLoading(false)
   }
 
@@ -111,6 +117,24 @@ export default function DashboardContent({ onSelectCard }: DashboardContentProps
   useEffect(() => {
     if (!loading) fetchPriceIndex(indexDays)
   }, [indexDays])
+
+  const fetchNewProducts = async (days: number) => {
+    setNewProductLoading(true)
+    try {
+      const res = await fetch(`/api/new-products?days=${days}`)
+      const json = await res.json()
+      if (json.success) {
+        setNewProducts(json)
+      }
+    } catch (e) {
+      console.error('New products fetch error:', e)
+    }
+    setNewProductLoading(false)
+  }
+
+  useEffect(() => {
+    if (!loading) fetchNewProducts(newProductDays)
+  }, [newProductDays])
 
   // リアルタイム検索
   useEffect(() => {
@@ -309,6 +333,69 @@ export default function DashboardContent({ onSelectCard }: DashboardContentProps
             )
           })()}
         </div>
+      </div>
+
+      {/* 🆕 新着商品 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold text-gray-800 flex items-center gap-2">
+            <Sparkles size={18} className="text-yellow-500" />
+            新着商品（買取表）
+          </h2>
+          <div className="flex items-center gap-2">
+            {newProductLoading && <RefreshCw size={14} className="animate-spin text-gray-400" />}
+            <select
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
+              value={newProductDays}
+              onChange={(e) => setNewProductDays(Number(e.target.value))}
+            >
+              <option value={1}>今日</option>
+              <option value={3}>3日間</option>
+              <option value={7}>7日間</option>
+            </select>
+          </div>
+        </div>
+        {newProducts.total > 0 ? (
+          <div className="space-y-4 max-h-[400px] overflow-auto">
+            {Object.entries(newProducts.grouped || {}).map(([date, items]: [string, any]) => (
+              <div key={date}>
+                <p className="text-xs font-medium text-gray-400 mb-2 sticky top-0 bg-white py-1">{date} ({items.length}件)</p>
+                <div className="space-y-1.5">
+                  {items.map((item: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${item.source === 'シンソク'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-purple-100 text-purple-700'
+                        }`}>
+                        {item.source === 'シンソク' ? 'シンソク' : 'ラウンジ'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                        {item.rarity && (
+                          <span className="text-xs text-gray-400">{item.rarity}</span>
+                        )}
+                      </div>
+                      {item.price > 0 && (
+                        <span className="text-sm font-bold text-gray-700 flex-shrink-0">
+                          ¥{item.price.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 text-center py-8">新着商品なし</p>
+        )}
+        {newProducts.total > 0 && (
+          <div className="flex justify-center gap-4 mt-3 pt-3 border-t border-gray-100">
+            <span className="text-xs text-gray-400">
+              シンソク: {newProducts.shinsokuCount || 0}件 / ラウンジ: {newProducts.loungeCount || 0}件
+            </span>
+          </div>
+        )}
       </div>
 
       {/* カード検索 */}
