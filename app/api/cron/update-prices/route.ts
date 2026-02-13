@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import {
+  extractApparelId,
+  getProductInfo,
+  getListings,
+} from '@/lib/snkrdunk-api'
 
 const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
 
@@ -196,49 +201,76 @@ export async function GET(request: NextRequest) {
       const currentNoChangeCount = site.no_change_count || 0
 
       try {
-        const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
+        // スニダンURL判定
+        const isSnkrdunk = site.product_url?.includes('snkrdunk.com')
 
-        if (!scrapeResult.success) {
-          // エラー時：30分後リトライ
-          results.errors++
-          const errorMsg = scrapeResult.error || 'Scrape failed'
-          const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
+        let newPrice: number | null = null
+        let newStock: number | null = null
 
-          await supabase
-            .from('card_sale_urls')
-            .update({
-              last_checked_at: new Date().toISOString(),
-              next_check_at: calculateNextCheckAt(nextInterval),
-              check_interval: CONFIG.ERROR_RETRY_INTERVAL,
-              error_count: (site.error_count || 0) + 1,
-              last_error: errorMsg
-            })
-            .eq('id', site.id)
+        if (isSnkrdunk) {
+          // 新API方式: スニダンAPIから最安値を取得
+          const apparelId = extractApparelId(site.product_url)
+          if (!apparelId) {
+            throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
+          }
 
-          results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
-          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
-          continue
-        }
+          const productInfo = await getProductInfo(apparelId)
+          const productType = productInfo.isBox ? 'box' : 'single'
 
-        // 価格・在庫取得
-        let newPrice = scrapeResult.price || scrapeResult.mainPrice
-        let newStock = scrapeResult.stock
+          if (productType === 'single') {
+            const listings = await getListings(apparelId, 'single', 1, 50)
+            if (listings.length > 0) {
+              newPrice = Math.min(...listings.map(l => l.price))
+              newStock = listings.length
+            }
+          } else {
+            newPrice = productInfo.minPrice
+            newStock = 1
+          }
+        } else {
+          // 既存のRailway方式
+          const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
 
-        if (typeof newStock !== 'number') {
-          newStock = newStock ? parseInt(newStock, 10) : 0
-        }
+          if (!scrapeResult.success) {
+            // エラー時：30分後リトライ
+            results.errors++
+            const errorMsg = scrapeResult.error || 'Scrape failed'
+            const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
 
-        // 状態別価格がある場合
-        if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
-          const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
-          const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
+            await supabase
+              .from('card_sale_urls')
+              .update({
+                last_checked_at: new Date().toISOString(),
+                next_check_at: calculateNextCheckAt(nextInterval),
+                check_interval: CONFIG.ERROR_RETRY_INTERVAL,
+                error_count: (site.error_count || 0) + 1,
+                last_error: errorMsg
+              })
+              .eq('id', site.id)
 
-          if (conditionA?.price) {
-            newPrice = conditionA.price
-            newStock = conditionA.stock ?? 0
-          } else if (conditionNew?.price) {
-            newPrice = conditionNew.price
-            newStock = conditionNew.stock ?? 0
+            results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
+            await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
+            continue
+          }
+
+          newPrice = scrapeResult.price || scrapeResult.mainPrice
+          newStock = scrapeResult.stock
+
+          if (typeof newStock !== 'number') {
+            newStock = newStock ? parseInt(newStock, 10) : 0
+          }
+
+          if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
+            const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
+            const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
+
+            if (conditionA?.price) {
+              newPrice = conditionA.price
+              newStock = conditionA.stock ?? 0
+            } else if (conditionNew?.price) {
+              newPrice = conditionNew.price
+              newStock = conditionNew.stock ?? 0
+            }
           }
         }
 
@@ -441,48 +473,83 @@ export async function POST(request: NextRequest) {
       const currentNoChangeCount = site.no_change_count || 0
 
       try {
-        const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
+        // スニダンURL判定
+        const isSnkrdunk = site.product_url?.includes('snkrdunk.com')
 
-        if (!scrapeResult.success) {
-          results.errors++
-          const errorMsg = scrapeResult.error || 'Scrape failed'
-          const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
+        let newPrice: number | null = null
+        let newStock: number | null = null
 
-          await supabase
-            .from('card_sale_urls')
-            .update({
-              last_checked_at: new Date().toISOString(),
-              next_check_at: calculateNextCheckAt(nextInterval),
-              check_interval: CONFIG.ERROR_RETRY_INTERVAL,
-              error_count: (site.error_count || 0) + 1,
-              last_error: errorMsg
-            })
-            .eq('id', site.id)
+        if (isSnkrdunk) {
+          // 新API方式: スニダンAPIから最安値を取得
+          const apparelId = extractApparelId(site.product_url)
+          if (!apparelId) {
+            throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
+          }
 
-          results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
-          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
-          continue
-        }
+          const productInfo = await getProductInfo(apparelId)
+          const productType = productInfo.isBox ? 'box' : 'single'
 
-        let newPrice = scrapeResult.price || scrapeResult.mainPrice
-        let newStock = scrapeResult.stock
+          if (productType === 'single') {
+            // シングル: 出品一覧から最安値を取得
+            const listings = await getListings(apparelId, 'single', 1, 50)
+            if (listings.length > 0) {
+              newPrice = Math.min(...listings.map(l => l.price))
+              newStock = listings.length
+            }
+          } else {
+            // BOX: productInfoのminPriceを使用
+            newPrice = productInfo.minPrice
+            newStock = 1
+          }
+        } else {
+          // 既存のRailway方式
+          const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
 
-        if (typeof newStock !== 'number') {
-          newStock = newStock ? parseInt(newStock, 10) : 0
-        }
+          if (!scrapeResult.success) {
+            results.errors++
+            const errorMsg = scrapeResult.error || 'Scrape failed'
+            const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
 
-        if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
-          const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
-          const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
+            await supabase
+              .from('card_sale_urls')
+              .update({
+                last_checked_at: new Date().toISOString(),
+                next_check_at: calculateNextCheckAt(nextInterval),
+                check_interval: CONFIG.ERROR_RETRY_INTERVAL,
+                error_count: (site.error_count || 0) + 1,
+                last_error: errorMsg
+              })
+              .eq('id', site.id)
 
-          if (conditionA?.price) {
-            newPrice = conditionA.price
-            newStock = conditionA.stock ?? 0
-          } else if (conditionNew?.price) {
-            newPrice = conditionNew.price
-            newStock = conditionNew.stock ?? 0
+            results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
+            await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
+            continue
+          }
+
+          newPrice = scrapeResult.price || scrapeResult.mainPrice
+          newStock = scrapeResult.stock
+
+          if (typeof newStock !== 'number') {
+            newStock = newStock ? parseInt(newStock, 10) : 0
+          }
+
+          if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
+            const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
+            const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
+
+            if (conditionA?.price) {
+              newPrice = conditionA.price
+              newStock = conditionA.stock ?? 0
+            } else if (conditionNew?.price) {
+              newPrice = conditionNew.price
+              newStock = conditionNew.stock ?? 0
+            }
           }
         }
+
+        // Railway方式のcondition分岐はisSnkrdunk分岐の中に移動済み
+
+        // (条件分岐はisSnkrdunk分岐の中に移動済み)
 
         if (newPrice !== null && newPrice !== undefined) {
           const priceChanged = oldPrice !== newPrice
