@@ -6,7 +6,7 @@ import {
     getSalesHistory,
     getListings,
 } from '@/lib/snkrdunk-api'
-import { normalizeGrade } from '@/lib/scraping/helpers'
+import { normalizeGrade, parseRelativeTime } from '@/lib/scraping/helpers'
 
 // アイコン番号を抽出するヘルパー
 function extractIconNumber(imageUrl: string): number | null {
@@ -202,18 +202,25 @@ async function scrapeViaAPI(cardId: string, url: string, siteId: string) {
     const { history: salesHistory } = await getSalesHistory(apparelId, 1, 20)
 
     // データ整形
+    const now = new Date()
     const processedData = salesHistory
         .map((item: any) => {
+            // 日時パース（相対時刻 or 絶対日付）
+            const soldAt = parseRelativeTime(item.date, now)
+            if (!soldAt) return null
+
             const gradeSource = productType === 'box' ? item.size : item.condition
             const grade = normalizeGrade(gradeSource)
             if (!grade) return null
+
+            if (!item.price || item.price === 0) return null
 
             return {
                 card_id: cardId,
                 apparel_id: apparelId,
                 grade,
                 price: item.price,
-                sold_at: item.soldAt,
+                sold_at: soldAt.toISOString(),
                 product_type: productType,
                 user_icon_number: extractIconNumber(item.imageUrl),
             }
