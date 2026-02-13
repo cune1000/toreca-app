@@ -6,6 +6,7 @@ import {
     getProductInfo,
     getSalesHistory,
     getAllSalesHistory,
+    getListings,
     type SnkrdunkSaleRecord,
 } from '@/lib/snkrdunk-api'
 
@@ -189,8 +190,70 @@ export async function POST(req: Request) {
             }
         }
         timings['7_dbInsert'] = Date.now() - t
+        t = Date.now()
 
         console.log(`[SnkrdunkAPI] DB write: inserted=${insertedCount}, skipped=${skippedCount}`, timings)
+
+        // ⑧ 出品一覧から最安値を取得して sale_prices に保存
+        // site_id を card_sale_urls から取得
+        const { data: saleUrlData } = await supabase
+            .from('card_sale_urls')
+            .select('site_id')
+            .eq('card_id', cardId)
+            .eq('product_url', url)
+            .single()
+        const siteId = saleUrlData?.site_id
+
+        const listingPrices: Record<string, number | null> = {}
+
+        if (productType === 'single') {
+            // シングル: 出品一覧からPSA10/状態A の最安値を取得
+            try {
+                const listings = await getListings(apparelId, 'single', 1, 50)
+                console.log(`[SnkrdunkAPI] Fetched ${listings.length} listings`)
+
+                // PSA10 の最安値
+                const psa10Items = listings.filter(l => l.condition.includes('PSA10'))
+                const psa10Min = psa10Items.length > 0
+                    ? Math.min(...psa10Items.map(l => l.price))
+                    : null
+                listingPrices['PSA10'] = psa10Min
+
+                // 状態A の最安値
+                const gradeAItems = listings.filter(l =>
+                    l.condition.startsWith('A') || l.condition.includes('A（')
+                )
+                const gradeAMin = gradeAItems.length > 0
+                    ? Math.min(...gradeAItems.map(l => l.price))
+                    : null
+                listingPrices['A'] = gradeAMin
+
+                console.log(`[SnkrdunkAPI] Listing prices: PSA10=${psa10Min}, A=${gradeAMin}`)
+            } catch (e: any) {
+                console.error(`[SnkrdunkAPI] Listings fetch error: ${e.message}`)
+            }
+        } else {
+            // BOX: productInfo.minPrice を使用
+            listingPrices['BOX'] = productInfo.minPrice
+            console.log(`[SnkrdunkAPI] BOX minPrice: ${productInfo.minPrice}`)
+        }
+
+        // sale_prices に保存
+        if (siteId) {
+            for (const [grade, price] of Object.entries(listingPrices)) {
+                if (price !== null && price > 0) {
+                    await supabase
+                        .from('sale_prices')
+                        .insert({
+                            card_id: cardId,
+                            site_id: siteId,
+                            price,
+                            grade,
+                        })
+                }
+            }
+        }
+        timings['8_listingPrices'] = Date.now() - t
 
         return NextResponse.json({
             success: true,
@@ -198,6 +261,7 @@ export async function POST(req: Request) {
             productType,
             productName: productInfo.localizedName,
             minPrice: productInfo.minPrice,
+            listingPrices,
             total: processedData.length,
             inserted: insertedCount,
             skipped: skippedCount,
