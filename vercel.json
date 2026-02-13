@@ -18,19 +18,19 @@
     },
     {
       "path": "/api/cron/shinsoku",
-      "schedule": "30 3,9,15,21 * * *"
+      "schedule": "0 2,4,13 * * *"
     },
     {
       "path": "/api/cron/shinsoku-sync",
-      "schedule": "0 4 * * *"
+      "schedule": "30 2,4,13 * * *"
     },
     {
       "path": "/api/cron/toreca-lounge",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 2,4,13 * * *"
     },
     {
       "path": "/api/cron/lounge-cache",
-      "schedule": "30 */6 * * *"
+      "schedule": "30 2,4,13 * * *"
     }
   ]
 }
