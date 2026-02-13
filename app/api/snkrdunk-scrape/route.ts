@@ -255,6 +255,17 @@ export async function POST(req: Request) {
         }
         timings['8_listingPrices'] = Date.now() - t
 
+        // ⑨ スクレイピング成功: ステータスをクリア
+        await supabase
+            .from('card_sale_urls')
+            .update({
+                last_scraped_at: new Date().toISOString(),
+                last_scrape_status: 'success',
+                last_scrape_error: null,
+            })
+            .eq('card_id', cardId)
+            .eq('product_url', url)
+
         return NextResponse.json({
             success: true,
             apparelId,
