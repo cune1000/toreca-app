@@ -68,6 +68,13 @@ const GRADE_SORT_ORDER: Record<string, number> = {
   '6個': 105, '7個': 106, '8個': 107, '9個': 108, '10個': 109,
 }
 
+// グレード別最安値カラー（価格・在庫推移グラフ用）
+const SALE_GRADE_COLORS: Record<string, { color: string; label: string }> = {
+  PSA10: { color: '#8b5cf6', label: 'PSA10最安' },
+  A: { color: '#10b981', label: '状態A最安' },
+  BOX: { color: '#f59e0b', label: 'BOX最安' },
+}
+
 // 期間フィルタオプション
 const PERIOD_OPTIONS = [
   { label: '本日', days: 1 },
@@ -555,7 +562,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
       dataMap.set(timestamp, existing)
     })
 
-    // 販売価格・在庫をサイト別に
+    // 販売価格・在庫をサイト別に（grade付きはグレード別ラインに分離）
     filteredSale.forEach((p: any) => {
       const dateStr = p.recorded_at || p.created_at
       const date = formatDate(dateStr)
@@ -567,10 +574,16 @@ export default function CardDetail({ card, onClose, onUpdated }) {
         date: date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
       }
 
-      const siteId = p.site?.id || 'other'
-      existing[`price_${siteId}`] = p.price
-      if (p.stock !== null && p.stock !== undefined) {
-        existing[`stock_${siteId}`] = p.stock
+      if (p.grade) {
+        // グレード付きデータ → グレード別ライン
+        existing[`sale_grade_${p.grade}`] = p.price
+      } else {
+        // グレードなし → 従来のサイト別ライン
+        const siteId = p.site?.id || 'other'
+        existing[`price_${siteId}`] = p.price
+        if (p.stock !== null && p.stock !== undefined) {
+          existing[`stock_${siteId}`] = p.stock
+        }
       }
       dataMap.set(timestamp, existing)
     })
@@ -607,6 +620,19 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     })
     return Array.from(conditions)
   }, [purchasePrices])
+
+  // sale_pricesのユニークなグレードリスト
+  const saleGrades = useMemo(() => {
+    const grades = new Set<string>()
+    salePrices.forEach((p: any) => {
+      if (p.grade) grades.add(p.grade)
+    })
+    return Array.from(grades).sort((a, b) => {
+      const orderA = GRADE_SORT_ORDER[a] ?? 999
+      const orderB = GRADE_SORT_ORDER[b] ?? 999
+      return orderA - orderB
+    })
+  }, [salePrices])
 
   // スニダン売買履歴のグラフデータ（期間フィルター適用）
   const snkrdunkChartData = useMemo(() => {
@@ -1014,6 +1040,25 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                             />
                           )
                         })}
+
+                      {/* グレード別最安値（PSA10/A/BOX） */}
+                      {saleGrades.map((grade) => {
+                        const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: `${grade}最安` }
+                        return (
+                          <Line
+                            key={`sale_grade_${grade}`}
+                            yAxisId="price"
+                            type="monotone"
+                            dataKey={`sale_grade_${grade}`}
+                            stroke={config.color}
+                            strokeWidth={2}
+                            strokeDasharray="6 3"
+                            name={config.label}
+                            dot={{ r: 4, fill: config.color }}
+                            connectNulls
+                          />
+                        )
+                      })}
 
                       {/* サイト別在庫 */}
                       {hasStockData && siteList
