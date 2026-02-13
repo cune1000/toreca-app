@@ -1009,7 +1009,8 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
-                        domain={['auto', 'auto']}
+                        domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
+                        allowDataOverflow={false}
                       />
                       {hasStockData && (
                         <YAxis
@@ -1268,7 +1269,8 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
-                        domain={['auto', 'auto']}
+                        domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
+                        allowDataOverflow={false}
                       />
                       <Tooltip content={<CustomTooltip />} />
 
