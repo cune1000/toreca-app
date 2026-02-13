@@ -101,6 +101,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
   // 表示切り替え用state
   const [showPurchase, setShowPurchase] = useState(true)
+  const [chartTab, setChartTab] = useState<'price' | 'snkrdunk' | 'daily'>('price')
   const [visibleSites, setVisibleSites] = useState<Record<string, { price: boolean; stock: boolean }>>({})
 
   // スニダン売買履歴用state
@@ -994,319 +995,355 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 </div>
               </div>
 
-              {/* グラフ */}
-              {chartData.length > 0 ? (
-                <div className="bg-white border rounded-xl p-4">
-                  <h3 className="font-bold text-gray-800 mb-4">価格・在庫推移</h3>
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={chartData} margin={{ top: 10, right: 60, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
-                      <YAxis
-                        yAxisId="price"
-                        orientation="left"
-                        tick={{ fontSize: 10, fill: '#9ca3af' }}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
-                        domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
-                        allowDataOverflow={false}
-                      />
-                      {hasStockData && (
-                        <YAxis
-                          yAxisId="stock"
-                          orientation="right"
-                          tick={{ fontSize: 10, fill: '#9ca3af' }}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(v) => `${v}個`}
-                          domain={[0, 'auto']}
-                        />
-                      )}
-                      <Tooltip content={<CustomTooltip />} />
+              {/* グラフタブ */}
+              <div className="bg-white border rounded-xl p-4">
+                {/* タブヘッダー */}
+                <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setChartTab('price')}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${chartTab === 'price'
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    📈 価格・在庫推移
+                  </button>
+                  <button
+                    onClick={() => setChartTab('snkrdunk')}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${chartTab === 'snkrdunk'
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    🔮 スニダン売買履歴
+                  </button>
+                  <button
+                    onClick={() => setChartTab('daily')}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${chartTab === 'daily'
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    📊 日次平均推移
+                  </button>
+                </div>
 
-                      {/* 買取価格（状態別） */}
-                      {showPurchase && purchaseConditions.map((condition) => {
-                        const config = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
-                        return (
-                          <Line
-                            key={`purchase_${condition}`}
-                            yAxisId="price"
-                            type="monotone"
-                            dataKey={`purchase_${condition}`}
-                            stroke={config.color}
-                            strokeWidth={2.5}
-                            name={`買取(${config.label})`}
-                            dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
-                            activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
-                            connectNulls
-                          />
-                        )
-                      })}
-
-                      {/* サイト別価格 */}
-                      {siteList
-                        .filter(site => visibleSites[site.id]?.price !== false)
-                        .map((site, index) => {
-                          const colorIndex = siteList.findIndex(s => s.id === site.id)
-                          const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
-                          return (
-                            <Line
-                              key={`price_${site.id}`}
+                {/* 価格・在庫推移タブ */}
+                {chartTab === 'price' && (
+                  <>
+                    {chartData.length > 0 ? (
+                      <>
+                        <ResponsiveContainer width="100%" height={400}>
+                          <LineChart data={chartData} margin={{ top: 10, right: 60, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
+                            <YAxis
                               yAxisId="price"
-                              type="monotone"
-                              dataKey={`price_${site.id}`}
-                              stroke={color}
-                              strokeWidth={2.5}
-                              name={`${site.name}(価格)`}
-                              dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
-                              activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
-                              connectNulls
+                              orientation="left"
+                              tick={{ fontSize: 10, fill: '#9ca3af' }}
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
+                              domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
+                              allowDataOverflow={false}
                             />
-                          )
-                        })}
+                            {hasStockData && (
+                              <YAxis
+                                yAxisId="stock"
+                                orientation="right"
+                                tick={{ fontSize: 10, fill: '#9ca3af' }}
+                                tickLine={false}
+                                axisLine={false}
+                                tickFormatter={(v) => `${v}個`}
+                                domain={[0, 'auto']}
+                              />
+                            )}
+                            <Tooltip content={<CustomTooltip />} />
 
-                      {/* グレード別最安値（PSA10/A/BOX） */}
-                      {saleGrades.map((grade) => {
-                        const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: `${grade}最安` }
-                        return (
-                          <Line
-                            key={`sale_grade_${grade}`}
-                            yAxisId="price"
-                            type="monotone"
-                            dataKey={`sale_grade_${grade}`}
-                            stroke={config.color}
-                            strokeWidth={2.5}
-                            strokeDasharray="8 4"
-                            name={config.label}
-                            dot={chartData.length > 30 ? false : { r: 5, strokeWidth: 2, fill: '#fff' }}
-                            activeDot={{ r: 7, strokeWidth: 2, fill: '#fff' }}
-                            connectNulls
-                          />
-                        )
-                      })}
+                            {/* 買取価格（状態別） */}
+                            {showPurchase && purchaseConditions.map((condition) => {
+                              const config = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
+                              return (
+                                <Line
+                                  key={`purchase_${condition}`}
+                                  yAxisId="price"
+                                  type="monotone"
+                                  dataKey={`purchase_${condition}`}
+                                  stroke={config.color}
+                                  strokeWidth={2.5}
+                                  name={`買取(${config.label})`}
+                                  dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
+                                  activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
+                                  connectNulls
+                                />
+                              )
+                            })}
 
-                      {/* サイト別在庫 */}
-                      {hasStockData && siteList
-                        .filter(site => visibleSites[site.id]?.stock !== false)
-                        .map((site, index) => {
-                          const colorIndex = siteList.findIndex(s => s.id === site.id)
-                          const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
-                          return (
-                            <Line
-                              key={`stock_${site.id}`}
-                              yAxisId="stock"
-                              type="stepAfter"
-                              dataKey={`stock_${site.id}`}
-                              stroke={color}
-                              strokeWidth={1.5}
-                              strokeDasharray="5 5"
-                              name={`${site.name}(在庫)`}
-                              dot={<DiamondDot stroke={color} />}
-                              connectNulls
-                            />
-                          )
-                        })}
-                    </LineChart>
-                  </ResponsiveContainer>
-                  <div className="flex justify-center gap-6 mt-4 text-xs text-gray-400">
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-500 inline-block rounded"></span> 価格（左軸）</span>
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-500 inline-block rounded" style={{ borderTop: '2px dashed #9ca3af' }}></span> 在庫（右軸）</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
-                  <p>価格データがまだありません</p>
-                </div>
-              )}
+                            {/* サイト別価格 */}
+                            {siteList
+                              .filter(site => visibleSites[site.id]?.price !== false)
+                              .map((site, index) => {
+                                const colorIndex = siteList.findIndex(s => s.id === site.id)
+                                const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
+                                return (
+                                  <Line
+                                    key={`price_${site.id}`}
+                                    yAxisId="price"
+                                    type="monotone"
+                                    dataKey={`price_${site.id}`}
+                                    stroke={color}
+                                    strokeWidth={2.5}
+                                    name={`${site.name}(価格)`}
+                                    dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
+                                    activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
+                                    connectNulls
+                                  />
+                                )
+                              })}
 
-              {/* スニダン売買履歴グラフ */}
-              <div className="bg-white border rounded-xl p-4">
-                <h3 className="font-bold text-gray-800 mb-4">スニダン売買履歴（グレード別）</h3>
+                            {/* グレード別最安値（PSA10/A/BOX） */}
+                            {saleGrades.map((grade) => {
+                              const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: `${grade}最安` }
+                              return (
+                                <Line
+                                  key={`sale_grade_${grade}`}
+                                  yAxisId="price"
+                                  type="monotone"
+                                  dataKey={`sale_grade_${grade}`}
+                                  stroke={config.color}
+                                  strokeWidth={2.5}
+                                  strokeDasharray="8 4"
+                                  name={config.label}
+                                  dot={chartData.length > 30 ? false : { r: 5, strokeWidth: 2, fill: '#fff' }}
+                                  activeDot={{ r: 7, strokeWidth: 2, fill: '#fff' }}
+                                  connectNulls
+                                />
+                              )
+                            })}
 
-                {/* 自動更新設定 */}
-                {(() => {
-                  const snkrdunkUrl = saleUrls.find((url: any) =>
-                    url.site?.name?.toLowerCase().includes('スニダン') ||
-                    url.site?.name?.toLowerCase().includes('snkrdunk') ||
-                    url.product_url?.toLowerCase().includes('snkrdunk')
-                  )
-
-                  return (
-                    <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                      <h4 className="font-bold text-sm mb-3">🤖 自動更新設定</h4>
-
-                      {/* URL表示 */}
-                      {snkrdunkUrl ? (
-                        <>
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs text-gray-600">🔗 スニダンURL:</span>
-                            <a
-                              href={snkrdunkUrl.product_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-500 hover:underline flex items-center gap-1 truncate max-w-xs"
-                            >
-                              {snkrdunkUrl.product_url}
-                              <ExternalLink size={12} />
-                            </a>
-                          </div>
-
-                          {/* モード選択 */}
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs text-gray-600">🔄 自動更新:</span>
-                            <select
-                              value={snkrdunkUrl.auto_scrape_mode || 'off'}
-                              onChange={(e) => updateAutoScrapeMode(snkrdunkUrl.id, e.target.value)}
-                              className="px-2 py-1 border rounded text-xs"
-                            >
-                              <option value="off">停止</option>
-                              <option value="auto">オートメーション（3時間～72時間）</option>
-                              <option value="manual">手動設定</option>
-                            </select>
-                          </div>
-
-                          {/* 手動設定時の間隔選択 */}
-                          {snkrdunkUrl.auto_scrape_mode === 'manual' && (
-                            <div className="flex items-center gap-2 mb-3 ml-4">
-                              <span className="text-xs text-gray-600">⏱️ 更新間隔:</span>
-                              <select
-                                value={snkrdunkUrl.auto_scrape_interval_minutes || 1440}
-                                onChange={(e) => updateScrapeInterval(snkrdunkUrl.id, parseInt(e.target.value))}
-                                className="px-2 py-1 border rounded text-xs"
-                              >
-                                <option value="180">3時間</option>
-                                <option value="360">6時間</option>
-                                <option value="720">12時間</option>
-                                <option value="1440">24時間</option>
-                                <option value="2880">48時間</option>
-                                <option value="4320">72時間</option>
-                              </select>
-                            </div>
-                          )}
-
-                          {/* 最終更新情報 */}
-                          {snkrdunkUrl.last_scraped_at && (
-                            <div className="text-xs text-gray-500 mb-2">
-                              📊 最終更新: {new Date(snkrdunkUrl.last_scraped_at).toLocaleString('ja-JP')}
-                              {' '}({formatRelativeTime(snkrdunkUrl.last_scraped_at)})
-                            </div>
-                          )}
-
-                          {/* 次回更新予定 */}
-                          {snkrdunkUrl.next_scrape_at && snkrdunkUrl.auto_scrape_mode !== 'off' && (
-                            <div className="text-xs text-gray-500 mb-2">
-                              ⏰ 次回更新: {new Date(snkrdunkUrl.next_scrape_at).toLocaleString('ja-JP')}
-                              {' '}({formatRelativeTime(snkrdunkUrl.next_scrape_at)})
-                            </div>
-                          )}
-
-                          {/* エラー表示 */}
-                          {snkrdunkUrl.last_scrape_status === 'error' && (
-                            <div className="bg-red-50 border border-red-200 rounded p-2 mb-2">
-                              <p className="text-xs text-red-700">⚠️ エラーが発生しました</p>
-                              <p className="text-xs text-red-600 mt-1">{snkrdunkUrl.last_scrape_error}</p>
-                            </div>
-                          )}
-
-                          {/* 手動更新ボタン */}
-                          <button
-                            onClick={scrapeSnkrdunk}
-                            disabled={snkrdunkScraping}
-                            className="px-3 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1"
-                          >
-                            {snkrdunkScraping ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                            今すぐ更新
-                          </button>
-                        </>
-                      ) : (
-                        <div className="text-xs text-gray-500">
-                          ⚠️ スニダンURLが未設定です。販売サイトからURLを追加してください。
+                            {/* サイト別在庫 */}
+                            {hasStockData && siteList
+                              .filter(site => visibleSites[site.id]?.stock !== false)
+                              .map((site, index) => {
+                                const colorIndex = siteList.findIndex(s => s.id === site.id)
+                                const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
+                                return (
+                                  <Line
+                                    key={`stock_${site.id}`}
+                                    yAxisId="stock"
+                                    type="stepAfter"
+                                    dataKey={`stock_${site.id}`}
+                                    stroke={color}
+                                    strokeWidth={1.5}
+                                    strokeDasharray="5 5"
+                                    name={`${site.name}(在庫)`}
+                                    dot={<DiamondDot stroke={color} />}
+                                    connectNulls
+                                  />
+                                )
+                              })}
+                          </LineChart>
+                        </ResponsiveContainer>
+                        <div className="flex justify-center gap-6 mt-4 text-xs text-gray-400">
+                          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-500 inline-block rounded"></span> 価格（左軸）</span>
+                          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-500 inline-block rounded" style={{ borderTop: '2px dashed #9ca3af' }}></span> 在庫（右軸）</span>
                         </div>
-                      )}
-                    </div>
-                  )
-                })()}
-
-                {/* グレード表示切り替え */}
-                {snkrdunkGrades.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {snkrdunkGrades.map(grade => {
-                      const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
-                      const isVisible = visibleGrades[grade] !== false
-                      return (
-                        <button
-                          key={grade}
-                          onClick={() => toggleGrade(grade)}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${isVisible
-                            ? 'bg-purple-50 border-purple-200 text-purple-700'
-                            : 'bg-white border-gray-200 text-gray-400'
-                            }`}
-                        >
-                          <span
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: isVisible ? color : '#d1d5db' }}
-                          ></span>
-                          {grade}
-                        </button>
-                      )
-                    })}
-                  </div>
+                      </>
+                    ) : (
+                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
+                        <p>価格データがまだありません</p>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* グラフ */}
-                {snkrdunkLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <RefreshCw className="animate-spin text-purple-500" size={32} />
-                  </div>
-                ) : snkrdunkChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={snkrdunkChartData} margin={{ top: 10, right: 20, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: '#9ca3af' }}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
-                        domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
-                        allowDataOverflow={false}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
+                {/* スニダン売買履歴タブ */}
+                {chartTab === 'snkrdunk' && (
+                  <>
+                    {/* 自動更新設定 */}
+                    {(() => {
+                      const snkrdunkUrl = saleUrls.find((url: any) =>
+                        url.site?.name?.toLowerCase().includes('スニダン') ||
+                        url.site?.name?.toLowerCase().includes('snkrdunk') ||
+                        url.product_url?.toLowerCase().includes('snkrdunk')
+                      )
 
-                      {/* グレード別ライン */}
-                      {snkrdunkGrades
-                        .filter(grade => visibleGrades[grade] !== false)
-                        .map(grade => {
+                      return (
+                        <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                          <h4 className="font-bold text-sm mb-3">🤖 自動更新設定</h4>
+
+                          {/* URL表示 */}
+                          {snkrdunkUrl ? (
+                            <>
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-xs text-gray-600">🔗 スニダンURL:</span>
+                                <a
+                                  href={snkrdunkUrl.product_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-500 hover:underline flex items-center gap-1 truncate max-w-xs"
+                                >
+                                  {snkrdunkUrl.product_url}
+                                  <ExternalLink size={12} />
+                                </a>
+                              </div>
+
+                              {/* モード選択 */}
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-xs text-gray-600">🔄 自動更新:</span>
+                                <select
+                                  value={snkrdunkUrl.auto_scrape_mode || 'off'}
+                                  onChange={(e) => updateAutoScrapeMode(snkrdunkUrl.id, e.target.value)}
+                                  className="px-2 py-1 border rounded text-xs"
+                                >
+                                  <option value="off">停止</option>
+                                  <option value="auto">オートメーション（3時間～72時間）</option>
+                                  <option value="manual">手動設定</option>
+                                </select>
+                              </div>
+
+                              {/* 手動設定時の間隔選択 */}
+                              {snkrdunkUrl.auto_scrape_mode === 'manual' && (
+                                <div className="flex items-center gap-2 mb-3 ml-4">
+                                  <span className="text-xs text-gray-600">⏱️ 更新間隔:</span>
+                                  <select
+                                    value={snkrdunkUrl.auto_scrape_interval_minutes || 1440}
+                                    onChange={(e) => updateScrapeInterval(snkrdunkUrl.id, parseInt(e.target.value))}
+                                    className="px-2 py-1 border rounded text-xs"
+                                  >
+                                    <option value="180">3時間</option>
+                                    <option value="360">6時間</option>
+                                    <option value="720">12時間</option>
+                                    <option value="1440">24時間</option>
+                                    <option value="2880">48時間</option>
+                                    <option value="4320">72時間</option>
+                                  </select>
+                                </div>
+                              )}
+
+                              {/* 最終更新情報 */}
+                              {snkrdunkUrl.last_scraped_at && (
+                                <div className="text-xs text-gray-500 mb-2">
+                                  📊 最終更新: {new Date(snkrdunkUrl.last_scraped_at).toLocaleString('ja-JP')}
+                                  {' '}({formatRelativeTime(snkrdunkUrl.last_scraped_at)})
+                                </div>
+                              )}
+
+                              {/* 次回更新予定 */}
+                              {snkrdunkUrl.next_scrape_at && snkrdunkUrl.auto_scrape_mode !== 'off' && (
+                                <div className="text-xs text-gray-500 mb-2">
+                                  ⏰ 次回更新: {new Date(snkrdunkUrl.next_scrape_at).toLocaleString('ja-JP')}
+                                  {' '}({formatRelativeTime(snkrdunkUrl.next_scrape_at)})
+                                </div>
+                              )}
+
+                              {/* エラー表示 */}
+                              {snkrdunkUrl.last_scrape_status === 'error' && (
+                                <div className="bg-red-50 border border-red-200 rounded p-2 mb-2">
+                                  <p className="text-xs text-red-700">⚠️ エラーが発生しました</p>
+                                  <p className="text-xs text-red-600 mt-1">{snkrdunkUrl.last_scrape_error}</p>
+                                </div>
+                              )}
+
+                              {/* 手動更新ボタン */}
+                              <button
+                                onClick={scrapeSnkrdunk}
+                                disabled={snkrdunkScraping}
+                                className="px-3 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1"
+                              >
+                                {snkrdunkScraping ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                今すぐ更新
+                              </button>
+                            </>
+                          ) : (
+                            <div className="text-xs text-gray-500">
+                              ⚠️ スニダンURLが未設定です。販売サイトからURLを追加してください。
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+
+                    {/* グレード表示切り替え */}
+                    {snkrdunkGrades.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {snkrdunkGrades.map(grade => {
                           const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
+                          const isVisible = visibleGrades[grade] !== false
                           return (
-                            <Line
+                            <button
                               key={grade}
-                              type="monotone"
-                              dataKey={`grade_${grade}`}
-                              stroke={color}
-                              strokeWidth={2.5}
-                              name={grade}
-                              dot={snkrdunkChartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
-                              activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
-                              connectNulls
-                            />
+                              onClick={() => toggleGrade(grade)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${isVisible
+                                ? 'bg-purple-50 border-purple-200 text-purple-700'
+                                : 'bg-white border-gray-200 text-gray-400'
+                                }`}
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: isVisible ? color : '#d1d5db' }}
+                              ></span>
+                              {grade}
+                            </button>
                           )
                         })}
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
-                    <p>売買履歴データがありません</p>
-                    <p className="text-sm mt-2">「履歴更新」ボタンからスクレイピングを実行してください</p>
-                  </div>
-                )}
-              </div>
+                      </div>
+                    )}
 
-              {/* 日次平均推移グラフ（カード固有） */}
-              <div className="bg-white border rounded-xl p-4">
-                <h3 className="font-bold text-gray-800 mb-4">📊 日次平均推移</h3>
-                <MarketChart cardId={card.id} />
+                    {/* グラフ */}
+                    {snkrdunkLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <RefreshCw className="animate-spin text-purple-500" size={32} />
+                      </div>
+                    ) : snkrdunkChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={400}>
+                        <LineChart data={snkrdunkChartData} margin={{ top: 10, right: 20, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
+                          <YAxis
+                            tick={{ fontSize: 10, fill: '#9ca3af' }}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
+                            domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
+                            allowDataOverflow={false}
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+
+                          {/* グレード別ライン */}
+                          {snkrdunkGrades
+                            .filter(grade => visibleGrades[grade] !== false)
+                            .map(grade => {
+                              const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
+                              return (
+                                <Line
+                                  key={grade}
+                                  type="monotone"
+                                  dataKey={`grade_${grade}`}
+                                  stroke={color}
+                                  strokeWidth={2.5}
+                                  name={grade}
+                                  dot={snkrdunkChartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
+                                  activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
+                                  connectNulls
+                                />
+                              )
+                            })}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
+                        <p>売買履歴データがありません</p>
+                        <p className="text-sm mt-2">「履歴更新」ボタンからスクレイピングを実行してください</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* 日次平均推移タブ */}
+                {chartTab === 'daily' && (
+                  <MarketChart cardId={card.id} />
+                )}
               </div>
 
               {/* 販売URL一覧 */}
