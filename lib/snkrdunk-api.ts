@@ -131,9 +131,19 @@ export async function getProductInfo(apparelId: number): Promise<SnkrdunkProduct
 
     const data = await res.json()
 
-    const categories = (data.categories || []).map((c: any) => c.name)
-    const isSingleCard = categories.includes('trading-card-single')
-    const isBox = categories.includes('trading-card-box-pack')
+    // カテゴリ判定: APIが返す形式が複数パターンある
+    // パターン1: { name: "trading-card-single" } / { name: "trading-card-box-pack" }
+    // パターン2: { name: "trading_card", localizedName: "トレカ (ボックス・パック)" }
+    const categories = (data.categories || [])
+    const categoryNames = categories.map((c: any) => c.name)
+    const categoryLocalNames = categories.map((c: any) => c.localizedName || '')
+
+    const isSingleCard = categoryNames.includes('trading-card-single') ||
+        categoryLocalNames.some((n: string) => n.includes('シングル'))
+    const isBox = categoryNames.includes('trading-card-box-pack') ||
+        categoryLocalNames.some((n: string) => n.includes('ボックス') || n.includes('パック'))
+
+    console.log(`[SnkrdunkAPI] Categories: ${JSON.stringify(categories)}, isSingle=${isSingleCard}, isBox=${isBox}`)
 
     return {
         id: data.id,
@@ -144,7 +154,7 @@ export async function getProductInfo(apparelId: number): Promise<SnkrdunkProduct
         totalListingCount: data.totalListingCount || 0,
         isSingleCard,
         isBox,
-        category: categories[0] || 'unknown',
+        category: categoryNames[0] || 'unknown',
         imageUrl: data.primaryMedia?.imageUrl || null,
     }
 }
