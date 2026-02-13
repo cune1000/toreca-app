@@ -735,10 +735,14 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null
 
+    // 値があるエントリのみ表示
+    const validEntries = payload.filter((entry: any) => entry.value !== null && entry.value !== undefined)
+    if (validEntries.length === 0) return null
+
     return (
       <div className="bg-white border rounded-lg shadow-lg p-3 text-sm">
         <p className="font-medium text-gray-700 mb-2">{label}</p>
-        {payload.map((entry: any, index: number) => {
+        {validEntries.map((entry: any, index: number) => {
           const isStock = entry.dataKey.startsWith('stock')
           return (
             <div key={index} className="flex items-center gap-2">
