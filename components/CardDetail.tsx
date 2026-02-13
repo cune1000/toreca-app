@@ -493,12 +493,39 @@ export default function CardDetail({ card, onClose, onUpdated }) {
           }
         }
 
-        await supabase.from('sale_prices').insert({
-          card_id: card.id,
-          site_id: saleUrl.site_id,
-          price: data.priceNumber || data.price,
-          stock: stock
-        })
+        // スニダン（gradePrices あり）の場合、グレード別 + 全体の4レコードを保存
+        if (data.gradePrices && data.gradePrices.length > 0) {
+          // ① 全体最安値 + 出品数（grade=null）
+          await supabase.from('sale_prices').insert({
+            card_id: card.id,
+            site_id: saleUrl.site_id,
+            price: data.price,
+            stock: stock,
+            grade: null
+          })
+
+          // ② グレード別（PSA10, A, BOXなど）
+          for (const gp of data.gradePrices) {
+            await supabase.from('sale_prices').insert({
+              card_id: card.id,
+              site_id: saleUrl.site_id,
+              price: gp.price,
+              grade: gp.grade,
+            })
+          }
+
+          const gradeInfo = data.gradePrices.map((gp: any) => `${gp.grade}: ¥${gp.price.toLocaleString()}`).join(', ')
+          alert(`更新完了: 全体¥${data.price.toLocaleString()}${stock !== null ? ` (${stock}件)` : ''} / ${gradeInfo}`)
+        } else {
+          // 通常サイト
+          await supabase.from('sale_prices').insert({
+            card_id: card.id,
+            site_id: saleUrl.site_id,
+            price: data.priceNumber || data.price,
+            stock: stock
+          })
+          alert(`更新完了: ¥${(data.priceNumber || data.price).toLocaleString()}${stock !== null ? ` (在庫: ${stock})` : ''}`)
+        }
 
         // card_sale_urlsのlast_price, last_stockも更新
         await supabase.from('card_sale_urls').update({
@@ -507,7 +534,6 @@ export default function CardDetail({ card, onClose, onUpdated }) {
           last_checked_at: new Date().toISOString()
         }).eq('id', saleUrl.id)
 
-        alert(`更新完了: ¥${(data.priceNumber || data.price).toLocaleString()}${stock !== null ? ` (在庫: ${stock})` : ''}`)
         fetchPrices()
       } else {
         alert('価格の取得に失敗: ' + (data.error || '不明なエラー'))
