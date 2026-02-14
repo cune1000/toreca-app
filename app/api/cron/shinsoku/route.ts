@@ -44,18 +44,32 @@ export async function GET(request: NextRequest) {
                 const itemId = link.external_key
                 const condition = link.condition || 'S'
 
-                // シンソクAPIから価格取得
-                const res = await fetch(`https://shinsoku-tcg.com/api/items/${itemId}`)
-                if (!res.ok) {
+                // shinsoku_itemsテーブルから価格取得（shinsoku-syncで同期済み）
+                const { data: itemRow } = await supabase
+                    .from('shinsoku_items')
+                    .select('price_s, price_a, price_am, price_b, price_c')
+                    .eq('item_id', itemId)
+                    .single()
+
+                if (!itemRow) {
+                    errors.push(`${(link as any).card?.name || link.card_id}(${link.label}): shinsoku_itemsにitem_id=${itemId}が見つかりません`)
                     skippedCount++
                     continue
                 }
 
-                const itemData = await res.json()
-                const prices = itemData?.prices || {}
-                const conditionMap: Record<string, string> = { S: 's', A: 'a', 'A-': 'am', B: 'b', C: 'c' }
-                const priceKey = conditionMap[condition] || 's'
-                const priceYen = prices[priceKey]
+                // condition → price_* マッピング
+                const conditionToPriceMap: Record<string, number | null> = {
+                    'S': itemRow.price_s,
+                    'normal': itemRow.price_s,
+                    '素体': itemRow.price_s,
+                    'A': itemRow.price_a,
+                    'A-': itemRow.price_am,
+                    'B': itemRow.price_b,
+                    'C': itemRow.price_c,
+                    'sealed': itemRow.price_s,
+                    '未開封': itemRow.price_s,
+                }
+                const priceYen = conditionToPriceMap[condition] ?? itemRow.price_s
 
                 if (!priceYen || priceYen === 0) {
                     skippedCount++
