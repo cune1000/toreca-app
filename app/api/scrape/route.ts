@@ -64,11 +64,11 @@ async function scrapeSnkrdunk(url: string) {
       prices.push({ grade: 'A', price: Math.min(...gradeA.map(l => l.price)) })
     }
   } else {
-    const listings = await getListings(apparelId, 'box', 1, 50)
-    totalListings = listings.length
-    if (listings.length > 0) {
-      overallMin = Math.min(...listings.map(l => l.price))
-      prices.push({ grade: 'BOX', price: overallMin })
+    // BOX: productInfoのminPriceを使用（cronと同じロジック）
+    totalListings = info.totalListingCount || 0
+    if (info.minPrice) {
+      overallMin = info.minPrice
+      prices.push({ grade: 'BOX', price: info.minPrice })
     }
   }
 
