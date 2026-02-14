@@ -24,8 +24,8 @@ export function parseRelativeTime(timeStr: string, baseTime: Date): Date | null 
         return isNaN(result.getTime()) ? null : result
     }
 
-    // 相対時刻のパターン（3日前、2時間前など）
-    const pattern = /(\d+)(分|時間|日)前/
+    // 相対時刻のパターン（3日前、2時間前、5秒前など）
+    const pattern = /(\d+)(秒|分|時間|日)前/
     const match = timeStr.match(pattern)
     if (!match) return null
 
@@ -34,6 +34,9 @@ export function parseRelativeTime(timeStr: string, baseTime: Date): Date | null 
     const result = new Date(baseTime)
 
     switch (unit) {
+        case '秒':
+            result.setSeconds(result.getSeconds() - value)
+            break
         case '分':
             result.setMinutes(result.getMinutes() - value)
             break
