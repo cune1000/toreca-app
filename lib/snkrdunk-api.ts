@@ -262,3 +262,36 @@ export async function getListings(
         imageUrl: item.primaryPhoto?.imageUrl || null,
     }))
 }
+
+export interface SnkrdunkBoxSize {
+    sizeId: number
+    name: string       // "1個", "2個" etc
+    quantity: number
+    minPrice: number
+    listingCount: number
+}
+
+/**
+ * BOX商品のサイズ別価格・出品数を取得
+ * productInfoではBOXの出品数が0になるため、このAPIを使用
+ */
+export async function getBoxSizes(apparelId: number): Promise<SnkrdunkBoxSize[]> {
+    const url = `${SNKRDUNK_BASE}/v1/apparels/${apparelId}/sizes`
+    const res = await snkrdunkFetch(url)
+
+    if (!res.ok) {
+        throw new Error(`BOXサイズ情報の取得に失敗: HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+
+    return (data.sizePrices || [])
+        .filter((sp: any) => (sp.listingItemCount || 0) > 0)
+        .map((sp: any) => ({
+            sizeId: sp.size?.id || 0,
+            name: sp.size?.localizedName || '',
+            quantity: sp.size?.quantity || 1,
+            minPrice: sp.minListingPrice || sp.minNewListingPrice || 0,
+            listingCount: sp.listingItemCount || 0,
+        }))
+}

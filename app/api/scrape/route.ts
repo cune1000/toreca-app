@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   getListings,
   getProductInfo,
+  getBoxSizes,
 } from '@/lib/snkrdunk-api'
 
 // Railway経由でスクレイピング（スニダン以外）
@@ -64,11 +65,20 @@ async function scrapeSnkrdunk(url: string) {
       prices.push({ grade: 'A', price: Math.min(...gradeA.map(l => l.price)) })
     }
   } else {
-    // BOX: productInfoのminPriceを使用（cronと同じロジック）
-    totalListings = info.totalListingCount || 0
-    if (info.minPrice) {
-      overallMin = info.minPrice
-      prices.push({ grade: 'BOX', price: info.minPrice })
+    // BOX: /sizes APIから価格・出品数を取得
+    // productInfoはBOXでminPrice=0, totalListingCount=0を返すため
+    const sizes = await getBoxSizes(apparelId)
+    totalListings = sizes.reduce((sum, s) => sum + s.listingCount, 0)
+    // 1個あたりの最安値を基準にする
+    const oneBox = sizes.find(s => s.quantity === 1)
+    if (oneBox) {
+      overallMin = oneBox.minPrice
+      prices.push({ grade: 'BOX', price: oneBox.minPrice })
+    } else if (sizes.length > 0) {
+      // 1個サイズがなければ最安値のサイズを使用
+      const cheapest = sizes.reduce((a, b) => a.minPrice < b.minPrice ? a : b)
+      overallMin = cheapest.minPrice
+      prices.push({ grade: 'BOX', price: cheapest.minPrice })
     }
   }
 
