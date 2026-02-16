@@ -576,10 +576,12 @@ export default function CardDetail({ card, onClose, onUpdated }) {
       const date = formatDate(dateStr)
       if (!date) return
 
-      const timestamp = date.getTime()
+      // 同じバッチのデータを統合するため分単位に丸める
+      const roundedDate = new Date(Math.floor(date.getTime() / 60000) * 60000)
+      const timestamp = roundedDate.getTime()
       const existing = dataMap.get(timestamp) || {
         timestamp,
-        date: date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        date: roundedDate.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
       }
 
       // 状態別に価格を分ける
