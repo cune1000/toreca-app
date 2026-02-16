@@ -132,7 +132,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
         if (!res.ok) return null
         const text = await res.text()
         try { return JSON.parse(text) } catch { return null }
-      }).then(data => {
+      }).then(async data => {
         if (!data?.success || !data?.price) return
         let stock = null
         if (data.stock !== null && data.stock !== undefined) {
@@ -149,12 +149,53 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
             }
           }
         }
-        supabase.from('sale_prices').insert({
-          card_id: cardId,
-          site_id: form.site_id,
-          price: data.priceNumber || data.price,
-          stock: stock
-        }).then(() => console.log('Background scrape saved'))
+
+        // gradePrices対応（CardDetail.tsxと統一）
+        if (data.gradePrices?.length > 0) {
+          // ① 全体最安値 + 出品数（grade=null）
+          await supabase.from('sale_prices').insert({
+            card_id: cardId,
+            site_id: form.site_id,
+            price: data.price,
+            stock: stock,
+            grade: null
+          })
+          // ② グレード別（PSA10, A, BOXなど）
+          for (const gp of data.gradePrices) {
+            await supabase.from('sale_prices').insert({
+              card_id: cardId,
+              site_id: form.site_id,
+              price: gp.price,
+              grade: gp.grade,
+            })
+          }
+        } else {
+          // 通常サイト
+          await supabase.from('sale_prices').insert({
+            card_id: cardId,
+            site_id: form.site_id,
+            price: data.priceNumber || data.price,
+            stock: stock
+          })
+        }
+
+        // card_sale_urlsのlast_price/last_stockも更新
+        const { data: urls } = await supabase
+          .from('card_sale_urls')
+          .select('id')
+          .eq('card_id', cardId)
+          .eq('site_id', form.site_id)
+          .eq('product_url', form.product_url)
+          .limit(1)
+        if (urls?.[0]) {
+          await supabase.from('card_sale_urls').update({
+            last_price: data.priceNumber || data.price,
+            last_stock: stock,
+            last_checked_at: new Date().toISOString()
+          }).eq('id', urls[0].id)
+        }
+
+        console.log('Background scrape saved')
       }).catch(err => console.log('Background scrape failed:', err))
 
     } catch (err: any) {

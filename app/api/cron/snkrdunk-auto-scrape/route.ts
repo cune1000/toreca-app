@@ -4,7 +4,6 @@ import {
     extractApparelId,
     getProductInfo,
     getSalesHistory,
-    getListings,
 } from '@/lib/snkrdunk-api'
 import { normalizeGrade, parseRelativeTime } from '@/lib/scraping/helpers'
 
@@ -94,7 +93,6 @@ export async function GET(req: Request) {
                     status: 'success',
                     inserted: scrapeResult.inserted,
                     skipped: scrapeResult.skipped,
-                    listingPrices: scrapeResult.listingPrices,
                     nextScrapeAt: nextScrapeAt.toISOString(),
                     intervalMinutes
                 })
@@ -272,36 +270,7 @@ async function scrapeViaAPI(cardId: string, url: string, siteId: string) {
         }
     }
 
-    // 販売最安値を取得・保存
-    const listingPrices: Record<string, number | null> = {}
+    console.log(`[AutoScrape] Done: inserted=${insertedCount}, skipped=${skippedCount}`)
 
-    if (productType === 'single') {
-        try {
-            const listings = await getListings(apparelId, 'single', 1, 50)
-            const psa10Items = listings.filter(l => l.condition.includes('PSA10'))
-            listingPrices['PSA10'] = psa10Items.length > 0 ? Math.min(...psa10Items.map(l => l.price)) : null
-
-            const gradeAItems = listings.filter(l => l.condition.startsWith('A') || l.condition.includes('A（'))
-            listingPrices['A'] = gradeAItems.length > 0 ? Math.min(...gradeAItems.map(l => l.price)) : null
-        } catch (e: any) {
-            console.error(`[AutoScrape] Listings fetch error: ${e.message}`)
-        }
-    } else {
-        listingPrices['BOX'] = productInfo.minPrice
-    }
-
-    // sale_prices に保存
-    if (siteId) {
-        for (const [grade, price] of Object.entries(listingPrices)) {
-            if (price !== null && price > 0) {
-                await supabase
-                    .from('sale_prices')
-                    .insert({ card_id: cardId, site_id: siteId, price, grade })
-            }
-        }
-    }
-
-    console.log(`[AutoScrape] Done: inserted=${insertedCount}, skipped=${skippedCount}, listingPrices=${JSON.stringify(listingPrices)}`)
-
-    return { inserted: insertedCount, skipped: skippedCount, listingPrices }
+    return { inserted: insertedCount, skipped: skippedCount }
 }
