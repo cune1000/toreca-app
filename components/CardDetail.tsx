@@ -1100,8 +1100,8 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                                   stroke={config.color}
                                   strokeWidth={2.5}
                                   name={`買取(${config.label})`}
-                                  dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
-                                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                                  activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
                                   connectNulls
                                 />
                               )
@@ -1122,8 +1122,8 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                                     stroke={color}
                                     strokeWidth={2.5}
                                     name={`${site.name}(価格)`}
-                                    dot={chartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
-                                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                                    dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                                    activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
                                     connectNulls
                                   />
                                 )
@@ -1142,7 +1142,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                                   strokeWidth={2.5}
                                   strokeDasharray="8 4"
                                   name={config.label}
-                                  dot={chartData.length > 30 ? false : { r: 5, strokeWidth: 2, fill: '#fff' }}
+                                  dot={{ r: 5, strokeWidth: 2, fill: '#fff' }}
                                   activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
                                   connectNulls
                                 />
