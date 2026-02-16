@@ -39,29 +39,7 @@ export async function GET(request: NextRequest) {
         const loungeCards = await fetchAllLoungeCards()
         const loungeMap = new Map(loungeCards.map(c => [c.key, c]))
 
-        // ④ purchase_pricesの最新価格を一括取得（バッチ処理）
-        const linkIds = links.map(l => l.id)
-        const lastPriceMap = new Map<string, number>()
-
-        for (let i = 0; i < linkIds.length; i += 100) {
-            const batch = linkIds.slice(i, i + 100)
-            const { data: prices } = await supabase
-                .from('purchase_prices')
-                .select('link_id, price, created_at')
-                .in('link_id', batch)
-                .eq('shop_id', shop.id)
-                .order('created_at', { ascending: false })
-
-            if (prices) {
-                for (const p of prices) {
-                    if (!lastPriceMap.has(p.link_id)) {
-                        lastPriceMap.set(p.link_id, p.price)
-                    }
-                }
-            }
-        }
-
-        // ⑤ 各紐付けの価格を計算してバッチINSERT
+        // ④ 各紐付けの価格を毎回記録（バッチINSERT）
         let updatedCount = 0
         let skippedCount = 0
         const errors: string[] = []
@@ -75,28 +53,22 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
-                const lastPrice = lastPriceMap.get(link.id)
-
-                // 価格変動があればINSERTリストに追加
-                if (lastPrice === undefined || lastPrice !== loungeCard.price) {
-                    inserts.push({
-                        card_id: link.card_id,
-                        shop_id: shop.id,
-                        price: loungeCard.price,
-                        condition: link.condition || 'normal',
-                        link_id: link.id,
-                    })
-                    updatedCount++
-                } else {
-                    skippedCount++
-                }
+                // 毎回INSERTリストに追加（価格変動の有無に関係なく）
+                inserts.push({
+                    card_id: link.card_id,
+                    shop_id: shop.id,
+                    price: loungeCard.price,
+                    condition: link.condition || 'normal',
+                    link_id: link.id,
+                })
+                updatedCount++
             } catch (err: any) {
                 const cardName = (link as any).card?.name || link.card_id
                 errors.push(`${cardName}(${link.label}): ${err.message}`)
             }
         }
 
-        // ⑥ バッチINSERT（100件ずつ）
+        // ⑤ バッチINSERT（100件ずつ）
         for (let i = 0; i < inserts.length; i += 100) {
             const batch = inserts.slice(i, i + 100)
             const { error: insertError } = await supabase

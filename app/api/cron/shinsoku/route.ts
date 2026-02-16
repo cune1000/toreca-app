@@ -38,7 +38,6 @@ export async function GET(request: NextRequest) {
         const externalKeys = [...new Set(links.map(l => l.external_key))]
         const itemMap = new Map<string, { price_s: number | null; price_a: number | null; price_am: number | null; price_b: number | null; price_c: number | null }>()
 
-        // Supabaseの.in()制限を考慮して100件ずつ取得
         for (let i = 0; i < externalKeys.length; i += 100) {
             const batch = externalKeys.slice(i, i + 100)
             const { data: items } = await supabase
@@ -52,30 +51,7 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // ④ purchase_pricesの最新価格を一括取得（各link_idの最新1件）
-        const linkIds = links.map(l => l.id)
-        const lastPriceMap = new Map<string, number>()
-
-        for (let i = 0; i < linkIds.length; i += 100) {
-            const batch = linkIds.slice(i, i + 100)
-            const { data: prices } = await supabase
-                .from('purchase_prices')
-                .select('link_id, price, created_at')
-                .in('link_id', batch)
-                .eq('shop_id', shop.id)
-                .order('created_at', { ascending: false })
-
-            if (prices) {
-                // 各link_idの最新（最初に出てきたもの）を記録
-                for (const p of prices) {
-                    if (!lastPriceMap.has(p.link_id)) {
-                        lastPriceMap.set(p.link_id, p.price)
-                    }
-                }
-            }
-        }
-
-        // ⑤ 各紐付けの価格を計算してINSERT
+        // ④ 各紐付けの価格を計算してINSERT（毎回記録）
         let updatedCount = 0
         let skippedCount = 0
         const errors: string[] = []
@@ -112,28 +88,22 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
-                const lastPrice = lastPriceMap.get(link.id)
-
-                // 価格変動があればINSERTリストに追加
-                if (lastPrice === undefined || lastPrice !== priceYen) {
-                    inserts.push({
-                        card_id: link.card_id,
-                        shop_id: shop.id,
-                        price: priceYen,
-                        condition: condition,
-                        link_id: link.id,
-                    })
-                    updatedCount++
-                } else {
-                    skippedCount++
-                }
+                // 毎回INSERTリストに追加（価格変動の有無に関係なく）
+                inserts.push({
+                    card_id: link.card_id,
+                    shop_id: shop.id,
+                    price: priceYen,
+                    condition: condition,
+                    link_id: link.id,
+                })
+                updatedCount++
             } catch (err: any) {
                 const cardName = (link as any).card?.name || link.card_id
                 errors.push(`${cardName}(${link.label}): ${err.message}`)
             }
         }
 
-        // ⑥ バッチINSERT（100件ずつ）
+        // ⑤ バッチINSERT（100件ずつ）
         for (let i = 0; i < inserts.length; i += 100) {
             const batch = inserts.slice(i, i + 100)
             const { error: insertError } = await supabase

@@ -369,41 +369,39 @@ export async function GET(request: NextRequest) {
             })
             .eq('id', site.id)
 
-          // 価格または在庫が変動した場合のみ履歴に追加
-          if (priceChanged || stockChanged) {
-            if (gradePrices.length > 0) {
-              // スニダン: 全体最安値 + 出品数（grade=null）を保存
+          // 毎回履歴に追加（価格・在庫の変動有無に関係なく）
+          if (gradePrices.length > 0) {
+            // スニダン: 全体最安値 + 出品数（grade=null）を保存
+            await supabase
+              .from('sale_prices')
+              .insert({
+                card_id: site.card_id,
+                site_id: site.site_id,
+                price: newPrice,
+                stock: newStock,
+                grade: null,
+              })
+            // スニダン: グレード別に保存
+            for (const gp of gradePrices) {
               await supabase
                 .from('sale_prices')
                 .insert({
                   card_id: site.card_id,
                   site_id: site.site_id,
-                  price: newPrice,
-                  stock: newStock,
-                  grade: null,
-                })
-              // スニダン: グレード別に保存
-              for (const gp of gradePrices) {
-                await supabase
-                  .from('sale_prices')
-                  .insert({
-                    card_id: site.card_id,
-                    site_id: site.site_id,
-                    price: gp.price,
-                    grade: gp.grade,
-                  })
-              }
-            } else {
-              // 通常サイト: grade無しで保存
-              await supabase
-                .from('sale_prices')
-                .insert({
-                  card_id: site.card_id,
-                  site_id: site.site_id,
-                  price: newPrice,
-                  stock: newStock
+                  price: gp.price,
+                  grade: gp.grade,
                 })
             }
+          } else {
+            // 通常サイト: grade無しで保存
+            await supabase
+              .from('sale_prices')
+              .insert({
+                card_id: site.card_id,
+                site_id: site.site_id,
+                price: newPrice,
+                stock: newStock
+              })
           }
 
           results.details.push({
@@ -649,40 +647,39 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', site.id)
 
-          if (priceChanged || stockChanged) {
-            if (gradePrices.length > 0) {
-              // スニダン: 全体最安値 + 出品数（grade=null）を保存
+          // 毎回履歴に追加（価格・在庫の変動有無に関係なく）
+          if (gradePrices.length > 0) {
+            // スニダン: 全体最安値 + 出品数（grade=null）を保存
+            await supabase
+              .from('sale_prices')
+              .insert({
+                card_id: site.card_id,
+                site_id: site.site_id,
+                price: newPrice,
+                stock: newStock,
+                grade: null,
+              })
+            // スニダン: グレード別に保存
+            for (const gp of gradePrices) {
               await supabase
                 .from('sale_prices')
                 .insert({
                   card_id: site.card_id,
                   site_id: site.site_id,
-                  price: newPrice,
-                  stock: newStock,
-                  grade: null,
-                })
-              // スニダン: グレード別に保存
-              for (const gp of gradePrices) {
-                await supabase
-                  .from('sale_prices')
-                  .insert({
-                    card_id: site.card_id,
-                    site_id: site.site_id,
-                    price: gp.price,
-                    grade: gp.grade,
-                  })
-              }
-            } else {
-              // 通常サイト
-              await supabase
-                .from('sale_prices')
-                .insert({
-                  card_id: site.card_id,
-                  site_id: site.site_id,
-                  price: newPrice,
-                  stock: newStock
+                  price: gp.price,
+                  grade: gp.grade,
                 })
             }
+          } else {
+            // 通常サイト
+            await supabase
+              .from('sale_prices')
+              .insert({
+                card_id: site.card_id,
+                site_id: site.site_id,
+                price: newPrice,
+                stock: newStock
+              })
           }
 
           results.details.push({
