@@ -4,6 +4,7 @@ import {
   extractApparelId,
   getProductInfo,
   getListings,
+  getBoxSizes,
 } from '@/lib/snkrdunk-api'
 
 const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
@@ -138,10 +139,18 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
       prices.push({ grade: 'A', price: Math.min(...gradeAItems.map(l => l.price)) })
     }
   } else {
-    // BOX: productInfoのminPriceを使用
-    if (productInfo.minPrice) {
-      prices.push({ grade: 'BOX', price: productInfo.minPrice })
-      overallMin = productInfo.minPrice
+    // BOX: /sizes APIから価格・出品数を取得
+    // productInfoはBOXでminPrice=0, totalListingCount=0を返すため
+    const sizes = await getBoxSizes(apparelId)
+    totalListings = sizes.reduce((sum, s) => sum + s.listingCount, 0)
+    const oneBox = sizes.find(s => s.quantity === 1)
+    if (oneBox) {
+      prices.push({ grade: 'BOX', price: oneBox.minPrice })
+      overallMin = oneBox.minPrice
+    } else if (sizes.length > 0) {
+      const cheapest = sizes.reduce((a, b) => a.minPrice < b.minPrice ? a : b)
+      prices.push({ grade: 'BOX', price: cheapest.minPrice })
+      overallMin = cheapest.minPrice
     }
   }
 

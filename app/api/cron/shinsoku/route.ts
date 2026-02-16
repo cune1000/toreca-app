@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         const shop = shops?.[0]
         if (!shop) throw new Error('シンソクがpurchase_shopsに未登録')
 
-        // ② card_purchase_linksから紐付け済みカードを取得
+        // ② card_purchase_linksから紐付け済みカードを一括取得
         const { data: links, error: linksError } = await supabase
             .from('card_purchase_links')
             .select('id, card_id, external_key, label, condition, card:card_id(name)')
@@ -34,25 +34,60 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: true, message: 'No linked cards', synced: 0 })
         }
 
+        // ③ shinsoku_itemsから全価格データを一括取得（バッチ処理）
+        const externalKeys = [...new Set(links.map(l => l.external_key))]
+        const itemMap = new Map<string, { price_s: number | null; price_a: number | null; price_am: number | null; price_b: number | null; price_c: number | null }>()
+
+        // Supabaseの.in()制限を考慮して100件ずつ取得
+        for (let i = 0; i < externalKeys.length; i += 100) {
+            const batch = externalKeys.slice(i, i + 100)
+            const { data: items } = await supabase
+                .from('shinsoku_items')
+                .select('item_id, price_s, price_a, price_am, price_b, price_c')
+                .in('item_id', batch)
+            if (items) {
+                for (const item of items) {
+                    itemMap.set(item.item_id, item)
+                }
+            }
+        }
+
+        // ④ purchase_pricesの最新価格を一括取得（各link_idの最新1件）
+        const linkIds = links.map(l => l.id)
+        const lastPriceMap = new Map<string, number>()
+
+        for (let i = 0; i < linkIds.length; i += 100) {
+            const batch = linkIds.slice(i, i + 100)
+            const { data: prices } = await supabase
+                .from('purchase_prices')
+                .select('link_id, price, created_at')
+                .in('link_id', batch)
+                .eq('shop_id', shop.id)
+                .order('created_at', { ascending: false })
+
+            if (prices) {
+                // 各link_idの最新（最初に出てきたもの）を記録
+                for (const p of prices) {
+                    if (!lastPriceMap.has(p.link_id)) {
+                        lastPriceMap.set(p.link_id, p.price)
+                    }
+                }
+            }
+        }
+
+        // ⑤ 各紐付けの価格を計算してINSERT
         let updatedCount = 0
         let skippedCount = 0
         const errors: string[] = []
+        const inserts: any[] = []
 
-        // ③ 各紐付けの価格を取得
         for (const link of links) {
             try {
                 const itemId = link.external_key
                 const condition = link.condition || 'S'
-
-                // shinsoku_itemsテーブルから価格取得（shinsoku-syncで同期済み）
-                const { data: itemRow } = await supabase
-                    .from('shinsoku_items')
-                    .select('price_s, price_a, price_am, price_b, price_c')
-                    .eq('item_id', itemId)
-                    .single()
+                const itemRow = itemMap.get(itemId)
 
                 if (!itemRow) {
-                    errors.push(`${(link as any).card?.name || link.card_id}(${link.label}): shinsoku_itemsにitem_id=${itemId}が見つかりません`)
                     skippedCount++
                     continue
                 }
@@ -62,6 +97,7 @@ export async function GET(request: NextRequest) {
                     'S': itemRow.price_s,
                     'normal': itemRow.price_s,
                     '素体': itemRow.price_s,
+                    'PSA10': itemRow.price_s,
                     'A': itemRow.price_a,
                     'A-': itemRow.price_am,
                     'B': itemRow.price_b,
@@ -76,21 +112,11 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
-                // 前回の価格を取得
-                const { data: lastPrice } = await supabase
-                    .from('purchase_prices')
-                    .select('price')
-                    .eq('card_id', link.card_id)
-                    .eq('shop_id', shop.id)
-                    .eq('condition', condition)
-                    .eq('link_id', link.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single()
+                const lastPrice = lastPriceMap.get(link.id)
 
-                // 価格変動があればINSERT
-                if (!lastPrice || lastPrice.price !== priceYen) {
-                    await supabase.from('purchase_prices').insert({
+                // 価格変動があればINSERTリストに追加
+                if (lastPrice === undefined || lastPrice !== priceYen) {
+                    inserts.push({
                         card_id: link.card_id,
                         shop_id: shop.id,
                         price: priceYen,
@@ -107,23 +133,24 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const elapsed = ((Date.now() - start) / 1000).toFixed(1)
+        // ⑥ バッチINSERT（100件ずつ）
+        for (let i = 0; i < inserts.length; i += 100) {
+            const batch = inserts.slice(i, i + 100)
+            const { error: insertError } = await supabase
+                .from('purchase_prices')
+                .insert(batch)
+            if (insertError) {
+                errors.push(`Batch insert error: ${insertError.message}`)
+            }
+        }
 
-        await supabase.from('cron_logs').insert({
-            job_name: 'shinsoku_kaitori',
-            status: 'success',
-            details: {
-                total_links: links.length,
-                updated: updatedCount,
-                skipped: skippedCount,
-                elapsed: `${elapsed}s`,
-                errors: errors.length > 0 ? errors : undefined,
-            },
-        })
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
         return NextResponse.json({
             success: true,
             total_links: links.length,
+            items_found: itemMap.size,
+            items_missing: externalKeys.length - itemMap.size,
             updated: updatedCount,
             skipped: skippedCount,
             elapsed: `${elapsed}s`,
@@ -132,12 +159,9 @@ export async function GET(request: NextRequest) {
     } catch (error: any) {
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
-        await supabase.from('cron_logs').insert({
-            job_name: 'shinsoku_kaitori',
-            status: 'error',
-            details: { error: error.message, elapsed: `${elapsed}s` },
-        })
-
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({
+            error: error.message,
+            elapsed: `${elapsed}s`,
+        }, { status: 500 })
     }
 }

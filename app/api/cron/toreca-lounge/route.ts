@@ -39,29 +39,47 @@ export async function GET(request: NextRequest) {
         const loungeCards = await fetchAllLoungeCards()
         const loungeMap = new Map(loungeCards.map(c => [c.key, c]))
 
-        let updatedCount = 0
-        const errors: string[] = []
+        // ④ purchase_pricesの最新価格を一括取得（バッチ処理）
+        const linkIds = links.map(l => l.id)
+        const lastPriceMap = new Map<string, number>()
 
-        // ④ 各紐付けの価格を記録
+        for (let i = 0; i < linkIds.length; i += 100) {
+            const batch = linkIds.slice(i, i + 100)
+            const { data: prices } = await supabase
+                .from('purchase_prices')
+                .select('link_id, price, created_at')
+                .in('link_id', batch)
+                .eq('shop_id', shop.id)
+                .order('created_at', { ascending: false })
+
+            if (prices) {
+                for (const p of prices) {
+                    if (!lastPriceMap.has(p.link_id)) {
+                        lastPriceMap.set(p.link_id, p.price)
+                    }
+                }
+            }
+        }
+
+        // ⑤ 各紐付けの価格を計算してバッチINSERT
+        let updatedCount = 0
+        let skippedCount = 0
+        const errors: string[] = []
+        const inserts: any[] = []
+
         for (const link of links) {
             try {
                 const loungeCard = loungeMap.get(link.external_key)
-                if (!loungeCard || loungeCard.price === 0) continue
+                if (!loungeCard || loungeCard.price === 0) {
+                    skippedCount++
+                    continue
+                }
 
-                // 前回の価格を取得
-                const { data: lastPrice } = await supabase
-                    .from('purchase_prices')
-                    .select('price')
-                    .eq('card_id', link.card_id)
-                    .eq('shop_id', shop.id)
-                    .eq('link_id', link.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single()
+                const lastPrice = lastPriceMap.get(link.id)
 
-                // 価格変動があればINSERT
-                if (!lastPrice || lastPrice.price !== loungeCard.price) {
-                    await supabase.from('purchase_prices').insert({
+                // 価格変動があればINSERTリストに追加
+                if (lastPrice === undefined || lastPrice !== loungeCard.price) {
+                    inserts.push({
                         card_id: link.card_id,
                         shop_id: shop.id,
                         price: loungeCard.price,
@@ -69,6 +87,8 @@ export async function GET(request: NextRequest) {
                         link_id: link.id,
                     })
                     updatedCount++
+                } else {
+                    skippedCount++
                 }
             } catch (err: any) {
                 const cardName = (link as any).card?.name || link.card_id
@@ -76,37 +96,34 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const elapsed = ((Date.now() - start) / 1000).toFixed(1)
+        // ⑥ バッチINSERT（100件ずつ）
+        for (let i = 0; i < inserts.length; i += 100) {
+            const batch = inserts.slice(i, i + 100)
+            const { error: insertError } = await supabase
+                .from('purchase_prices')
+                .insert(batch)
+            if (insertError) {
+                errors.push(`Batch insert error: ${insertError.message}`)
+            }
+        }
 
-        await supabase.from('cron_logs').insert({
-            job_name: 'toreca_lounge_kaitori',
-            status: 'success',
-            details: {
-                total_links: links.length,
-                scraped_cards: loungeCards.length,
-                updated: updatedCount,
-                elapsed: `${elapsed}s`,
-                errors: errors.length > 0 ? errors : undefined,
-            },
-        })
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
         return NextResponse.json({
             success: true,
             total_links: links.length,
             scraped: loungeCards.length,
             updated: updatedCount,
+            skipped: skippedCount,
             elapsed: `${elapsed}s`,
             errors: errors.length > 0 ? errors : undefined,
         })
     } catch (error: any) {
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
-        await supabase.from('cron_logs').insert({
-            job_name: 'toreca_lounge_kaitori',
-            status: 'error',
-            details: { error: error.message, elapsed: `${elapsed}s` },
-        })
-
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({
+            error: error.message,
+            elapsed: `${elapsed}s`,
+        }, { status: 500 })
     }
 }
