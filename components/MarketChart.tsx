@@ -311,54 +311,77 @@ export default function MarketChart({ cardId }: MarketChartProps) {
                     {/* === スニダン売買履歴（実線・エリア） === */}
                     {hasPSA10Trade && (
                         <Area type="monotone" dataKey="psa10_trade" stroke={COLORS.psa10_trade} strokeWidth={2.5}
-                            fill="url(#psa10Fill)" name="PSA10 売買" dot={{ r: 3, fill: COLORS.psa10_trade }} connectNulls />
+                            fill="url(#psa10Fill)" name="PSA10 売買"
+                            dot={{ r: 5, fill: COLORS.psa10_trade, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.psa10_trade, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                     {hasATrade && (
                         <Area type="monotone" dataKey="a_trade" stroke={COLORS.a_trade} strokeWidth={2}
-                            fill="url(#aFill)" name="状態A 売買" dot={{ r: 2, fill: COLORS.a_trade }} connectNulls />
+                            fill="url(#aFill)" name="状態A 売買"
+                            dot={{ r: 4, fill: COLORS.a_trade, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.a_trade, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                     {hasBoxTrade && (
                         <Area type="monotone" dataKey="box_trade" stroke={COLORS.box_trade} strokeWidth={2}
-                            fill="transparent" name="BOX 売買" dot={{ r: 2, fill: COLORS.box_trade }} connectNulls />
+                            fill="transparent" name="BOX 売買"
+                            dot={{ r: 4, fill: COLORS.box_trade, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.box_trade, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
 
                     {/* === 販売最安値（点線） === */}
                     {hasPSA10Sale && (
                         <Area type="monotone" dataKey="psa10_sale" stroke={COLORS.psa10_sale} strokeWidth={2}
                             strokeDasharray="3 3" fill="transparent" name="PSA10 販売最安"
-                            dot={{ r: 2, fill: COLORS.psa10_sale }} connectNulls />
+                            dot={{ r: 4, fill: COLORS.psa10_sale, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.psa10_sale, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                     {hasASale && (
                         <Area type="monotone" dataKey="a_sale" stroke={COLORS.a_sale} strokeWidth={2}
                             strokeDasharray="3 3" fill="transparent" name="状態A 販売最安"
-                            dot={{ r: 2, fill: COLORS.a_sale }} connectNulls />
+                            dot={{ r: 4, fill: COLORS.a_sale, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.a_sale, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                     {hasBoxSale && (
                         <Area type="monotone" dataKey="box_sale" stroke={COLORS.box_sale} strokeWidth={2}
                             strokeDasharray="3 3" fill="transparent" name="BOX 販売最安"
-                            dot={{ r: 2, fill: COLORS.box_sale }} connectNulls />
+                            dot={{ r: 4, fill: COLORS.box_sale, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.box_sale, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
 
                     {/* === 買取価格（破線） === */}
                     {hasPurchaseNormal && (
                         <Area type="monotone" dataKey="purchase_normal" stroke={COLORS.purchase_normal} strokeWidth={2}
                             strokeDasharray="8 4" fill="transparent" name="素体 買取"
-                            dot={{ r: 2, fill: COLORS.purchase_normal }} connectNulls />
+                            dot={{ r: 4, fill: COLORS.purchase_normal, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.purchase_normal, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                     {hasPurchasePSA10 && (
                         <Area type="monotone" dataKey="purchase_psa10" stroke={COLORS.purchase_psa10} strokeWidth={2}
                             strokeDasharray="8 4" fill="transparent" name="PSA10 買取"
-                            dot={{ r: 2, fill: COLORS.purchase_psa10 }} connectNulls />
+                            dot={{ r: 4, fill: COLORS.purchase_psa10, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.purchase_psa10, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                     {hasPurchaseSealed && (
                         <Area type="monotone" dataKey="purchase_sealed" stroke={COLORS.purchase_sealed} strokeWidth={2}
                             strokeDasharray="8 4" fill="transparent" name="未開封 買取"
-                            dot={{ r: 2, fill: COLORS.purchase_sealed }} connectNulls />
+                            dot={{ r: 4, fill: COLORS.purchase_sealed, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.purchase_sealed, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                     {hasPurchaseOpened && (
                         <Area type="monotone" dataKey="purchase_opened" stroke={COLORS.purchase_opened} strokeWidth={2}
                             strokeDasharray="8 4" fill="transparent" name="開封 買取"
-                            dot={{ r: 2, fill: COLORS.purchase_opened }} connectNulls />
+                            dot={{ r: 4, fill: COLORS.purchase_opened, stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 7, fill: COLORS.purchase_opened, stroke: '#fff', strokeWidth: 2 }}
+                            connectNulls />
                     )}
                 </AreaChart>
             </ResponsiveContainer>
