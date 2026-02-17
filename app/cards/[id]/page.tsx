@@ -376,7 +376,6 @@ export default function CardDetailPage({ params }: Props) {
     const entries = Object.values(latestPurchaseByLabel); return entries.length === 0 ? null : Math.max(...entries.map(e => e.price))
   }, [latestPurchaseByLabel])
 
-  const hasStockData = useMemo(() => salePrices.some((p: any) => p.stock != null && !p.grade), [salePrices])
   const hasGradeStockData = useMemo(() => salePrices.some((p: any) => p.stock != null && p.grade), [salePrices])
   const purchaseConditions = useMemo(() => { const c = new Set<string>(); purchasePrices.forEach((p: any) => c.add(p.condition || (p.is_psa ? 'psa' : 'normal'))); return Array.from(c) }, [purchasePrices])
   const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade) g.add(p.grade) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices])
@@ -538,7 +537,6 @@ export default function CardDetailPage({ params }: Props) {
                   isSiteHidden={isSiteHidden}
                   purchaseConditions={purchaseConditions}
                   saleGrades={saleGrades}
-                  hasStockData={hasStockData}
                   hasGradeStockData={hasGradeStockData}
                   onRefreshOverseas={fetchOverseasPrices}
                 />

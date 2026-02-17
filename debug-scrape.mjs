@@ -9,7 +9,7 @@ if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, 'utf-8');
     envContent.split('\n').forEach(line => {
         const [key, val] = line.split('=');
-        if (key && key.trim() === 'RAILWAY_SCRAPER_URL') scraperUrl = val.trim().replace(/"/g, '');
+        if (key && key.trim() === 'TORECA_SCRAPER_URL') scraperUrl = val.trim().replace(/"/g, '');
     });
 }
 

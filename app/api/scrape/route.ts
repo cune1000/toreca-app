@@ -3,17 +3,18 @@ import {
   getAllListings,
   getProductInfo,
   getBoxSizes,
+  extractApparelId,
 } from '@/lib/snkrdunk-api'
+import { extractGradePrices } from '@/lib/scraping/helpers'
+import { TORECA_SCRAPER_URL } from '@/lib/config'
 
 // Railway経由でスクレイピング（スニダン以外）
 async function scrapeViaRailway(url: string, mode: string = 'auto') {
-  const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
-
-  if (!RAILWAY_URL) {
-    throw new Error('RAILWAY_SCRAPER_URL is not configured')
+  if (!TORECA_SCRAPER_URL) {
+    throw new Error('TORECA_SCRAPER_URL is not configured')
   }
 
-  const res = await fetch(`${RAILWAY_URL}/scrape`, {
+  const res = await fetch(`${TORECA_SCRAPER_URL}/scrape`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, mode }),
@@ -29,9 +30,8 @@ async function scrapeViaRailway(url: string, mode: string = 'auto') {
 
 // スニダンAPIで価格取得
 async function scrapeSnkrdunk(url: string) {
-  const match = url.match(/\/apparels\/(\d+)/)
-  if (!match) throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
-  const apparelId = parseInt(match[1], 10)
+  const apparelId = extractApparelId(url)
+  if (!apparelId) throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
 
   const info = await getProductInfo(apparelId)
   const productType: 'single' | 'box' = info?.isBox ? 'box' : 'single'
@@ -48,53 +48,8 @@ async function scrapeSnkrdunk(url: string) {
       overallMin = Math.min(...listings.map(l => l.price))
     }
 
-    // PSA10
-    const psa10 = listings.filter(l =>
-      l.condition?.includes('PSA10')
-    )
-    if (psa10.length > 0) {
-      const sorted = [...psa10].sort((a, b) => a.price - b.price)
-      prices.push({
-        grade: 'PSA10',
-        price: sorted[0].price,
-        stock: sorted.length,
-        topPrices: sorted.slice(0, 3).map(l => l.price),
-      })
-    }
-
-    // 状態A（PSA/ARS/BGS鑑定品を除外）
-    const gradeA = listings.filter(l =>
-      (l.condition?.startsWith('A') || l.condition?.includes('A（')) &&
-      !l.condition?.includes('PSA') &&
-      !l.condition?.includes('ARS') &&
-      !l.condition?.includes('BGS')
-    )
-    if (gradeA.length > 0) {
-      const sorted = [...gradeA].sort((a, b) => a.price - b.price)
-      prices.push({
-        grade: 'A',
-        price: sorted[0].price,
-        stock: sorted.length,
-        topPrices: sorted.slice(0, 3).map(l => l.price),
-      })
-    }
-
-    // 状態B（鑑定品を除外）
-    const gradeB = listings.filter(l =>
-      (l.condition?.startsWith('B') || l.condition?.includes('B（')) &&
-      !l.condition?.includes('PSA') &&
-      !l.condition?.includes('ARS') &&
-      !l.condition?.includes('BGS')
-    )
-    if (gradeB.length > 0) {
-      const sorted = [...gradeB].sort((a, b) => a.price - b.price)
-      prices.push({
-        grade: 'B',
-        price: sorted[0].price,
-        stock: sorted.length,
-        topPrices: sorted.slice(0, 3).map(l => l.price),
-      })
-    }
+    // グレード別最安値（PSA10, A, B）を共通ヘルパーで抽出
+    prices.push(...extractGradePrices(listings))
   } else {
     // BOX: /sizes APIから価格・出品数を取得
     // productInfoはBOXでminPrice=0, totalListingCount=0を返すため
@@ -168,7 +123,7 @@ export async function GET(request: NextRequest) {
         browser: 'ブラウザ版のみ（確実）'
       },
       supported: ['snkrdunk.com (API直接)', 'torecacamp-pokemon.com', 'cardrush-pokemon.jp'],
-      railway: process.env.RAILWAY_SCRAPER_URL ? 'configured' : 'not configured'
+      railway: TORECA_SCRAPER_URL ? 'configured' : 'not configured'
     })
   }
 

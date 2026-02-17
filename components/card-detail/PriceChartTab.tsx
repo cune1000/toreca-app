@@ -24,7 +24,6 @@ interface PriceChartTabProps {
   isSiteHidden: (siteId: string) => boolean
   purchaseConditions: string[]
   saleGrades: string[]
-  hasStockData: boolean
   hasGradeStockData?: boolean
   onRefreshOverseas?: () => void
 }
@@ -85,7 +84,7 @@ export default function PriceChartTab({
   card, chartData, selectedPeriod, onPeriodChange,
   showPurchase, onShowPurchaseChange,
   siteList, visibleSites, onToggleSitePrice, onToggleSiteStock, onToggleSiteAll, isSiteHidden,
-  purchaseConditions, saleGrades, hasStockData, hasGradeStockData,
+  purchaseConditions, saleGrades, hasGradeStockData,
   onRefreshOverseas,
 }: PriceChartTabProps) {
   // localStorage からトグル復元

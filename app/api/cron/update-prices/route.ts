@@ -8,8 +8,8 @@ import {
   getAllListings,
   getBoxSizes,
 } from '@/lib/snkrdunk-api'
-
-const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL
+import { extractGradePrices } from '@/lib/scraping/helpers'
+import { TORECA_SCRAPER_URL } from '@/lib/config'
 
 // ===== 設定 =====
 const CONFIG = {
@@ -85,11 +85,11 @@ function calculateNextInterval(currentInterval: number, oldPrice: number | null,
 
 // Railwayでスクレイピング
 async function scrapeViaRailway(url: string, mode: string = 'light') {
-  if (!RAILWAY_URL) {
-    throw new Error('RAILWAY_SCRAPER_URL is not configured')
+  if (!TORECA_SCRAPER_URL) {
+    throw new Error('TORECA_SCRAPER_URL is not configured')
   }
 
-  const res = await fetch(`${RAILWAY_URL}/scrape`, {
+  const res = await fetch(`${TORECA_SCRAPER_URL}/scrape`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, mode }),
@@ -126,51 +126,8 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
       overallMin = Math.min(...listings.map(l => l.price))
     }
 
-    // PSA10最安値
-    const psa10Items = listings.filter(l => l.condition.includes('PSA10'))
-    if (psa10Items.length > 0) {
-      const sorted = [...psa10Items].sort((a, b) => a.price - b.price)
-      prices.push({
-        grade: 'PSA10',
-        price: sorted[0].price,
-        stock: sorted.length,
-        topPrices: sorted.slice(0, 3).map(l => l.price),
-      })
-    }
-
-    // 状態A最安値（PSA/ARS/BGS鑑定品を除外）
-    const gradeAItems = listings.filter(l =>
-      (l.condition.startsWith('A') || l.condition.includes('A（')) &&
-      !l.condition.includes('PSA') &&
-      !l.condition.includes('ARS') &&
-      !l.condition.includes('BGS')
-    )
-    if (gradeAItems.length > 0) {
-      const sorted = [...gradeAItems].sort((a, b) => a.price - b.price)
-      prices.push({
-        grade: 'A',
-        price: sorted[0].price,
-        stock: sorted.length,
-        topPrices: sorted.slice(0, 3).map(l => l.price),
-      })
-    }
-
-    // 状態B最安値（鑑定品を除外）
-    const gradeBItems = listings.filter(l =>
-      (l.condition.startsWith('B') || l.condition.includes('B（')) &&
-      !l.condition.includes('PSA') &&
-      !l.condition.includes('ARS') &&
-      !l.condition.includes('BGS')
-    )
-    if (gradeBItems.length > 0) {
-      const sorted = [...gradeBItems].sort((a, b) => a.price - b.price)
-      prices.push({
-        grade: 'B',
-        price: sorted[0].price,
-        stock: sorted.length,
-        topPrices: sorted.slice(0, 3).map(l => l.price),
-      })
-    }
+    // グレード別最安値（PSA10, A, B）を共通ヘルパーで抽出
+    prices.push(...extractGradePrices(listings))
   } else {
     // BOX: /sizes APIから価格・出品数を取得
     // productInfoはBOXでminPrice=0, totalListingCount=0を返すため

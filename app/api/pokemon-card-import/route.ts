@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-
-const RAILWAY_URL = process.env.RAILWAY_SCRAPER_URL || 'https://skillful-love-production.up.railway.app'
+import { TORECA_SCRAPER_URL } from '@/lib/config'
 
 // GET: プレビュー取得（Railwayに転送）
 export async function GET(request: NextRequest) {
@@ -23,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Railwayに転送
-    const railwayUrl = `${RAILWAY_URL}/pokemon-import?url=${encodeURIComponent(listUrl)}&limit=${limit}&offset=${offset}`
+    const railwayUrl = `${TORECA_SCRAPER_URL}/pokemon-import?url=${encodeURIComponent(listUrl)}&limit=${limit}&offset=${offset}`
     console.log('Calling Railway:', railwayUrl)
 
     const res = await fetch(railwayUrl, {
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Railwayからカードデータ取得
-    const railwayRes = await fetch(`${RAILWAY_URL}/pokemon-import`, {
+    const railwayRes = await fetch(`${TORECA_SCRAPER_URL}/pokemon-import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: listUrl, limit, offset })
