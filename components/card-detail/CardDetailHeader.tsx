@@ -19,6 +19,15 @@ interface GradeData {
   topPrices?: number[]
 }
 
+interface OverseasLatest {
+  loose_price_jpy?: number | null
+  graded_price_jpy?: number | null
+  loose_price_usd?: number | null
+  graded_price_usd?: number | null
+  exchange_rate?: number | null
+  recorded_at?: string
+}
+
 interface CardDetailHeaderProps {
   card: any
   cardImageUrl: string | null
@@ -27,6 +36,7 @@ interface CardDetailHeaderProps {
   latestPrices: Record<string, { price: number; stock: number | null; siteName: string }>
   priceDiffs: PriceDiff[]
   snkrdunkLatestByGrade?: GradeData[]
+  overseasLatest?: OverseasLatest | null
   onClose: () => void
   onEdit: () => void
   onUpdated?: () => void
@@ -35,7 +45,7 @@ interface CardDetailHeaderProps {
 
 export default function CardDetailHeader({
   card, cardImageUrl, latestPurchase, latestPurchaseByLabel, latestPrices,
-  priceDiffs, snkrdunkLatestByGrade, onClose, onEdit, onUpdated, onImageChanged,
+  priceDiffs, snkrdunkLatestByGrade, overseasLatest, onClose, onEdit, onUpdated, onImageChanged,
 }: CardDetailHeaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
@@ -307,6 +317,53 @@ export default function CardDetailHeader({
                 </div>
               ))
           )}
+
+          {/* 海外転売シミュレーション — コンパクトカード */}
+          {overseasLatest && (overseasLatest.loose_price_jpy || overseasLatest.graded_price_jpy) && snkrdunkLatestByGrade && snkrdunkLatestByGrade.length > 0 && (() => {
+            const rows: { label: string; domestic: number; domesticLabel: string; overseasJpy: number; overseasUsd: number; profit: number; pct: number }[] = []
+            const looseJpy = overseasLatest.loose_price_jpy
+            const gradedJpy = overseasLatest.graded_price_jpy
+            if (looseJpy && overseasLatest.loose_price_usd) {
+              const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
+              if (saleA) rows.push({ label: '素体(A)→海外', domestic: saleA.price, domesticLabel: 'A', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleA.price, pct: ((looseJpy - saleA.price) / saleA.price) * 100 })
+              const saleB = snkrdunkLatestByGrade.find(g => g.grade === 'B')
+              if (saleB) rows.push({ label: '素体(B)→海外', domestic: saleB.price, domesticLabel: 'B', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleB.price, pct: ((looseJpy - saleB.price) / saleB.price) * 100 })
+            }
+            if (gradedJpy && overseasLatest.graded_price_usd) {
+              const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
+              if (salePSA10) rows.push({ label: 'PSA10→海外', domestic: salePSA10.price, domesticLabel: 'PSA10', overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - salePSA10.price, pct: ((gradedJpy - salePSA10.price) / salePSA10.price) * 100 })
+            }
+            if (rows.length === 0) return null
+            return (
+              <div className="bg-indigo-50 rounded-xl p-4 flex-1 min-w-[240px]">
+                <div className="flex items-center gap-2 text-indigo-600 text-sm mb-2">
+                  <Globe size={16} />
+                  海外転売シミュレーション
+                </div>
+                <div className="space-y-1.5">
+                  {rows.map((r, i) => {
+                    const isPositive = r.profit > 0
+                    return (
+                      <div key={i} className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-xs text-indigo-400 w-[90px] shrink-0">{r.label}</span>
+                        <span className="text-xs text-slate-500 tabular-nums">¥{r.domestic.toLocaleString()}</span>
+                        <span className="text-xs text-slate-300">→</span>
+                        <span className="text-xs text-indigo-600 tabular-nums font-medium">¥{r.overseasJpy.toLocaleString()}</span>
+                        <span className={`text-xs font-bold tabular-nums flex items-center gap-0.5 ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                          {isPositive ? '+' : ''}¥{r.profit.toLocaleString()}
+                          <span className="font-medium opacity-70">({isPositive ? '+' : ''}{r.pct.toFixed(1)}%)</span>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {overseasLatest.exchange_rate && (
+                  <p className="text-[10px] text-indigo-300 mt-2">$1 = ¥{overseasLatest.exchange_rate.toFixed(2)}</p>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>

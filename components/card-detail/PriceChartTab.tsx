@@ -1,9 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { RefreshCw } from 'lucide-react'
-import OverseasComparisonSection from './OverseasComparisonSection'
 import {
   SITE_COLORS, PURCHASE_CONDITION_COLORS, SALE_GRADE_COLORS,
   OVERSEAS_LINE_COLORS, DAILY_AVG_COLORS,
@@ -27,9 +26,6 @@ interface PriceChartTabProps {
   saleGrades: string[]
   hasStockData: boolean
   hasGradeStockData?: boolean
-  // 海外比較用
-  overseasLatest: any | null
-  snkrdunkLatestByGrade: { price: number; stock: number | null; grade: string; date: string }[]
   onRefreshOverseas?: () => void
 }
 
@@ -90,14 +86,28 @@ export default function PriceChartTab({
   showPurchase, onShowPurchaseChange,
   siteList, visibleSites, onToggleSitePrice, onToggleSiteStock, onToggleSiteAll, isSiteHidden,
   purchaseConditions, saleGrades, hasStockData, hasGradeStockData,
-  overseasLatest, snkrdunkLatestByGrade, onRefreshOverseas,
+  onRefreshOverseas,
 }: PriceChartTabProps) {
-  // 表示トグル
-  const [showOverseasLoose, setShowOverseasLoose] = useState(true)
-  const [showOverseasGraded, setShowOverseasGraded] = useState(true)
-  const [showDailyTrade, setShowDailyTrade] = useState(true)
+  // localStorage からトグル復元
+  const loadSetting = (key: string, fallback: any) => {
+    if (typeof window === 'undefined') return fallback
+    try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); return s[key] ?? fallback } catch { return fallback }
+  }
+  const saveSetting = useCallback((key: string, value: any) => {
+    try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); s[key] = value; localStorage.setItem('toreca-chart-settings', JSON.stringify(s)) } catch {}
+  }, [])
+
+  const [showOverseasLoose, setShowOverseasLoose] = useState(() => loadSetting('showOverseasLoose', true))
+  const [showOverseasGraded, setShowOverseasGraded] = useState(() => loadSetting('showOverseasGraded', true))
+  const [showDailyTrade, setShowDailyTrade] = useState(() => loadSetting('showDailyTrade', true))
   const [overseasUpdating, setOverseasUpdating] = useState(false)
-  const [visibleGrades, setVisibleGrades] = useState<Record<string, { price: boolean; stock: boolean }>>({})
+  const [visibleGrades, setVisibleGrades] = useState<Record<string, { price: boolean; stock: boolean }>>(() => loadSetting('visibleGrades', {}))
+
+  // トグル変更時に保存
+  useEffect(() => { saveSetting('showOverseasLoose', showOverseasLoose) }, [showOverseasLoose, saveSetting])
+  useEffect(() => { saveSetting('showOverseasGraded', showOverseasGraded) }, [showOverseasGraded, saveSetting])
+  useEffect(() => { saveSetting('showDailyTrade', showDailyTrade) }, [showDailyTrade, saveSetting])
+  useEffect(() => { saveSetting('visibleGrades', visibleGrades) }, [visibleGrades, saveSetting])
 
   const hasOverseasData = chartData.some(d => d.overseas_loose || d.overseas_graded)
   const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
@@ -114,6 +124,7 @@ export default function PriceChartTab({
   const isGradeStockVisible = (grade: string) => visibleGrades[grade]?.stock !== false
   const toggleGradePrice = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: !(prev[grade]?.price !== false), stock: prev[grade]?.stock ?? true } }))
   const toggleGradeStock = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: prev[grade]?.price ?? true, stock: !(prev[grade]?.stock !== false) } }))
+  const toggleGradeAll = (grade: string) => setVisibleGrades(prev => { const c = prev[grade] || { price: true, stock: true }; const allOn = c.price !== false || c.stock !== false; return { ...prev, [grade]: { price: !allOn, stock: !allOn } } })
 
   // 海外価格手動更新
   const handleOverseasUpdate = async () => {
@@ -170,11 +181,11 @@ export default function PriceChartTab({
         <div>
           <p className="text-[11px] text-slate-400 font-medium mb-1.5">買取</p>
           <div className="flex flex-wrap gap-2">
-            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showPurchase ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>
-              <input type="checkbox" checked={showPurchase} onChange={() => onShowPurchaseChange(!showPurchase)} className="w-3.5 h-3.5 accent-blue-500" />
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showPurchase ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-              買取価格
-            </label>
+              <span className="cursor-pointer select-none" onClick={() => onShowPurchaseChange(!showPurchase)}>買取価格</span>
+              <input type="checkbox" checked={showPurchase} onChange={() => onShowPurchaseChange(!showPurchase)} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
+            </div>
           </div>
         </div>
 
@@ -190,14 +201,14 @@ export default function PriceChartTab({
                 return (
                   <div key={site.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border bg-white border-slate-200">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }}></span>
-                    <span className="text-slate-600 mr-1">{site.name}</span>
+                    <span className="text-slate-600 cursor-pointer select-none" onClick={() => onToggleSiteAll(site.id)}>{site.name}</span>
                     <label className="flex items-center gap-0.5 cursor-pointer">
-                      <input type="checkbox" checked={v.price !== false} onChange={() => onToggleSitePrice(site.id)} className="w-3.5 h-3.5 accent-green-500" />
                       <span className="text-xs text-slate-500">価格</span>
+                      <input type="checkbox" checked={v.price !== false} onChange={() => onToggleSitePrice(site.id)} className="w-3.5 h-3.5 accent-green-500" />
                     </label>
                     <label className="flex items-center gap-0.5 cursor-pointer">
-                      <input type="checkbox" checked={v.stock !== false} onChange={() => onToggleSiteStock(site.id)} className="w-3.5 h-3.5 accent-green-500" />
                       <span className="text-xs text-slate-500">在庫</span>
+                      <input type="checkbox" checked={v.stock !== false} onChange={() => onToggleSiteStock(site.id)} className="w-3.5 h-3.5 accent-green-500" />
                     </label>
                   </div>
                 )
@@ -216,15 +227,15 @@ export default function PriceChartTab({
                 return (
                   <div key={grade} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border bg-white border-slate-200">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: config.color }}></span>
-                    <span className="text-slate-600 mr-1">{grade}</span>
+                    <span className="text-slate-600 cursor-pointer select-none" onClick={() => toggleGradeAll(grade)}>{grade}</span>
                     <label className="flex items-center gap-0.5 cursor-pointer">
-                      <input type="checkbox" checked={isGradePriceVisible(grade)} onChange={() => toggleGradePrice(grade)} className="w-3.5 h-3.5 accent-purple-500" />
                       <span className="text-xs text-slate-500">価格</span>
+                      <input type="checkbox" checked={isGradePriceVisible(grade)} onChange={() => toggleGradePrice(grade)} className="w-3.5 h-3.5 accent-purple-500" />
                     </label>
                     {hasGradeStockData && (
                       <label className="flex items-center gap-0.5 cursor-pointer">
-                        <input type="checkbox" checked={isGradeStockVisible(grade)} onChange={() => toggleGradeStock(grade)} className="w-3.5 h-3.5 accent-purple-500" />
                         <span className="text-xs text-slate-500">在庫</span>
+                        <input type="checkbox" checked={isGradeStockVisible(grade)} onChange={() => toggleGradeStock(grade)} className="w-3.5 h-3.5 accent-purple-500" />
                       </label>
                     )}
                   </div>
@@ -241,16 +252,16 @@ export default function PriceChartTab({
             <div className="flex flex-wrap gap-2 items-center">
               {card.pricecharting_id && (
                 <>
-                  <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showOverseasLoose ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400'}`}>
-                    <input type="checkbox" checked={showOverseasLoose} onChange={() => setShowOverseasLoose(!showOverseasLoose)} className="w-3.5 h-3.5 accent-indigo-500" />
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showOverseasLoose ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400'}`}>
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: OVERSEAS_LINE_COLORS.loose.color }}></span>
-                    {OVERSEAS_LINE_COLORS.loose.label}
-                  </label>
-                  <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showOverseasGraded ? 'bg-violet-50 border-violet-200 text-violet-700' : 'bg-white border-slate-200 text-slate-400'}`}>
-                    <input type="checkbox" checked={showOverseasGraded} onChange={() => setShowOverseasGraded(!showOverseasGraded)} className="w-3.5 h-3.5 accent-violet-500" />
+                    <span className="cursor-pointer select-none" onClick={() => setShowOverseasLoose(!showOverseasLoose)}>{OVERSEAS_LINE_COLORS.loose.label}</span>
+                    <input type="checkbox" checked={showOverseasLoose} onChange={() => setShowOverseasLoose(!showOverseasLoose)} className="w-3.5 h-3.5 accent-indigo-500 cursor-pointer" />
+                  </div>
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showOverseasGraded ? 'bg-violet-50 border-violet-200 text-violet-700' : 'bg-white border-slate-200 text-slate-400'}`}>
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: OVERSEAS_LINE_COLORS.graded.color }}></span>
-                    {OVERSEAS_LINE_COLORS.graded.label}
-                  </label>
+                    <span className="cursor-pointer select-none" onClick={() => setShowOverseasGraded(!showOverseasGraded)}>{OVERSEAS_LINE_COLORS.graded.label}</span>
+                    <input type="checkbox" checked={showOverseasGraded} onChange={() => setShowOverseasGraded(!showOverseasGraded)} className="w-3.5 h-3.5 accent-violet-500 cursor-pointer" />
+                  </div>
                   <button
                     onClick={handleOverseasUpdate}
                     disabled={overseasUpdating}
@@ -263,11 +274,11 @@ export default function PriceChartTab({
                 </>
               )}
               {hasDailyTradeData && (
-                <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showDailyTrade ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>
-                  <input type="checkbox" checked={showDailyTrade} onChange={() => setShowDailyTrade(!showDailyTrade)} className="w-3.5 h-3.5 accent-orange-500" />
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showDailyTrade ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DAILY_AVG_COLORS.trade.color }}></span>
-                  {DAILY_AVG_COLORS.trade.label}
-                </label>
+                  <span className="cursor-pointer select-none" onClick={() => setShowDailyTrade(!showDailyTrade)}>{DAILY_AVG_COLORS.trade.label}</span>
+                  <input type="checkbox" checked={showDailyTrade} onChange={() => setShowDailyTrade(!showDailyTrade)} className="w-3.5 h-3.5 accent-orange-500 cursor-pointer" />
+                </div>
               )}
             </div>
           </div>
@@ -465,13 +476,6 @@ export default function PriceChartTab({
         </div>
       )}
 
-      {/* 海外転売シミュレーション */}
-      {card.pricecharting_id && (
-        <OverseasComparisonSection
-          overseasLatest={overseasLatest}
-          snkrdunkLatestByGrade={snkrdunkLatestByGrade}
-        />
-      )}
     </div>
   )
 }

@@ -38,7 +38,12 @@ export default function CardDetailPage({ params }: Props) {
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(30)
   const [cardImageUrl, setCardImageUrl] = useState<string | null>(null)
-  const [showPurchase, setShowPurchase] = useState(true)
+  const [showPurchase, setShowPurchase] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); return s.showPurchase ?? true } catch { return true }
+    }
+    return true
+  })
   const [chartTab, setChartTab] = useState<'price' | 'snkrdunk' | 'settings'>('price')
   const [visibleSites, setVisibleSites] = useState<Record<string, { price: boolean; stock: boolean }>>({})
 
@@ -399,7 +404,7 @@ export default function CardDetailPage({ params }: Props) {
       const saleA = snkrdunkLatestByGrade.find((g: any) => g.grade === 'A')
       if (saleA) {
         const profit = looseJpy - saleA.price
-        diffs.push({ label: 'A', displayLabel: 'A→海外', diffJpy: profit, diffPercent: Math.round((profit / saleA.price) * 1000) / 10 })
+        diffs.push({ label: 'A', displayLabel: '素体→海外', diffJpy: profit, diffPercent: Math.round((profit / saleA.price) * 1000) / 10 })
       }
     }
     const gradedJpy = overseasLatest.graded_price_jpy
@@ -412,6 +417,12 @@ export default function CardDetailPage({ params }: Props) {
     }
     return diffs
   }, [overseasLatest, snkrdunkLatestByGrade])
+
+  // ── Chart settings persistence ──
+  const saveChartSetting = (key: string, value: any) => {
+    try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); s[key] = value; localStorage.setItem('toreca-chart-settings', JSON.stringify(s)) } catch {}
+  }
+  const handleShowPurchaseChange = (v: boolean) => { setShowPurchase(v); saveChartSetting('showPurchase', v) }
 
   // ── Site visibility toggles ──
   const toggleSitePrice = (siteId: string) => setVisibleSites(prev => ({ ...prev, [siteId]: { ...prev[siteId], price: !prev[siteId]?.price } }))
@@ -475,6 +486,7 @@ export default function CardDetailPage({ params }: Props) {
             latestPrices={latestPrices}
             priceDiffs={priceDiffs}
             snkrdunkLatestByGrade={snkrdunkLatestByGrade}
+            overseasLatest={overseasLatest}
             onClose={() => router.back()}
             onEdit={() => setShowEditForm(true)}
             onUpdated={handleCardUpdated}
@@ -517,7 +529,7 @@ export default function CardDetailPage({ params }: Props) {
                   selectedPeriod={selectedPeriod}
                   onPeriodChange={setSelectedPeriod}
                   showPurchase={showPurchase}
-                  onShowPurchaseChange={setShowPurchase}
+                  onShowPurchaseChange={handleShowPurchaseChange}
                   siteList={siteList}
                   visibleSites={visibleSites}
                   onToggleSitePrice={toggleSitePrice}
@@ -528,8 +540,6 @@ export default function CardDetailPage({ params }: Props) {
                   saleGrades={saleGrades}
                   hasStockData={hasStockData}
                   hasGradeStockData={hasGradeStockData}
-                  overseasLatest={overseasLatest}
-                  snkrdunkLatestByGrade={snkrdunkLatestByGrade}
                   onRefreshOverseas={fetchOverseasPrices}
                 />
               )}
