@@ -70,6 +70,19 @@ const GRADE_SORT_ORDER: Record<string, number> = {
   '6個': 105, '7個': 106, '8個': 107, '9個': 108, '10個': 109,
 }
 
+// スニダン売買履歴のカテゴリ定義（BOX系は除外）
+const SNKRDUNK_CATEGORIES = [
+  { key: 'all', label: 'すべて', grades: null },  // null = BOX系以外全部
+  { key: 'a', label: '素体', grades: ['A'] },
+  { key: 'psa10', label: 'PSA10', grades: ['PSA10'] },
+  { key: 'b_below', label: 'B以下', grades: ['B', 'C', 'D'] },
+  { key: 'psa9_below', label: 'PSA9以下', grades: ['PSA9', 'PSA8以下'] },
+  { key: 'other_graded', label: 'その他鑑定品', grades: ['BGS10BL', 'BGS10GL', 'BGS9.5', 'BGS9以下', 'ARS10+', 'ARS10', 'ARS9', 'ARS8以下'] },
+]
+
+// BOX系グレード判定
+const isBoxGrade = (grade: string) => /^\d+個$/.test(grade) || grade === 'BOX'
+
 // グレード別最安値カラー（価格・在庫推移グラフ用）
 const SALE_GRADE_COLORS: Record<string, { color: string; label: string }> = {
   PSA10: { color: '#8b5cf6', label: 'PSA10最安' },
@@ -107,36 +120,10 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const [visibleSites, setVisibleSites] = useState<Record<string, { price: boolean; stock: boolean }>>({})
 
   // スニダン売買履歴用state
+  const [selectedSnkrdunkCategory, setSelectedSnkrdunkCategory] = useState('all')
   const [snkrdunkSales, setSnkrdunkSales] = useState([])
   const [snkrdunkLoading, setSnkrdunkLoading] = useState(false)
   const [snkrdunkScraping, setSnkrdunkScraping] = useState(false)
-  const [visibleGrades, setVisibleGrades] = useState<Record<string, boolean>>({
-    PSA10: true,
-    PSA9: true,
-    A: true,
-    B: true,
-    C: true
-  })
-  const [gradesHydrated, setGradesHydrated] = useState(false)
-
-  // マウント後にlocalStorageから復元
-  useEffect(() => {
-    const saved = localStorage.getItem('visibleGrades')
-    if (saved) {
-      try {
-        setVisibleGrades(JSON.parse(saved))
-      } catch { }
-    }
-    setGradesHydrated(true)
-  }, [])
-
-  // visibleGradesが変更されたらlocalStorageに保存（ハイドレーション後のみ）
-  useEffect(() => {
-    if (gradesHydrated) {
-      localStorage.setItem('visibleGrades', JSON.stringify(visibleGrades))
-    }
-  }, [visibleGrades, gradesHydrated])
-
   useEffect(() => {
     if (card?.id) {
       fetchPrices()
@@ -667,19 +654,6 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     })
   }, [salePrices])
 
-  // スニダンのユニークなグレードリスト（ソート済み）
-  const snkrdunkGrades = useMemo(() => {
-    const grades = new Set<string>()
-    snkrdunkSales.forEach((sale: any) => {
-      grades.add(sale.grade)
-    })
-    return Array.from(grades).sort((a, b) => {
-      const orderA = GRADE_SORT_ORDER[a] ?? 999
-      const orderB = GRADE_SORT_ORDER[b] ?? 999
-      return orderA - orderB
-    })
-  }, [snkrdunkSales])
-
   // サイト表示切り替え
   const toggleSitePrice = (siteId: string) => {
     setVisibleSites(prev => ({
@@ -712,14 +686,6 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const isSiteHidden = (siteId: string) => {
     const v = visibleSites[siteId]
     return v?.price === false && v?.stock === false
-  }
-
-  // グレード表示切り替え
-  const toggleGrade = (grade: string) => {
-    setVisibleGrades(prev => ({
-      ...prev,
-      [grade]: !prev[grade]
-    }))
   }
 
   // カスタムドット（◇ダイヤモンド型）
@@ -1281,43 +1247,29 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                       )
                     })()}
 
-                    {/* グレードフィルタ */}
-                    {snkrdunkGrades.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        <button
-                          onClick={() => {
-                            const allVisible = snkrdunkGrades.every(g => visibleGrades[g] !== false)
-                            const newState: Record<string, boolean> = {}
-                            snkrdunkGrades.forEach(g => { newState[g] = !allVisible })
-                            setVisibleGrades(prev => ({ ...prev, ...newState }))
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                            snkrdunkGrades.every(g => visibleGrades[g] !== false)
-                              ? 'bg-gray-800 text-white border-gray-800'
-                              : 'bg-gray-100 text-gray-500 border-gray-200'
-                          }`}
-                        >
-                          すべて
-                        </button>
-                        {snkrdunkGrades.map(grade => {
-                          const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
-                          const isVisible = visibleGrades[grade] !== false
-                          return (
-                            <button
-                              key={grade}
-                              onClick={() => toggleGrade(grade)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${isVisible
-                                ? 'border-purple-300 text-purple-700 bg-purple-50'
-                                : 'border-gray-200 text-gray-400 bg-white'
-                              }`}
-                            >
-                              <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: isVisible ? color : '#d1d5db' }} />
-                              {grade}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
+                    {/* カテゴリタブ */}
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {SNKRDUNK_CATEGORIES.map(cat => {
+                        // データがあるカテゴリのみ表示
+                        const hasData = cat.grades === null
+                          ? snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
+                          : snkrdunkSales.some((s: any) => cat.grades!.includes(s.grade))
+                        if (!hasData && cat.key !== 'all') return null
+                        return (
+                          <button
+                            key={cat.key}
+                            onClick={() => setSelectedSnkrdunkCategory(cat.key)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                              selectedSnkrdunkCategory === cat.key
+                                ? 'bg-gray-800 text-white'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        )
+                      })}
+                    </div>
 
                     {/* サマリー + リスト */}
                     {snkrdunkLoading ? (
@@ -1325,8 +1277,13 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         <RefreshCw className="animate-spin text-purple-500" size={32} />
                       </div>
                     ) : (() => {
+                      const cat = SNKRDUNK_CATEGORIES.find(c => c.key === selectedSnkrdunkCategory) || SNKRDUNK_CATEGORIES[0]
                       const filtered = [...snkrdunkSales]
-                        .filter((s: any) => visibleGrades[s.grade] !== false)
+                        .filter((s: any) => {
+                          if (isBoxGrade(s.grade)) return false  // BOX系は常に除外
+                          if (cat.grades === null) return true   // 「すべて」
+                          return cat.grades.includes(s.grade)
+                        })
                         .sort((a: any, b: any) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
                       if (filtered.length === 0) {
                         return (
