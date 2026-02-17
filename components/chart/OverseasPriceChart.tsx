@@ -65,8 +65,8 @@ export default function OverseasPriceChart({ cardId, pricechartingId, days: init
         const d = json.data
         const parts = []
         if (d.looseUsd != null) parts.push(`素体: $${(d.looseUsd / 100).toFixed(2)}`)
-        if (d.gradedUsd != null) parts.push(`鑑定: $${(d.gradedUsd / 100).toFixed(2)}`)
-        alert(`更新完了: ${parts.join(' / ')}${d.looseJpy != null ? ` (≈¥${d.looseJpy.toLocaleString()})` : ''}`)
+        if (d.psa10Usd != null) parts.push(`PSA10: $${(d.psa10Usd / 100).toFixed(2)}`)
+        alert(`更新完了: ${parts.join(' / ')}${d.psa10Jpy != null ? ` (PSA10 ≈¥${d.psa10Jpy.toLocaleString()})` : ''}`)
         fetchPrices()
       } else {
         alert('更新失敗: ' + (json.error || '不明なエラー'))
@@ -117,7 +117,7 @@ export default function OverseasPriceChart({ cardId, pricechartingId, days: init
                 )}
               </div>
               <div className="bg-purple-50 rounded-xl p-3">
-                <p className="text-[10px] text-purple-500 font-medium">鑑定品（Graded）</p>
+                <p className="text-[10px] text-purple-500 font-medium">PSA 10</p>
                 <p className="text-lg font-bold text-gray-800">
                   {latest.graded_price_usd != null ? `$${(latest.graded_price_usd / 100).toFixed(2)}` : '-'}
                 </p>
@@ -208,7 +208,7 @@ export default function OverseasPriceChart({ cardId, pricechartingId, days: init
                 yAxisId="usd"
                 type="monotone"
                 dataKey="gradedUsd"
-                name="鑑定 USD"
+                name="PSA10 USD"
                 stroke="#8b5cf6"
                 strokeWidth={2}
                 dot={false}
@@ -229,7 +229,7 @@ export default function OverseasPriceChart({ cardId, pricechartingId, days: init
                 yAxisId="jpy"
                 type="monotone"
                 dataKey="gradedJpy"
-                name="鑑定 JPY"
+                name="PSA10 JPY"
                 stroke="#8b5cf6"
                 strokeWidth={1}
                 strokeDasharray="5 5"

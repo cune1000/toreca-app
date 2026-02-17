@@ -96,7 +96,8 @@ export async function GET(req: Request) {
         const product = await getProduct(card.pricecharting_id!)
 
         const looseUsd = product['loose-price'] ?? null
-        const gradedUsd = product['graded-price'] ?? null
+        // トレカではmanual-only-price = PSA 10（graded-priceはGrade 9）
+        const psa10Usd = product['manual-only-price'] ?? null
 
         const { error: insertError } = await supabase
           .from(TABLES.OVERSEAS_PRICES)
@@ -106,10 +107,10 @@ export async function GET(req: Request) {
             loose_price_usd: looseUsd,
             cib_price_usd: product['cib-price'] ?? null,
             new_price_usd: product['new-price'] ?? null,
-            graded_price_usd: gradedUsd,
+            graded_price_usd: psa10Usd,
             exchange_rate: exchangeRate,
             loose_price_jpy: looseUsd != null ? penniesToJpy(looseUsd, exchangeRate) : null,
-            graded_price_jpy: gradedUsd != null ? penniesToJpy(gradedUsd, exchangeRate) : null,
+            graded_price_jpy: psa10Usd != null ? penniesToJpy(psa10Usd, exchangeRate) : null,
           })
 
         if (insertError) {

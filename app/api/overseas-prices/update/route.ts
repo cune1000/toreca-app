@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
     const product = await getProduct(pricecharting_id)
 
     const looseUsd = product['loose-price'] ?? null
-    const gradedUsd = product['graded-price'] ?? null
+    // トレカではmanual-only-price = PSA 10（graded-priceはGrade 9）
+    const psa10Usd = product['manual-only-price'] ?? null
 
     const record = {
       card_id,
@@ -59,10 +60,10 @@ export async function POST(request: NextRequest) {
       loose_price_usd: looseUsd,
       cib_price_usd: product['cib-price'] ?? null,
       new_price_usd: product['new-price'] ?? null,
-      graded_price_usd: gradedUsd,
+      graded_price_usd: psa10Usd,
       exchange_rate: exchangeRate,
       loose_price_jpy: looseUsd != null ? penniesToJpy(looseUsd, exchangeRate) : null,
-      graded_price_jpy: gradedUsd != null ? penniesToJpy(gradedUsd, exchangeRate) : null,
+      graded_price_jpy: psa10Usd != null ? penniesToJpy(psa10Usd, exchangeRate) : null,
     }
 
     const { error: insertError } = await supabase
@@ -81,9 +82,9 @@ export async function POST(request: NextRequest) {
       data: {
         productName: product['product-name'] || '',
         looseUsd,
-        gradedUsd,
+        psa10Usd,
         looseJpy: record.loose_price_jpy,
-        gradedJpy: record.graded_price_jpy,
+        psa10Jpy: record.graded_price_jpy,
         exchangeRate,
       },
     })
