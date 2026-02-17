@@ -667,33 +667,6 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     })
   }, [salePrices])
 
-  // スニダン売買履歴のグラフデータ（期間フィルター適用）
-  const snkrdunkChartData = useMemo(() => {
-    // 期間でフィルター
-    const now = new Date()
-    const cutoff = selectedPeriod ? new Date(now.getTime() - selectedPeriod * 24 * 60 * 60 * 1000) : null
-
-    // すべての売買データを個別の点として表示（平均化しない）
-    return snkrdunkSales
-      .filter((sale: any) => {
-        if (!cutoff) return true
-        const saleDate = new Date(sale.sold_at)
-        return saleDate >= cutoff
-      })
-      .map((sale: any, index: number) => {
-        const result: any = {
-          id: `${sale.sold_at}_${index}`, // 一意のID
-          timestamp: new Date(sale.sold_at).getTime(),
-          date: new Date(sale.sold_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        }
-
-        // グレードごとに価格を設定
-        result[`grade_${sale.grade}`] = sale.price
-
-        return result
-      }).sort((a, b) => a.timestamp - b.timestamp).slice(-100)
-  }, [snkrdunkSales, selectedPeriod])
-
   // スニダンのユニークなグレードリスト（ソート済み）
   const snkrdunkGrades = useMemo(() => {
     const grades = new Set<string>()
@@ -1308,9 +1281,24 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                       )
                     })()}
 
-                    {/* グレード表示切り替え */}
+                    {/* グレードフィルタ */}
                     {snkrdunkGrades.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        <button
+                          onClick={() => {
+                            const allVisible = snkrdunkGrades.every(g => visibleGrades[g] !== false)
+                            const newState: Record<string, boolean> = {}
+                            snkrdunkGrades.forEach(g => { newState[g] = !allVisible })
+                            setVisibleGrades(prev => ({ ...prev, ...newState }))
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                            snkrdunkGrades.every(g => visibleGrades[g] !== false)
+                              ? 'bg-gray-800 text-white border-gray-800'
+                              : 'bg-gray-100 text-gray-500 border-gray-200'
+                          }`}
+                        >
+                          すべて
+                        </button>
                         {snkrdunkGrades.map(grade => {
                           const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
                           const isVisible = visibleGrades[grade] !== false
@@ -1318,15 +1306,12 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                             <button
                               key={grade}
                               onClick={() => toggleGrade(grade)}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${isVisible
-                                ? 'bg-purple-50 border-purple-200 text-purple-700'
-                                : 'bg-white border-gray-200 text-gray-400'
-                                }`}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${isVisible
+                                ? 'border-purple-300 text-purple-700 bg-purple-50'
+                                : 'border-gray-200 text-gray-400 bg-white'
+                              }`}
                             >
-                              <span
-                                className="w-3 h-3 rounded-full"
-                                style={{ backgroundColor: isVisible ? color : '#d1d5db' }}
-                              ></span>
+                              <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: isVisible ? color : '#d1d5db' }} />
                               {grade}
                             </button>
                           )
@@ -1334,53 +1319,89 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                       </div>
                     )}
 
-                    {/* グラフ */}
+                    {/* サマリー + リスト */}
                     {snkrdunkLoading ? (
                       <div className="flex items-center justify-center py-12">
                         <RefreshCw className="animate-spin text-purple-500" size={32} />
                       </div>
-                    ) : snkrdunkChartData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={400}>
-                        <LineChart data={snkrdunkChartData} margin={{ top: 10, right: 20, left: 20, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
-                          <YAxis
-                            tick={{ fontSize: 10, fill: '#9ca3af' }}
-                            tickLine={false}
-                            axisLine={false}
-                            tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
-                            domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
-                            allowDataOverflow={false}
-                          />
-                          <Tooltip content={<CustomTooltip />} />
+                    ) : (() => {
+                      const filtered = [...snkrdunkSales]
+                        .filter((s: any) => visibleGrades[s.grade] !== false)
+                        .sort((a: any, b: any) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
+                            <p>売買履歴データがありません</p>
+                            <p className="text-sm mt-2">「今すぐ更新」ボタンからスクレイピングを実行してください</p>
+                          </div>
+                        )
+                      }
+                      const prices = filtered.map((s: any) => s.price)
+                      const latest = prices[0]
+                      const avg = Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length)
+                      const min = Math.min(...prices)
+                      const max = Math.max(...prices)
+                      return (
+                        <>
+                          {/* サマリー */}
+                          <div className="grid grid-cols-4 gap-2 mb-3">
+                            <div className="bg-purple-50 rounded-lg p-2 text-center">
+                              <p className="text-[10px] text-purple-500">最新</p>
+                              <p className="text-sm font-bold text-gray-800">¥{latest.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-2 text-center">
+                              <p className="text-[10px] text-gray-500">平均</p>
+                              <p className="text-sm font-bold text-gray-800">¥{avg.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-2 text-center">
+                              <p className="text-[10px] text-blue-500">最安</p>
+                              <p className="text-sm font-bold text-gray-800">¥{min.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-2 text-center">
+                              <p className="text-[10px] text-gray-500">件数</p>
+                              <p className="text-sm font-bold text-gray-800">{filtered.length}件</p>
+                            </div>
+                          </div>
 
-                          {/* グレード別ライン */}
-                          {snkrdunkGrades
-                            .filter(grade => visibleGrades[grade] !== false)
-                            .map(grade => {
-                              const color = SNKRDUNK_GRADE_COLORS[grade] || '#6b7280'
-                              return (
-                                <Line
-                                  key={grade}
-                                  type="monotone"
-                                  dataKey={`grade_${grade}`}
-                                  stroke={color}
-                                  strokeWidth={2.5}
-                                  name={grade}
-                                  dot={snkrdunkChartData.length > 30 ? false : { r: 4, strokeWidth: 2, fill: '#fff' }}
-                                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-                                  connectNulls
-                                />
-                              )
-                            })}
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
-                        <p>売買履歴データがありません</p>
-                        <p className="text-sm mt-2">「履歴更新」ボタンからスクレイピングを実行してください</p>
-                      </div>
-                    )}
+                          {/* 取引リスト */}
+                          <div className="max-h-[400px] overflow-auto border rounded-lg">
+                            <table className="w-full text-sm">
+                              <thead className="bg-purple-50 sticky top-0 z-10">
+                                <tr>
+                                  <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">日時</th>
+                                  <th className="text-center px-3 py-2 text-xs font-medium text-gray-600">グレード</th>
+                                  <th className="text-right px-3 py-2 text-xs font-medium text-gray-600">価格</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {filtered.map((sale: any, i: number) => {
+                                  const date = new Date(sale.sold_at)
+                                  const gradeColor = SNKRDUNK_GRADE_COLORS[sale.grade] || '#6b7280'
+                                  return (
+                                    <tr key={i} className="hover:bg-purple-50/50">
+                                      <td className="px-3 py-2 text-xs text-gray-500">
+                                        {date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        <span
+                                          className="px-2 py-0.5 rounded text-[11px] font-medium"
+                                          style={{ backgroundColor: `${gradeColor}15`, color: gradeColor }}
+                                        >
+                                          {sale.grade}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-medium text-gray-800">
+                                        ¥{sale.price.toLocaleString()}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )
+                    })()}
                   </>
                 )}
 
