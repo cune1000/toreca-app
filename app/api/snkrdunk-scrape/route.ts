@@ -219,9 +219,12 @@ export async function POST(req: Request) {
                     : null
                 listingPrices['PSA10'] = psa10Min
 
-                // 状態A の最安値
+                // 状態A の最安値（PSA/ARS/BGS鑑定品を除外）
                 const gradeAItems = listings.filter(l =>
-                    l.condition.startsWith('A') || l.condition.includes('A（')
+                    (l.condition.startsWith('A') || l.condition.includes('A（')) &&
+                    !l.condition.includes('PSA') &&
+                    !l.condition.includes('ARS') &&
+                    !l.condition.includes('BGS')
                 )
                 const gradeAMin = gradeAItems.length > 0
                     ? Math.min(...gradeAItems.map(l => l.price))

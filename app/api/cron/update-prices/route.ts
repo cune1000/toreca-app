@@ -132,10 +132,12 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
       prices.push({ grade: 'PSA10', price: Math.min(...psa10Items.map(l => l.price)) })
     }
 
-    // 状態A最安値
+    // 状態A最安値（PSA/ARS/BGS鑑定品を除外）
     const gradeAItems = listings.filter(l =>
       (l.condition.startsWith('A') || l.condition.includes('A（')) &&
-      !l.condition.includes('PSA')
+      !l.condition.includes('PSA') &&
+      !l.condition.includes('ARS') &&
+      !l.condition.includes('BGS')
     )
     if (gradeAItems.length > 0) {
       prices.push({ grade: 'A', price: Math.min(...gradeAItems.map(l => l.price)) })

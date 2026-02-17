@@ -235,7 +235,7 @@ export async function getListings(
 
     if (productType === 'single') {
         params.append('sizeId', '0')
-        params.append('isSaleOnly', 'false')
+        params.append('isSaleOnly', 'true')
     } else {
         params.append('withAllColors', 'true')
     }
@@ -249,18 +249,23 @@ export async function getListings(
 
     const data = await res.json()
 
-    return (data.apparelUsedItems || []).map((item: any) => ({
-        id: item.id,
-        price: item.price,
-        size: item.size?.localizedName || '',
-        condition: item.displayWearCount || '',
-        status: item.statusText || '',
-        note: item.note || '',
-        accessoriesNote: item.accessoriesNote || null,
-        createdAt: item.createdAt || '',
-        updatedAt: item.updatedAt || '',
-        imageUrl: item.primaryPhoto?.imageUrl || null,
-    }))
+    return (data.apparelUsedItems || [])
+        .map((item: any) => ({
+            id: item.id,
+            price: item.price,
+            size: item.size?.localizedName || '',
+            condition: item.displayWearCount || '',
+            status: item.statusText || '',
+            note: item.note || '',
+            accessoriesNote: item.accessoriesNote || null,
+            createdAt: item.createdAt || '',
+            updatedAt: item.updatedAt || '',
+            imageUrl: item.primaryPhoto?.imageUrl || null,
+        }))
+        // 販売中以外を除外（防御的フィルタ）
+        .filter((item: SnkrdunkListing) =>
+            !item.status || item.status === '販売中' || item.status === ''
+        )
 }
 
 export interface SnkrdunkBoxSize {
