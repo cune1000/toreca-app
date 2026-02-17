@@ -624,7 +624,35 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     return latest
   }, [salePrices])
 
-  const latestPurchase = purchasePrices[0]?.price
+  // 買取価格をラベル別に最新価格を取得
+  const latestPurchaseByLabel = useMemo(() => {
+    const result: Record<string, { price: number; label: string; date: string }> = {}
+    for (const p of purchasePrices as any[]) {
+      const rawLabel = (p.link as any)?.label || ''
+      let key: string
+      let displayLabel: string
+      if (rawLabel.includes('PSA10') || rawLabel.includes('psa10')) {
+        key = 'psa10'; displayLabel = 'PSA10'
+      } else if (rawLabel.includes('未開封')) {
+        key = 'sealed'; displayLabel = '未開封'
+      } else if (rawLabel.includes('開封')) {
+        key = 'opened'; displayLabel = '開封品'
+      } else {
+        key = 'normal'; displayLabel = '素体'
+      }
+      if (!result[key]) {
+        result[key] = { price: p.price, label: displayLabel, date: p.created_at }
+      }
+    }
+    return result
+  }, [purchasePrices])
+
+  // 最新買取価格 = 各ラベルの最新のうち最高額
+  const latestPurchase = useMemo(() => {
+    const entries = Object.values(latestPurchaseByLabel)
+    if (entries.length === 0) return null
+    return Math.max(...entries.map(e => e.price))
+  }, [latestPurchaseByLabel])
 
   // 在庫データがあるかチェック
   const hasStockData = useMemo(() => {
@@ -840,6 +868,17 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 <p className="text-2xl font-bold text-blue-700">
                   {latestPurchase ? `¥${latestPurchase.toLocaleString()}` : '-'}
                 </p>
+                {Object.keys(latestPurchaseByLabel).length > 1 && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                    {Object.entries(latestPurchaseByLabel)
+                      .sort((a, b) => b[1].price - a[1].price)
+                      .map(([key, data]) => (
+                        <span key={key} className="text-xs text-blue-500">
+                          {data.label} ¥{data.price.toLocaleString()}
+                        </span>
+                      ))}
+                  </div>
+                )}
               </div>
               {/* 上位3サイト（在庫0除外、価格順） */}
               {Object.entries(latestPrices)
