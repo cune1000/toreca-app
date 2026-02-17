@@ -217,11 +217,30 @@ export default function CardDetailPage({ params }: Props) {
           }
         }
         if (data.gradePrices && data.gradePrices.length > 0) {
-          await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.price, stock, grade: null })
-          for (const gp of data.gradePrices) { await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: gp.price, grade: gp.grade, stock: gp.stock ?? null, top_prices: gp.topPrices ?? null }) }
-          alert(`更新完了: 全体¥${data.price.toLocaleString()}`)
+          // 全体最安値（grade=null）を保存
+          const { error: overallError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.price, stock, grade: null })
+          if (overallError) console.error('sale_prices insert (overall) error:', overallError)
+
+          // グレード別を保存（top_pricesが未認識の場合はフォールバック）
+          let gradeInsertFailed = false
+          for (const gp of data.gradePrices) {
+            const { error: gradeError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: gp.price, grade: gp.grade, stock: gp.stock ?? null, top_prices: gp.topPrices ?? null })
+            if (gradeError) {
+              console.error('sale_prices insert (grade) error:', gradeError)
+              // top_pricesカラムが未認識の場合、top_pricesなしでリトライ
+              if (gradeError.message?.includes('top_prices') || gradeError.code === '42703') {
+                const { error: retryError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: gp.price, grade: gp.grade, stock: gp.stock ?? null })
+                if (retryError) { console.error('sale_prices insert (grade retry) error:', retryError); gradeInsertFailed = true }
+              } else {
+                gradeInsertFailed = true
+              }
+            }
+          }
+          const warnMsg = gradeInsertFailed ? '\n(一部グレードの保存に失敗)' : ''
+          alert(`更新完了: 全体¥${data.price.toLocaleString()}${warnMsg}`)
         } else {
-          await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.priceNumber || data.price, stock })
+          const { error: insertError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.priceNumber || data.price, stock })
+          if (insertError) console.error('sale_prices insert error:', insertError)
           alert(`更新完了: ¥${(data.priceNumber || data.price).toLocaleString()}`)
         }
         await supabase.from('card_sale_urls').update({ last_price: data.priceNumber || data.price, last_stock: stock, last_checked_at: new Date().toISOString() }).eq('id', saleUrl.id)

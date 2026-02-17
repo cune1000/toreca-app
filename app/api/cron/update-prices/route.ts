@@ -405,7 +405,7 @@ export async function GET(request: NextRequest) {
           // 毎回履歴に追加（価格・在庫の変動有無に関係なく）
           if (gradePrices.length > 0) {
             // スニダン: 全体最安値 + 出品数（grade=null）を保存
-            await supabase
+            const { error: overallErr } = await supabase
               .from('sale_prices')
               .insert({
                 card_id: site.card_id,
@@ -414,9 +414,11 @@ export async function GET(request: NextRequest) {
                 stock: newStock,
                 grade: null,
               })
+            if (overallErr) console.error(`[cron] sale_prices insert (overall) error for ${cardName}:`, overallErr)
+
             // スニダン: グレード別に保存（stock + top_prices含む）
             for (const gp of gradePrices) {
-              await supabase
+              const { error: gradeErr } = await supabase
                 .from('sale_prices')
                 .insert({
                   card_id: site.card_id,
@@ -426,10 +428,26 @@ export async function GET(request: NextRequest) {
                   stock: gp.stock ?? null,
                   top_prices: gp.topPrices ?? null,
                 })
+              if (gradeErr) {
+                console.error(`[cron] sale_prices insert (grade ${gp.grade}) error for ${cardName}:`, gradeErr)
+                // top_pricesカラムが未認識の場合、top_pricesなしでリトライ
+                if (gradeErr.message?.includes('top_prices') || gradeErr.code === '42703') {
+                  const { error: retryErr } = await supabase
+                    .from('sale_prices')
+                    .insert({
+                      card_id: site.card_id,
+                      site_id: site.site_id,
+                      price: gp.price,
+                      grade: gp.grade,
+                      stock: gp.stock ?? null,
+                    })
+                  if (retryErr) console.error(`[cron] sale_prices insert (grade ${gp.grade} retry) error for ${cardName}:`, retryErr)
+                }
+              }
             }
           } else {
             // 通常サイト: grade無しで保存
-            await supabase
+            const { error: saleErr } = await supabase
               .from('sale_prices')
               .insert({
                 card_id: site.card_id,
@@ -437,6 +455,7 @@ export async function GET(request: NextRequest) {
                 price: newPrice,
                 stock: newStock
               })
+            if (saleErr) console.error(`[cron] sale_prices insert error for ${cardName}:`, saleErr)
           }
 
           results.details.push({
@@ -685,7 +704,7 @@ export async function POST(request: NextRequest) {
           // 毎回履歴に追加（価格・在庫の変動有無に関係なく）
           if (gradePrices.length > 0) {
             // スニダン: 全体最安値 + 出品数（grade=null）を保存
-            await supabase
+            const { error: overallErr } = await supabase
               .from('sale_prices')
               .insert({
                 card_id: site.card_id,
@@ -694,9 +713,11 @@ export async function POST(request: NextRequest) {
                 stock: newStock,
                 grade: null,
               })
+            if (overallErr) console.error(`[manual] sale_prices insert (overall) error for ${cardName}:`, overallErr)
+
             // スニダン: グレード別に保存（stock + top_prices含む）
             for (const gp of gradePrices) {
-              await supabase
+              const { error: gradeErr } = await supabase
                 .from('sale_prices')
                 .insert({
                   card_id: site.card_id,
@@ -706,10 +727,26 @@ export async function POST(request: NextRequest) {
                   stock: gp.stock ?? null,
                   top_prices: gp.topPrices ?? null,
                 })
+              if (gradeErr) {
+                console.error(`[manual] sale_prices insert (grade ${gp.grade}) error for ${cardName}:`, gradeErr)
+                // top_pricesカラムが未認識の場合、top_pricesなしでリトライ
+                if (gradeErr.message?.includes('top_prices') || gradeErr.code === '42703') {
+                  const { error: retryErr } = await supabase
+                    .from('sale_prices')
+                    .insert({
+                      card_id: site.card_id,
+                      site_id: site.site_id,
+                      price: gp.price,
+                      grade: gp.grade,
+                      stock: gp.stock ?? null,
+                    })
+                  if (retryErr) console.error(`[manual] sale_prices insert (grade ${gp.grade} retry) error for ${cardName}:`, retryErr)
+                }
+              }
             }
           } else {
             // 通常サイト
-            await supabase
+            const { error: saleErr } = await supabase
               .from('sale_prices')
               .insert({
                 card_id: site.card_id,
@@ -717,6 +754,7 @@ export async function POST(request: NextRequest) {
                 price: newPrice,
                 stock: newStock
               })
+            if (saleErr) console.error(`[manual] sale_prices insert error for ${cardName}:`, saleErr)
           }
 
           results.details.push({
