@@ -101,7 +101,14 @@ export default function PriceChartTab({
 
   const hasOverseasData = chartData.some(d => d.overseas_loose || d.overseas_graded)
   const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
-  const showStockAxis = hasStockData || hasGradeStockData
+
+  // スニダン判定（グレード別で表示するのでサイト別からは除外）
+  const isSnkrdunkSite = (site: any) => {
+    const n = site.name?.toLowerCase() || ''
+    return n.includes('スニーカーダンク') || n.includes('スニダン') || n.includes('snkrdunk')
+  }
+  const nonSnkrdunkSites = siteList.filter(s => !isSnkrdunkSite(s))
+  const showStockAxis = nonSnkrdunkSites.some(s => visibleSites[s.id]?.stock !== false) || hasGradeStockData
 
   const isGradePriceVisible = (grade: string) => visibleGrades[grade]?.price !== false
   const isGradeStockVisible = (grade: string) => visibleGrades[grade]?.stock !== false
@@ -171,12 +178,12 @@ export default function PriceChartTab({
           </div>
         </div>
 
-        {/* サイト別 */}
-        {siteList.length > 0 && (
+        {/* サイト別（スニダン以外） */}
+        {nonSnkrdunkSites.length > 0 && (
           <div>
             <p className="text-[11px] text-slate-400 font-medium mb-1.5">販売サイト</p>
             <div className="flex flex-wrap gap-2">
-              {siteList.map((site) => {
+              {nonSnkrdunkSites.map((site) => {
                 const colorIndex = siteList.findIndex(s => s.id === site.id)
                 const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
                 const v = visibleSites[site.id] || { price: true, stock: true }
@@ -199,10 +206,10 @@ export default function PriceChartTab({
           </div>
         )}
 
-        {/* グレード別 */}
+        {/* スニーカーダンク（グレード別） */}
         {saleGrades.length > 0 && (
           <div>
-            <p className="text-[11px] text-slate-400 font-medium mb-1.5">グレード別最安値</p>
+            <p className="text-[11px] text-slate-400 font-medium mb-1.5">スニーカーダンク</p>
             <div className="flex flex-wrap gap-2">
               {saleGrades.map((grade) => {
                 const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: grade }
@@ -316,8 +323,8 @@ export default function PriceChartTab({
                 )
               })}
 
-              {/* サイト別価格線 */}
-              {siteList
+              {/* サイト別価格線（スニダン以外） */}
+              {nonSnkrdunkSites
                 .filter(site => visibleSites[site.id]?.price !== false)
                 .map((site) => {
                   const colorIndex = siteList.findIndex(s => s.id === site.id)
@@ -358,8 +365,8 @@ export default function PriceChartTab({
                 )
               })}
 
-              {/* サイト別在庫線 */}
-              {hasStockData && siteList
+              {/* サイト別在庫線（スニダン以外） */}
+              {nonSnkrdunkSites
                 .filter(site => visibleSites[site.id]?.stock !== false)
                 .map((site) => {
                   const colorIndex = siteList.findIndex(s => s.id === site.id)
