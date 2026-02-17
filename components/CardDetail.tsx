@@ -477,7 +477,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
       const data = await res.json()
 
-      if (data.success && data.price) {
+      if (data.success && (data.price || data.price === 0)) {
         // 在庫数を取得（数値または文字列に対応）
         let stock = null
         if (data.stock !== null && data.stock !== undefined) {
@@ -538,7 +538,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
         fetchPrices()
       } else {
-        alert('価格の取得に失敗: ' + (data.error || '不明なエラー'))
+        alert('価格の取得に失敗: ' + (data.error || (data.price === null ? '出品が見つかりません' : '不明なエラー')))
       }
     } catch (err: any) {
       alert('エラー: ' + err.message)

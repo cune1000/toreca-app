@@ -262,10 +262,6 @@ export async function getListings(
             updatedAt: item.updatedAt || '',
             imageUrl: item.primaryPhoto?.imageUrl || null,
         }))
-        // 販売中以外を除外（防御的フィルタ）
-        .filter((item: SnkrdunkListing) =>
-            !item.status || item.status === '販売中' || item.status === ''
-        )
 }
 
 export interface SnkrdunkBoxSize {
