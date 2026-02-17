@@ -12,7 +12,7 @@ import SettingsTab from './card-detail/SettingsTab'
 import {
   SITE_COLORS, PURCHASE_CONDITION_COLORS, SNKRDUNK_GRADE_COLORS,
   GRADE_SORT_ORDER, isBoxGrade, SINGLE_CATEGORIES, SALE_GRADE_COLORS,
-  PERIOD_OPTIONS,
+  PERIOD_OPTIONS, formatRelativeTime,
 } from './card-detail/constants'
 
 export default function CardDetail({ card, onClose, onUpdated }) {
@@ -498,25 +498,27 @@ export default function CardDetail({ card, onClose, onUpdated }) {
     return latest
   }, [salePrices])
 
-  // 買取価格をラベル別に最新価格を取得
+  // 買取価格をラベル別に最高額店舗を取得
   const latestPurchaseByLabel = useMemo(() => {
-    const result: Record<string, { price: number; label: string; date: string }> = {}
+    // 各ラベル×店舗の最新データを集め、最高額の店舗を返す
+    const byLabelShop: Record<string, Record<string, { price: number; label: string; date: string; shopName: string }>> = {}
     for (const p of purchasePrices as any[]) {
       const rawLabel = (p.link as any)?.label || ''
-      let key: string
-      let displayLabel: string
-      if (rawLabel.includes('PSA10') || rawLabel.includes('psa10')) {
-        key = 'psa10'; displayLabel = 'PSA10'
-      } else if (rawLabel.includes('未開封')) {
-        key = 'sealed'; displayLabel = '未開封'
-      } else if (rawLabel.includes('開封')) {
-        key = 'opened'; displayLabel = '開封品'
-      } else {
-        key = 'normal'; displayLabel = '素体'
+      let key: string; let displayLabel: string
+      if (rawLabel.includes('PSA10') || rawLabel.includes('psa10')) { key = 'psa10'; displayLabel = 'PSA10' }
+      else if (rawLabel.includes('未開封')) { key = 'sealed'; displayLabel = '未開封' }
+      else if (rawLabel.includes('開封')) { key = 'opened'; displayLabel = '開封品' }
+      else { key = 'normal'; displayLabel = '素体' }
+      const shopId = p.shop?.id || 'unknown'
+      if (!byLabelShop[key]) byLabelShop[key] = {}
+      if (!byLabelShop[key][shopId]) {
+        byLabelShop[key][shopId] = { price: p.price, label: displayLabel, date: p.created_at, shopName: p.shop?.name || '-' }
       }
-      if (!result[key]) {
-        result[key] = { price: p.price, label: displayLabel, date: p.created_at }
-      }
+    }
+    const result: Record<string, { price: number; label: string; date: string; shopName: string }> = {}
+    for (const [key, shops] of Object.entries(byLabelShop)) {
+      const best = Object.values(shops).sort((a, b) => b.price - a.price)[0]
+      if (best) result[key] = best
     }
     return result
   }, [purchasePrices])
@@ -752,13 +754,14 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 <p className="text-2xl font-bold text-blue-700">
                   {latestPurchase ? `¥${latestPurchase.toLocaleString()}` : '-'}
                 </p>
-                {Object.keys(latestPurchaseByLabel).length > 1 && (
+                {Object.keys(latestPurchaseByLabel).length > 0 && (
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                     {Object.entries(latestPurchaseByLabel)
                       .sort((a, b) => b[1].price - a[1].price)
                       .map(([key, data]) => (
                         <span key={key} className="text-xs text-blue-500">
                           {data.label} ¥{data.price.toLocaleString()}
+                          <span className="text-blue-400 ml-0.5">({data.shopName})</span>
                         </span>
                       ))}
                   </div>
@@ -1060,307 +1063,353 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
               {/* ===== スニダン売買履歴タブ（3カラム） ===== */}
               {chartTab === 'snkrdunk' && (
-                <div className="grid grid-cols-3 gap-4">
-                  {/* カラム1: スニダン売買例歴 */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-sm text-gray-700">🔮 スニダン売買例歴</h4>
-                      <button
-                        onClick={scrapeSnkrdunk}
-                        disabled={snkrdunkScraping}
-                        className="px-2 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1"
-                      >
-                        {snkrdunkScraping ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                        更新
-                      </button>
+                <div className="grid grid-cols-3 gap-5">
+                  {/* ── カラム1: スニダン売買例歴 ── */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    {/* ヘッダー */}
+                    <div className="bg-purple-50 px-4 py-3 border-b border-purple-100">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-sm text-purple-800">🔮 スニダン売買例歴</h4>
+                        <button
+                          onClick={scrapeSnkrdunk}
+                          disabled={snkrdunkScraping}
+                          className="px-2.5 py-1 bg-purple-500 text-white rounded-lg text-[11px] hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1 shadow-sm"
+                        >
+                          {snkrdunkScraping ? <RefreshCw size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                          更新
+                        </button>
+                      </div>
+                      {snkrdunkSales.length > 0 && (
+                        <p className="text-[10px] text-purple-500 mt-1">
+                          最終取引: {formatRelativeTime((snkrdunkSales as any[]).sort((a: any, b: any) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())[0]?.sold_at)}
+                        </p>
+                      )}
                     </div>
 
-                    {/* カテゴリタブ */}
-                    {(() => {
-                      const hasBoxData = snkrdunkSales.some((s: any) => isBoxGrade(s.grade))
-                      const hasSingleData = snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
-                      const isBoxCard = hasBoxData && !hasSingleData
+                    <div className="p-3 space-y-3">
+                      {/* カテゴリタブ */}
+                      {(() => {
+                        const hasBoxData = snkrdunkSales.some((s: any) => isBoxGrade(s.grade))
+                        const hasSingleData = snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
+                        const isBoxCard = hasBoxData && !hasSingleData
 
-                      const boxQuantities = isBoxCard
-                        ? [...new Set(snkrdunkSales.map((s: any) => s.grade))]
-                            .filter(isBoxGrade)
-                            .sort((a, b) => {
-                              const numA = parseInt(a) || 999
-                              const numB = parseInt(b) || 999
-                              return numA - numB
-                            })
-                        : []
+                        const boxQuantities = isBoxCard
+                          ? [...new Set(snkrdunkSales.map((s: any) => s.grade))]
+                              .filter(isBoxGrade)
+                              .sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999))
+                          : []
 
-                      const categories = isBoxCard
-                        ? [
-                            { key: 'all', label: 'すべて', grades: null as string[] | null },
-                            ...boxQuantities.map(q => ({ key: q, label: q, grades: [q] })),
-                          ]
-                        : SINGLE_CATEGORIES
+                        const categories = isBoxCard
+                          ? [
+                              { key: 'all', label: 'すべて', grades: null as string[] | null },
+                              ...boxQuantities.map(q => ({ key: q, label: q, grades: [q] })),
+                            ]
+                          : SINGLE_CATEGORIES
 
-                      return (
-                        <div className="flex flex-wrap gap-1">
-                          {categories.map(cat => {
-                            const hasData = cat.grades === null
-                              ? true
-                              : snkrdunkSales.some((s: any) => cat.grades!.includes(s.grade))
-                            if (!hasData && cat.key !== 'all') return null
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {categories.map(cat => {
+                              const hasData = cat.grades === null
+                                ? true
+                                : snkrdunkSales.some((s: any) => cat.grades!.includes(s.grade))
+                              if (!hasData && cat.key !== 'all') return null
+                              return (
+                                <button
+                                  key={cat.key}
+                                  onClick={() => setSelectedSnkrdunkCategory(cat.key)}
+                                  className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+                                    selectedSnkrdunkCategory === cat.key
+                                      ? 'bg-purple-600 text-white shadow-sm'
+                                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  {cat.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+
+                      {/* サマリー + リスト */}
+                      {snkrdunkLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <RefreshCw className="animate-spin text-purple-500" size={24} />
+                        </div>
+                      ) : (() => {
+                        const hasBoxData = snkrdunkSales.some((s: any) => isBoxGrade(s.grade))
+                        const hasSingleData = snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
+                        const isBoxCard = hasBoxData && !hasSingleData
+
+                        const categories = isBoxCard
+                          ? [{ key: 'all', label: 'すべて', grades: null as string[] | null }]
+                          : SINGLE_CATEGORIES
+                        const cat = categories.find(c => c.key === selectedSnkrdunkCategory)
+                          || (isBoxCard && selectedSnkrdunkCategory !== 'all'
+                            ? { key: selectedSnkrdunkCategory, label: selectedSnkrdunkCategory, grades: [selectedSnkrdunkCategory] }
+                            : categories[0])
+
+                        const filtered = [...snkrdunkSales]
+                          .filter((s: any) => {
+                            if (isBoxCard) {
+                              if (!isBoxGrade(s.grade)) return false
+                              if (cat.grades === null) return true
+                              return cat.grades.includes(s.grade)
+                            } else {
+                              if (isBoxGrade(s.grade)) return false
+                              if (cat.grades === null) return true
+                              return cat.grades.includes(s.grade)
+                            }
+                          })
+                          .sort((a: any, b: any) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-400 text-sm">
+                              売買履歴データがありません
+                            </div>
+                          )
+                        }
+
+                        const prices = filtered.map((s: any) => s.price)
+                        const latestPrice = prices[0]
+                        const avg = Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length)
+                        const min = Math.min(...prices)
+
+                        return (
+                          <>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <div className="bg-gradient-to-b from-purple-50 to-purple-100/50 rounded-lg p-2 text-center">
+                                <p className="text-[10px] text-purple-500 font-medium">最新</p>
+                                <p className="text-xs font-bold text-purple-700">¥{latestPrice.toLocaleString()}</p>
+                              </div>
+                              <div className="bg-gradient-to-b from-gray-50 to-gray-100/50 rounded-lg p-2 text-center">
+                                <p className="text-[10px] text-gray-500 font-medium">平均</p>
+                                <p className="text-xs font-bold text-gray-700">¥{avg.toLocaleString()}</p>
+                              </div>
+                              <div className="bg-gradient-to-b from-blue-50 to-blue-100/50 rounded-lg p-2 text-center">
+                                <p className="text-[10px] text-blue-500 font-medium">最安</p>
+                                <p className="text-xs font-bold text-blue-700">¥{min.toLocaleString()}</p>
+                              </div>
+                            </div>
+
+                            <div className="max-h-[380px] overflow-auto rounded-lg border border-gray-100">
+                              <table className="w-full text-sm">
+                                <thead className="bg-purple-50/80 sticky top-0 z-10">
+                                  <tr>
+                                    <th className="text-left px-3 py-2 text-[11px] font-medium text-purple-600">日時</th>
+                                    <th className="text-center px-2 py-2 text-[11px] font-medium text-purple-600">グレード</th>
+                                    <th className="text-right px-3 py-2 text-[11px] font-medium text-purple-600">価格</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                  {filtered.map((sale: any, i: number) => {
+                                    const date = new Date(sale.sold_at)
+                                    const gradeColor = SNKRDUNK_GRADE_COLORS[sale.grade] || '#6b7280'
+                                    return (
+                                      <tr key={i} className="hover:bg-purple-50/30 transition-colors">
+                                        <td className="px-3 py-2 text-[11px] text-gray-500">
+                                          {date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </td>
+                                        <td className="px-2 py-2 text-center">
+                                          <span
+                                            className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                            style={{ backgroundColor: `${gradeColor}15`, color: gradeColor }}
+                                          >
+                                            {sale.grade}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-semibold text-gray-800 text-xs">
+                                          ¥{sale.price.toLocaleString()}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* ── カラム2: 買取 ── */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    {/* ヘッダー */}
+                    <div className="bg-blue-50 px-4 py-3 border-b border-blue-100">
+                      <h4 className="font-bold text-sm text-blue-800">🏪 買取（最高額店舗）</h4>
+                      {purchasePrices.length > 0 && (
+                        <p className="text-[10px] text-blue-500 mt-1">
+                          更新: {formatRelativeTime((purchasePrices as any[])[0]?.created_at)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="p-3 space-y-3">
+                      {/* 買取ラベル別 最高額店舗 */}
+                      {Object.keys(latestPurchaseByLabel).length > 0 ? (
+                        <div className="space-y-2">
+                          {Object.entries(latestPurchaseByLabel)
+                            .sort((a, b) => b[1].price - a[1].price)
+                            .map(([key, data]) => {
+                              const config = PURCHASE_CONDITION_COLORS[key] || { color: '#3b82f6', label: data.label }
+                              return (
+                                <div key={key} className="bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg p-3">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span
+                                      className="px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                                      style={{ backgroundColor: `${config.color}12`, color: config.color }}
+                                    >
+                                      {data.label}
+                                    </span>
+                                    <span className="font-bold text-gray-900 text-base">¥{data.price.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[10px] text-gray-400">
+                                    <span>{data.shopName}</span>
+                                    <span>{formatRelativeTime(data.date)}</span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-400 text-sm">
+                          買取データなし
+                        </div>
+                      )}
+
+                      {/* 買取履歴テーブル */}
+                      {purchasePrices.length > 0 && (
+                        <div className="max-h-[320px] overflow-auto rounded-lg border border-gray-100">
+                          <table className="w-full text-sm">
+                            <thead className="bg-blue-50/80 sticky top-0 z-10">
+                              <tr>
+                                <th className="text-left px-3 py-2 text-[11px] font-medium text-blue-600">店舗</th>
+                                <th className="text-center px-2 py-2 text-[11px] font-medium text-blue-600">状態</th>
+                                <th className="text-right px-3 py-2 text-[11px] font-medium text-blue-600">価格</th>
+                                <th className="text-right px-2 py-2 text-[11px] font-medium text-blue-600">日時</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {(purchasePrices as any[]).slice(0, 30).map((p: any, i) => {
+                                const rawLabel = (p.link as any)?.label || ''
+                                let condKey = 'normal'
+                                if (rawLabel.includes('PSA10') || rawLabel.includes('psa10')) condKey = 'psa'
+                                else if (rawLabel.includes('未開封')) condKey = 'sealed'
+                                else if (rawLabel.includes('開封')) condKey = 'opened'
+                                const condConfig = PURCHASE_CONDITION_COLORS[condKey] || { color: '#3b82f6', label: condKey }
+                                const date = formatDate(p.tweet_time || p.recorded_at || p.created_at)
+                                return (
+                                  <tr key={i} className="hover:bg-blue-50/30 transition-colors">
+                                    <td className="px-3 py-2 text-[11px] text-gray-600">{p.shop?.name || '-'}</td>
+                                    <td className="px-2 py-2 text-center">
+                                      <span
+                                        className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                        style={{ backgroundColor: `${condConfig.color}15`, color: condConfig.color }}
+                                      >
+                                        {condConfig.label}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-semibold text-gray-800 text-xs">
+                                      ¥{p.price.toLocaleString()}
+                                    </td>
+                                    <td className="px-2 py-2 text-right text-[10px] text-gray-400">
+                                      {date ? date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── カラム3: スニダン販売中最安値一覧 ── */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    {/* ヘッダー */}
+                    <div className="bg-green-50 px-4 py-3 border-b border-green-100">
+                      <h4 className="font-bold text-sm text-green-800">🛒 スニダン販売中最安値</h4>
+                      {snkrdunkLatestByGrade.length > 0 && (
+                        <p className="text-[10px] text-green-500 mt-1">
+                          更新: {formatRelativeTime(snkrdunkLatestByGrade[0]?.date)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="p-3 space-y-3">
+                      {snkrdunkLatestByGrade.length > 0 ? (
+                        <div className="space-y-2">
+                          {snkrdunkLatestByGrade.map((item) => {
+                            const gradeColor = SNKRDUNK_GRADE_COLORS[item.grade] || '#6b7280'
                             return (
-                              <button
-                                key={cat.key}
-                                onClick={() => setSelectedSnkrdunkCategory(cat.key)}
-                                className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
-                                  selectedSnkrdunkCategory === cat.key
-                                    ? 'bg-gray-800 text-white'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                                }`}
-                              >
-                                {cat.label}
-                              </button>
+                              <div key={item.grade} className="bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span
+                                    className="px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                                    style={{ backgroundColor: `${gradeColor}12`, color: gradeColor }}
+                                  >
+                                    {item.grade}
+                                  </span>
+                                  <div className="text-right">
+                                    <span className="font-bold text-gray-900 text-base">¥{item.price.toLocaleString()}</span>
+                                    {item.stock !== null && (
+                                      <span className="text-[10px] text-gray-400 ml-1.5">({item.stock}件)</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right text-[10px] text-gray-400">
+                                  {formatRelativeTime(item.date)}
+                                </div>
+                              </div>
                             )
                           })}
                         </div>
-                      )
-                    })()}
+                      ) : (
+                        <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-400 text-sm">
+                          販売中データなし
+                        </div>
+                      )}
 
-                    {/* サマリー + リスト */}
-                    {snkrdunkLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <RefreshCw className="animate-spin text-purple-500" size={24} />
-                      </div>
-                    ) : (() => {
-                      const hasBoxData = snkrdunkSales.some((s: any) => isBoxGrade(s.grade))
-                      const hasSingleData = snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
-                      const isBoxCard = hasBoxData && !hasSingleData
-
-                      const categories = isBoxCard
-                        ? [{ key: 'all', label: 'すべて', grades: null as string[] | null }]
-                        : SINGLE_CATEGORIES
-                      const cat = categories.find(c => c.key === selectedSnkrdunkCategory)
-                        || (isBoxCard && selectedSnkrdunkCategory !== 'all'
-                          ? { key: selectedSnkrdunkCategory, label: selectedSnkrdunkCategory, grades: [selectedSnkrdunkCategory] }
-                          : categories[0])
-
-                      const filtered = [...snkrdunkSales]
-                        .filter((s: any) => {
-                          if (isBoxCard) {
-                            if (!isBoxGrade(s.grade)) return false
-                            if (cat.grades === null) return true
-                            return cat.grades.includes(s.grade)
-                          } else {
-                            if (isBoxGrade(s.grade)) return false
-                            if (cat.grades === null) return true
-                            return cat.grades.includes(s.grade)
-                          }
-                        })
-                        .sort((a: any, b: any) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
-
-                      if (filtered.length === 0) {
-                        return (
-                          <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500 text-sm">
-                            <p>売買履歴データがありません</p>
-                          </div>
-                        )
-                      }
-
-                      const prices = filtered.map((s: any) => s.price)
-                      const latest = prices[0]
-                      const avg = Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length)
-                      const min = Math.min(...prices)
-
-                      return (
-                        <>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            <div className="bg-purple-50 rounded-lg p-1.5 text-center">
-                              <p className="text-[10px] text-purple-500">最新</p>
-                              <p className="text-xs font-bold text-gray-800">¥{latest.toLocaleString()}</p>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-1.5 text-center">
-                              <p className="text-[10px] text-gray-500">平均</p>
-                              <p className="text-xs font-bold text-gray-800">¥{avg.toLocaleString()}</p>
-                            </div>
-                            <div className="bg-blue-50 rounded-lg p-1.5 text-center">
-                              <p className="text-[10px] text-blue-500">最安</p>
-                              <p className="text-xs font-bold text-gray-800">¥{min.toLocaleString()}</p>
-                            </div>
-                          </div>
-
-                          <div className="max-h-[400px] overflow-auto border rounded-lg">
-                            <table className="w-full text-sm">
-                              <thead className="bg-purple-50 sticky top-0 z-10">
-                                <tr>
-                                  <th className="text-left px-2 py-1.5 text-[11px] font-medium text-gray-600">日時</th>
-                                  <th className="text-center px-2 py-1.5 text-[11px] font-medium text-gray-600">グレード</th>
-                                  <th className="text-right px-2 py-1.5 text-[11px] font-medium text-gray-600">価格</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {filtered.map((sale: any, i: number) => {
-                                  const date = new Date(sale.sold_at)
-                                  const gradeColor = SNKRDUNK_GRADE_COLORS[sale.grade] || '#6b7280'
-                                  return (
-                                    <tr key={i} className="hover:bg-purple-50/50">
-                                      <td className="px-2 py-1.5 text-[11px] text-gray-500">
-                                        {date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                      </td>
-                                      <td className="px-2 py-1.5 text-center">
-                                        <span
-                                          className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                          style={{ backgroundColor: `${gradeColor}15`, color: gradeColor }}
-                                        >
-                                          {sale.grade}
-                                        </span>
-                                      </td>
-                                      <td className="px-2 py-1.5 text-right font-medium text-gray-800 text-xs">
-                                        ¥{sale.price.toLocaleString()}
-                                      </td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </>
-                      )
-                    })()}
-                  </div>
-
-                  {/* カラム2: 買取 */}
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-sm text-gray-700">🏪 買取</h4>
-
-                    {/* 買取ラベル別最新価格 */}
-                    {Object.keys(latestPurchaseByLabel).length > 0 ? (
-                      <div className="space-y-2">
-                        {Object.entries(latestPurchaseByLabel)
-                          .sort((a, b) => b[1].price - a[1].price)
-                          .map(([key, data]) => {
-                            const config = PURCHASE_CONDITION_COLORS[key] || { color: '#3b82f6', label: data.label }
-                            return (
-                              <div key={key} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
-                                <span
-                                  className="px-2 py-0.5 rounded text-xs font-medium"
-                                  style={{ backgroundColor: `${config.color}15`, color: config.color }}
-                                >
-                                  {data.label}
-                                </span>
-                                <span className="font-bold text-gray-800 text-sm">¥{data.price.toLocaleString()}</span>
-                              </div>
-                            )
-                          })}
-                      </div>
-                    ) : (
-                      <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-400 text-sm">
-                        買取データなし
-                      </div>
-                    )}
-
-                    {/* 買取履歴テーブル */}
-                    {purchasePrices.length > 0 && (
-                      <div className="max-h-[350px] overflow-auto border rounded-lg">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 sticky top-0 z-10">
-                            <tr>
-                              <th className="text-left px-2 py-1.5 text-[11px] font-medium text-gray-600">店舗</th>
-                              <th className="text-center px-2 py-1.5 text-[11px] font-medium text-gray-600">状態</th>
-                              <th className="text-right px-2 py-1.5 text-[11px] font-medium text-gray-600">価格</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {(purchasePrices as any[]).slice(0, 30).map((p: any, i) => {
-                              const rawLabel = (p.link as any)?.label || ''
-                              let condKey = 'normal'
-                              if (rawLabel.includes('PSA10') || rawLabel.includes('psa10')) condKey = 'psa'
-                              else if (rawLabel.includes('未開封')) condKey = 'sealed'
-                              else if (rawLabel.includes('開封')) condKey = 'opened'
-                              const condConfig = PURCHASE_CONDITION_COLORS[condKey] || { color: '#3b82f6', label: condKey }
-                              const date = formatDate(p.tweet_time || p.recorded_at || p.created_at)
-                              return (
-                                <tr key={i} className="hover:bg-gray-50">
-                                  <td className="px-2 py-1.5 text-[11px] text-gray-600">{p.shop?.name || '-'}</td>
-                                  <td className="px-2 py-1.5 text-center">
-                                    <span
-                                      className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                      style={{ backgroundColor: `${condConfig.color}20`, color: condConfig.color }}
-                                    >
-                                      {condConfig.label}
-                                    </span>
-                                  </td>
-                                  <td className="px-2 py-1.5 text-right font-medium text-gray-800 text-xs">
-                                    ¥{p.price.toLocaleString()}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* カラム3: スニダン販売中最安値一覧 */}
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-sm text-gray-700">🛒 スニダン販売中最安値</h4>
-
-                    {snkrdunkLatestByGrade.length > 0 ? (
-                      <div className="space-y-2">
-                        {snkrdunkLatestByGrade.map((item) => {
-                          const gradeColor = SNKRDUNK_GRADE_COLORS[item.grade] || '#6b7280'
-                          return (
-                            <div key={item.grade} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
-                              <span
-                                className="px-2 py-0.5 rounded text-xs font-medium"
-                                style={{ backgroundColor: `${gradeColor}15`, color: gradeColor }}
-                              >
-                                {item.grade}
-                              </span>
-                              <div className="text-right">
-                                <span className="font-bold text-gray-800 text-sm">¥{item.price.toLocaleString()}</span>
-                                {item.stock !== null && (
-                                  <span className="text-[10px] text-gray-400 ml-1">({item.stock}件)</span>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-400 text-sm">
-                        販売中データなし
-                      </div>
-                    )}
-
-                    {/* 販売価格履歴テーブル */}
-                    {salePrices.length > 0 && (
-                      <div className="max-h-[350px] overflow-auto border rounded-lg">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 sticky top-0 z-10">
-                            <tr>
-                              <th className="text-left px-2 py-1.5 text-[11px] font-medium text-gray-600">サイト</th>
-                              <th className="text-center px-2 py-1.5 text-[11px] font-medium text-gray-600">グレード</th>
-                              <th className="text-right px-2 py-1.5 text-[11px] font-medium text-gray-600">価格</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {(salePrices as any[]).slice(0, 30).map((p: any, i) => {
-                              return (
-                                <tr key={i} className="hover:bg-gray-50">
-                                  <td className="px-2 py-1.5 text-[11px] text-gray-600">{p.site?.name || '-'}</td>
-                                  <td className="px-2 py-1.5 text-center">
-                                    {p.grade ? (
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-700">{p.grade}</span>
-                                    ) : '-'}
-                                  </td>
-                                  <td className="px-2 py-1.5 text-right font-medium text-gray-800 text-xs">
-                                    ¥{p.price.toLocaleString()}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                      {/* 販売価格履歴テーブル */}
+                      {salePrices.length > 0 && (
+                        <div className="max-h-[320px] overflow-auto rounded-lg border border-gray-100">
+                          <table className="w-full text-sm">
+                            <thead className="bg-green-50/80 sticky top-0 z-10">
+                              <tr>
+                                <th className="text-left px-3 py-2 text-[11px] font-medium text-green-600">サイト</th>
+                                <th className="text-center px-2 py-2 text-[11px] font-medium text-green-600">グレード</th>
+                                <th className="text-right px-3 py-2 text-[11px] font-medium text-green-600">価格</th>
+                                <th className="text-right px-2 py-2 text-[11px] font-medium text-green-600">日時</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {(salePrices as any[]).slice(0, 30).map((p: any, i) => {
+                                const date = formatDate(p.recorded_at || p.created_at)
+                                return (
+                                  <tr key={i} className="hover:bg-green-50/30 transition-colors">
+                                    <td className="px-3 py-2 text-[11px] text-gray-600">{p.site?.name || '-'}</td>
+                                    <td className="px-2 py-2 text-center">
+                                      {p.grade ? (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-600 font-medium">{p.grade}</span>
+                                      ) : '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-semibold text-gray-800 text-xs">
+                                      ¥{p.price.toLocaleString()}
+                                    </td>
+                                    <td className="px-2 py-2 text-right text-[10px] text-gray-400">
+                                      {date ? date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
