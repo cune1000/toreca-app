@@ -70,18 +70,18 @@ const GRADE_SORT_ORDER: Record<string, number> = {
   '6個': 105, '7個': 106, '8個': 107, '9個': 108, '10個': 109,
 }
 
-// スニダン売買履歴のカテゴリ定義（BOX系は除外）
-const SNKRDUNK_CATEGORIES = [
-  { key: 'all', label: 'すべて', grades: null },  // null = BOX系以外全部
+// BOX系グレード判定
+const isBoxGrade = (grade: string) => /^\d+個$/.test(grade) || grade === 'BOX'
+
+// シングルカード用カテゴリ
+const SINGLE_CATEGORIES = [
+  { key: 'all', label: 'すべて', grades: null },
   { key: 'a', label: '素体', grades: ['A'] },
   { key: 'psa10', label: 'PSA10', grades: ['PSA10'] },
   { key: 'b_below', label: 'B以下', grades: ['B', 'C', 'D'] },
   { key: 'psa9_below', label: 'PSA9以下', grades: ['PSA9', 'PSA8以下'] },
   { key: 'other_graded', label: 'その他鑑定品', grades: ['BGS10BL', 'BGS10GL', 'BGS9.5', 'BGS9以下', 'ARS10+', 'ARS10', 'ARS9', 'ARS8以下'] },
 ]
-
-// BOX系グレード判定
-const isBoxGrade = (grade: string) => /^\d+個$/.test(grade) || grade === 'BOX'
 
 // グレード別最安値カラー（価格・在庫推移グラフ用）
 const SALE_GRADE_COLORS: Record<string, { color: string; label: string }> = {
@@ -1247,29 +1247,54 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                       )
                     })()}
 
-                    {/* カテゴリタブ */}
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {SNKRDUNK_CATEGORIES.map(cat => {
-                        // データがあるカテゴリのみ表示
-                        const hasData = cat.grades === null
-                          ? snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
-                          : snkrdunkSales.some((s: any) => cat.grades!.includes(s.grade))
-                        if (!hasData && cat.key !== 'all') return null
-                        return (
-                          <button
-                            key={cat.key}
-                            onClick={() => setSelectedSnkrdunkCategory(cat.key)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                              selectedSnkrdunkCategory === cat.key
-                                ? 'bg-gray-800 text-white'
-                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                            }`}
-                          >
-                            {cat.label}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {/* カテゴリタブ（シングル=グレード別 / BOX=個数別） */}
+                    {(() => {
+                      const hasBoxData = snkrdunkSales.some((s: any) => isBoxGrade(s.grade))
+                      const hasSingleData = snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
+                      const isBoxCard = hasBoxData && !hasSingleData
+
+                      // BOXカード: 個数別タブを動的生成
+                      const boxQuantities = isBoxCard
+                        ? [...new Set(snkrdunkSales.map((s: any) => s.grade))]
+                            .filter(isBoxGrade)
+                            .sort((a, b) => {
+                              const numA = parseInt(a) || 999
+                              const numB = parseInt(b) || 999
+                              return numA - numB
+                            })
+                        : []
+
+                      const categories = isBoxCard
+                        ? [
+                            { key: 'all', label: 'すべて', grades: null },
+                            ...boxQuantities.map(q => ({ key: q, label: q, grades: [q] })),
+                          ]
+                        : SINGLE_CATEGORIES
+
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {categories.map(cat => {
+                            const hasData = cat.grades === null
+                              ? true
+                              : snkrdunkSales.some((s: any) => cat.grades!.includes(s.grade))
+                            if (!hasData && cat.key !== 'all') return null
+                            return (
+                              <button
+                                key={cat.key}
+                                onClick={() => setSelectedSnkrdunkCategory(cat.key)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                                  selectedSnkrdunkCategory === cat.key
+                                    ? 'bg-gray-800 text-white'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                }`}
+                              >
+                                {cat.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
 
                     {/* サマリー + リスト */}
                     {snkrdunkLoading ? (
@@ -1277,12 +1302,30 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                         <RefreshCw className="animate-spin text-purple-500" size={32} />
                       </div>
                     ) : (() => {
-                      const cat = SNKRDUNK_CATEGORIES.find(c => c.key === selectedSnkrdunkCategory) || SNKRDUNK_CATEGORIES[0]
+                      // BOXカードかどうか判定
+                      const hasBoxData = snkrdunkSales.some((s: any) => isBoxGrade(s.grade))
+                      const hasSingleData = snkrdunkSales.some((s: any) => !isBoxGrade(s.grade))
+                      const isBoxCard = hasBoxData && !hasSingleData
+
+                      const categories = isBoxCard
+                        ? [{ key: 'all', label: 'すべて', grades: null as string[] | null }]
+                        : SINGLE_CATEGORIES
+                      const cat = categories.find(c => c.key === selectedSnkrdunkCategory)
+                        || (isBoxCard && selectedSnkrdunkCategory !== 'all'
+                          ? { key: selectedSnkrdunkCategory, label: selectedSnkrdunkCategory, grades: [selectedSnkrdunkCategory] }
+                          : categories[0])
+
                       const filtered = [...snkrdunkSales]
                         .filter((s: any) => {
-                          if (isBoxGrade(s.grade)) return false  // BOX系は常に除外
-                          if (cat.grades === null) return true   // 「すべて」
-                          return cat.grades.includes(s.grade)
+                          if (isBoxCard) {
+                            if (!isBoxGrade(s.grade)) return false
+                            if (cat.grades === null) return true
+                            return cat.grades.includes(s.grade)
+                          } else {
+                            if (isBoxGrade(s.grade)) return false
+                            if (cat.grades === null) return true
+                            return cat.grades.includes(s.grade)
+                          }
                         })
                         .sort((a: any, b: any) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
                       if (filtered.length === 0) {
