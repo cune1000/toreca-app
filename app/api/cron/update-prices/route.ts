@@ -100,7 +100,7 @@ async function scrapeViaRailway(url: string, mode: string = 'light') {
 
 // スニダンAPIでグレード別最安値を取得
 interface SnkrdunkPriceResult {
-  prices: { grade: string; price: number }[]
+  prices: { grade: string; price: number; stock?: number; topPrices?: number[] }[]
   overallMin: number | null
   totalListings: number  // 全出品数
 }
@@ -112,7 +112,7 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
 
   const productInfo = await getProductInfo(apparelId)
   const productType = productInfo.isBox ? 'box' : 'single'
-  const prices: { grade: string; price: number }[] = []
+  const prices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
   let totalListings = 0
   let overallMin: number | null = null
 
@@ -129,7 +129,13 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
     // PSA10最安値
     const psa10Items = listings.filter(l => l.condition.includes('PSA10'))
     if (psa10Items.length > 0) {
-      prices.push({ grade: 'PSA10', price: Math.min(...psa10Items.map(l => l.price)) })
+      const sorted = [...psa10Items].sort((a, b) => a.price - b.price)
+      prices.push({
+        grade: 'PSA10',
+        price: sorted[0].price,
+        stock: sorted.length,
+        topPrices: sorted.slice(0, 3).map(l => l.price),
+      })
     }
 
     // 状態A最安値（PSA/ARS/BGS鑑定品を除外）
@@ -140,7 +146,30 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
       !l.condition.includes('BGS')
     )
     if (gradeAItems.length > 0) {
-      prices.push({ grade: 'A', price: Math.min(...gradeAItems.map(l => l.price)) })
+      const sorted = [...gradeAItems].sort((a, b) => a.price - b.price)
+      prices.push({
+        grade: 'A',
+        price: sorted[0].price,
+        stock: sorted.length,
+        topPrices: sorted.slice(0, 3).map(l => l.price),
+      })
+    }
+
+    // 状態B最安値（鑑定品を除外）
+    const gradeBItems = listings.filter(l =>
+      (l.condition.startsWith('B') || l.condition.includes('B（')) &&
+      !l.condition.includes('PSA') &&
+      !l.condition.includes('ARS') &&
+      !l.condition.includes('BGS')
+    )
+    if (gradeBItems.length > 0) {
+      const sorted = [...gradeBItems].sort((a, b) => a.price - b.price)
+      prices.push({
+        grade: 'B',
+        price: sorted[0].price,
+        stock: sorted.length,
+        topPrices: sorted.slice(0, 3).map(l => l.price),
+      })
     }
   } else {
     // BOX: /sizes APIから価格・出品数を取得
@@ -272,7 +301,7 @@ export async function GET(request: NextRequest) {
 
         let newPrice: number | null = null
         let newStock: number | null = null
-        let gradePrices: { grade: string; price: number }[] = []
+        let gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
 
         if (isSnkrdunk) {
           // 新API方式: グレード別最安値 + 全体最安値 + 出品数を取得
@@ -385,7 +414,7 @@ export async function GET(request: NextRequest) {
                 stock: newStock,
                 grade: null,
               })
-            // スニダン: グレード別に保存
+            // スニダン: グレード別に保存（stock + top_prices含む）
             for (const gp of gradePrices) {
               await supabase
                 .from('sale_prices')
@@ -394,6 +423,8 @@ export async function GET(request: NextRequest) {
                   site_id: site.site_id,
                   price: gp.price,
                   grade: gp.grade,
+                  stock: gp.stock ?? null,
+                  top_prices: gp.topPrices ?? null,
                 })
             }
           } else {
@@ -553,7 +584,7 @@ export async function POST(request: NextRequest) {
 
         let newPrice: number | null = null
         let newStock: number | null = null
-        let gradePrices: { grade: string; price: number }[] = []
+        let gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
 
         if (isSnkrdunk) {
           // 新API方式: グレード別最安値 + 全体最安値 + 出品数を取得
@@ -663,7 +694,7 @@ export async function POST(request: NextRequest) {
                 stock: newStock,
                 grade: null,
               })
-            // スニダン: グレード別に保存
+            // スニダン: グレード別に保存（stock + top_prices含む）
             for (const gp of gradePrices) {
               await supabase
                 .from('sale_prices')
@@ -672,6 +703,8 @@ export async function POST(request: NextRequest) {
                   site_id: site.site_id,
                   price: gp.price,
                   grade: gp.grade,
+                  stock: gp.stock ?? null,
+                  top_prices: gp.topPrices ?? null,
                 })
             }
           } else {

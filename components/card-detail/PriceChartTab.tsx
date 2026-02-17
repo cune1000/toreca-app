@@ -1,11 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import OverseasPriceChart from '@/components/chart/OverseasPriceChart'
-import MarketChart from '@/components/MarketChart'
+import { RefreshCw } from 'lucide-react'
 import OverseasComparisonSection from './OverseasComparisonSection'
 import {
   SITE_COLORS, PURCHASE_CONDITION_COLORS, SALE_GRADE_COLORS,
+  OVERSEAS_LINE_COLORS, DAILY_AVG_COLORS,
   PERIOD_OPTIONS,
 } from './constants'
 
@@ -25,9 +26,11 @@ interface PriceChartTabProps {
   purchaseConditions: string[]
   saleGrades: string[]
   hasStockData: boolean
+  hasGradeStockData?: boolean
   // 海外比較用
   overseasLatest: any | null
   snkrdunkLatestByGrade: { price: number; stock: number | null; grade: string; date: string }[]
+  onRefreshOverseas?: () => void
 }
 
 // カスタムドット（ダイヤモンド型）
@@ -86,9 +89,47 @@ export default function PriceChartTab({
   card, chartData, selectedPeriod, onPeriodChange,
   showPurchase, onShowPurchaseChange,
   siteList, visibleSites, onToggleSitePrice, onToggleSiteStock, onToggleSiteAll, isSiteHidden,
-  purchaseConditions, saleGrades, hasStockData,
-  overseasLatest, snkrdunkLatestByGrade,
+  purchaseConditions, saleGrades, hasStockData, hasGradeStockData,
+  overseasLatest, snkrdunkLatestByGrade, onRefreshOverseas,
 }: PriceChartTabProps) {
+  // 海外・売買平均の表示トグル
+  const [showOverseasLoose, setShowOverseasLoose] = useState(true)
+  const [showOverseasGraded, setShowOverseasGraded] = useState(true)
+  const [showDailyTrade, setShowDailyTrade] = useState(true)
+  const [overseasUpdating, setOverseasUpdating] = useState(false)
+
+  const hasOverseasData = chartData.some(d => d.overseas_loose || d.overseas_graded)
+  const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
+  const showStockAxis = hasStockData || hasGradeStockData
+
+  // 海外価格手動更新
+  const handleOverseasUpdate = async () => {
+    if (!card.pricecharting_id) return
+    setOverseasUpdating(true)
+    try {
+      const res = await fetch('/api/overseas-prices/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: card.id, pricecharting_id: card.pricecharting_id }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        const d = json.data
+        const parts = []
+        if (d.looseUsd != null) parts.push(`素体: $${(d.looseUsd / 100).toFixed(2)}`)
+        if (d.psa10Usd != null) parts.push(`PSA10: $${(d.psa10Usd / 100).toFixed(2)}`)
+        alert(`更新完了: ${parts.join(' / ')}`)
+        onRefreshOverseas?.()
+      } else {
+        alert('更新失敗: ' + (json.error || '不明なエラー'))
+      }
+    } catch (err: any) {
+      alert('エラー: ' + err.message)
+    } finally {
+      setOverseasUpdating(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* 期間フィルタ */}
@@ -112,6 +153,7 @@ export default function PriceChartTab({
       <div className="bg-slate-50 rounded-xl p-4">
         <p className="text-sm font-medium text-slate-700 mb-3">グラフ表示設定</p>
         <div className="flex flex-wrap gap-3">
+          {/* 買取価格 */}
           <button
             onClick={() => onShowPurchaseChange(!showPurchase)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showPurchase
@@ -121,14 +163,10 @@ export default function PriceChartTab({
           >
             <span className={`w-3 h-3 rounded-full ${showPurchase ? 'bg-blue-500' : 'bg-slate-300'}`}></span>
             買取価格
-            <input
-              type="checkbox"
-              checked={showPurchase}
-              onChange={() => onShowPurchaseChange(!showPurchase)}
-              className="w-4 h-4 accent-blue-500"
-            />
+            <input type="checkbox" checked={showPurchase} onChange={() => onShowPurchaseChange(!showPurchase)} className="w-4 h-4 accent-blue-500" />
           </button>
 
+          {/* サイト別 */}
           {siteList.map((site) => {
             const colorIndex = siteList.findIndex(s => s.id === site.id)
             const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
@@ -142,30 +180,15 @@ export default function PriceChartTab({
                   : 'bg-green-50 border-green-200 text-green-700'
                 }`}
               >
-                <span
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: hidden ? '#d1d5db' : color }}
-                ></span>
-                <span className="cursor-pointer" onClick={() => onToggleSiteAll(site.id)}>
-                  {site.name}
-                </span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: hidden ? '#d1d5db' : color }}></span>
+                <span className="cursor-pointer" onClick={() => onToggleSiteAll(site.id)}>{site.name}</span>
                 <span className="flex items-center gap-1 ml-1 text-xs">
                   <label className="flex items-center gap-0.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={v.price !== false}
-                      onChange={() => onToggleSitePrice(site.id)}
-                      className="w-3 h-3 accent-green-500"
-                    />
+                    <input type="checkbox" checked={v.price !== false} onChange={() => onToggleSitePrice(site.id)} className="w-3 h-3 accent-green-500" />
                     <span>●価格</span>
                   </label>
                   <label className="flex items-center gap-0.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={v.stock !== false}
-                      onChange={() => onToggleSiteStock(site.id)}
-                      className="w-3 h-3 accent-green-500"
-                    />
+                    <input type="checkbox" checked={v.stock !== false} onChange={() => onToggleSiteStock(site.id)} className="w-3 h-3 accent-green-500" />
                     <span>◇在庫</span>
                   </label>
                 </span>
@@ -173,9 +196,63 @@ export default function PriceChartTab({
             )
           })}
         </div>
+
+        {/* 海外・売買平均トグル */}
+        {(card.pricecharting_id || hasDailyTradeData) && (
+          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-slate-200">
+            {card.pricecharting_id && (
+              <>
+                <button
+                  onClick={() => setShowOverseasLoose(!showOverseasLoose)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showOverseasLoose
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                    : 'bg-white border-slate-200 text-slate-400'
+                  }`}
+                >
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: showOverseasLoose ? OVERSEAS_LINE_COLORS.loose.color : '#d1d5db' }}></span>
+                  {OVERSEAS_LINE_COLORS.loose.label}
+                  <input type="checkbox" checked={showOverseasLoose} onChange={() => setShowOverseasLoose(!showOverseasLoose)} className="w-3 h-3 accent-indigo-500" />
+                </button>
+                <button
+                  onClick={() => setShowOverseasGraded(!showOverseasGraded)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showOverseasGraded
+                    ? 'bg-violet-50 border-violet-200 text-violet-700'
+                    : 'bg-white border-slate-200 text-slate-400'
+                  }`}
+                >
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: showOverseasGraded ? OVERSEAS_LINE_COLORS.graded.color : '#d1d5db' }}></span>
+                  {OVERSEAS_LINE_COLORS.graded.label}
+                  <input type="checkbox" checked={showOverseasGraded} onChange={() => setShowOverseasGraded(!showOverseasGraded)} className="w-3 h-3 accent-violet-500" />
+                </button>
+                <button
+                  onClick={handleOverseasUpdate}
+                  disabled={overseasUpdating}
+                  className="px-2.5 py-1.5 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-1"
+                  title="PriceChartingから最新価格を取得"
+                >
+                  <RefreshCw size={12} className={overseasUpdating ? 'animate-spin' : ''} />
+                  海外更新
+                </button>
+              </>
+            )}
+            {hasDailyTradeData && (
+              <button
+                onClick={() => setShowDailyTrade(!showDailyTrade)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showDailyTrade
+                  ? 'bg-orange-50 border-orange-200 text-orange-700'
+                  : 'bg-white border-slate-200 text-slate-400'
+                }`}
+              >
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: showDailyTrade ? DAILY_AVG_COLORS.trade.color : '#d1d5db' }}></span>
+                {DAILY_AVG_COLORS.trade.label}
+                <input type="checkbox" checked={showDailyTrade} onChange={() => setShowDailyTrade(!showDailyTrade)} className="w-3 h-3 accent-orange-500" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* 価格・在庫グラフ */}
+      {/* 統合チャート */}
       {chartData.length > 0 ? (
         <>
           <ResponsiveContainer width="100%" height={400}>
@@ -192,7 +269,7 @@ export default function PriceChartTab({
                 domain={[(dataMin: number) => Math.floor(dataMin * 0.85), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
                 allowDataOverflow={false}
               />
-              {hasStockData && (
+              {showStockAxis && (
                 <YAxis
                   yAxisId="stock"
                   orientation="right"
@@ -205,6 +282,7 @@ export default function PriceChartTab({
               )}
               <Tooltip content={<CustomTooltip />} />
 
+              {/* 買取価格線 */}
               {showPurchase && purchaseConditions.map((condition) => {
                 const config = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
                 return (
@@ -223,6 +301,7 @@ export default function PriceChartTab({
                 )
               })}
 
+              {/* サイト別価格線 */}
               {siteList
                 .filter(site => visibleSites[site.id]?.price !== false)
                 .map((site) => {
@@ -244,6 +323,7 @@ export default function PriceChartTab({
                   )
                 })}
 
+              {/* グレード別最安値線 */}
               {saleGrades.map((grade) => {
                 const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: `${grade}最安` }
                 return (
@@ -263,6 +343,7 @@ export default function PriceChartTab({
                 )
               })}
 
+              {/* サイト別在庫線 */}
               {hasStockData && siteList
                 .filter(site => visibleSites[site.id]?.stock !== false)
                 .map((site) => {
@@ -283,11 +364,77 @@ export default function PriceChartTab({
                     />
                   )
                 })}
+
+              {/* グレード別在庫線 */}
+              {hasGradeStockData && saleGrades.map((grade) => {
+                const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: grade }
+                return (
+                  <Line
+                    key={`stock_grade_${grade}`}
+                    yAxisId="stock"
+                    type="stepAfter"
+                    dataKey={`stock_grade_${grade}`}
+                    stroke={config.color}
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    name={`${config.label.replace('最安', '')}在庫`}
+                    dot={<DiamondDot stroke={config.color} />}
+                    connectNulls
+                  />
+                )
+              })}
+
+              {/* 海外素体線 */}
+              {showOverseasLoose && hasOverseasData && (
+                <Line
+                  yAxisId="price"
+                  type="monotone"
+                  dataKey="overseas_loose"
+                  stroke={OVERSEAS_LINE_COLORS.loose.color}
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  name={OVERSEAS_LINE_COLORS.loose.label}
+                  dot={false}
+                  connectNulls
+                />
+              )}
+
+              {/* 海外PSA10線 */}
+              {showOverseasGraded && hasOverseasData && (
+                <Line
+                  yAxisId="price"
+                  type="monotone"
+                  dataKey="overseas_graded"
+                  stroke={OVERSEAS_LINE_COLORS.graded.color}
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  name={OVERSEAS_LINE_COLORS.graded.label}
+                  dot={false}
+                  connectNulls
+                />
+              )}
+
+              {/* 売買日次平均線 */}
+              {showDailyTrade && hasDailyTradeData && (
+                <Line
+                  yAxisId="price"
+                  type="monotone"
+                  dataKey="daily_trade_avg"
+                  stroke={DAILY_AVG_COLORS.trade.color}
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  name={DAILY_AVG_COLORS.trade.label}
+                  dot={false}
+                  connectNulls
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-2 text-xs text-slate-400">
             <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded"></span> 価格（左軸）</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded" style={{ borderTop: '2px dashed #9ca3af' }}></span> 在庫（右軸）</span>
+            {showStockAxis && (
+              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded" style={{ borderTop: '2px dashed #9ca3af' }}></span> 在庫（右軸）</span>
+            )}
           </div>
         </>
       ) : (
@@ -296,36 +443,13 @@ export default function PriceChartTab({
         </div>
       )}
 
-      {/* 海外 vs 国内 価格比較ダッシュボード */}
+      {/* 海外転売シミュレーション */}
       {card.pricecharting_id && (
         <OverseasComparisonSection
           overseasLatest={overseasLatest}
           snkrdunkLatestByGrade={snkrdunkLatestByGrade}
         />
       )}
-
-      {/* 海外価格チャート */}
-      {card.pricecharting_id && (
-        <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-cyan-50 px-5 py-3 border-b border-blue-100/60">
-            <h4 className="text-sm font-semibold text-slate-800 tracking-tight">🌐 海外価格推移（PriceCharting）</h4>
-          </div>
-          <div className="p-5">
-            <OverseasPriceChart cardId={card.id} pricechartingId={card.pricecharting_id} />
-          </div>
-        </div>
-      )}
-
-      {/* 日次平均推移（MarketChart統合） */}
-      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="bg-gradient-to-r from-slate-50 via-gray-50 to-zinc-50 px-5 py-3 border-b border-slate-100/60">
-          <h4 className="text-sm font-semibold text-slate-800 tracking-tight">📊 日次平均推移</h4>
-          <p className="text-[11px] text-slate-400 mt-0.5">売買・販売・買取の日次平均価格</p>
-        </div>
-        <div className="p-5">
-          <MarketChart cardId={card.id} />
-        </div>
-      </div>
     </div>
   )
 }

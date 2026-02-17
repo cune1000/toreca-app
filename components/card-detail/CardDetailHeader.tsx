@@ -2,13 +2,21 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { X, ExternalLink, Edit, Store, Globe, Package, TrendingUp, TrendingDown } from 'lucide-react'
+import { X, ExternalLink, Edit, Store, Globe, Package, TrendingUp, TrendingDown, ShoppingCart } from 'lucide-react'
 
 interface PriceDiff {
   label: string
   displayLabel: string
   diffJpy: number
   diffPercent: number
+}
+
+interface GradeData {
+  price: number
+  stock: number | null
+  grade: string
+  date: string
+  topPrices?: number[]
 }
 
 interface CardDetailHeaderProps {
@@ -18,6 +26,7 @@ interface CardDetailHeaderProps {
   latestPurchaseByLabel: Record<string, { price: number; label: string; shopName: string; date: string }>
   latestPrices: Record<string, { price: number; stock: number | null; siteName: string }>
   priceDiffs: PriceDiff[]
+  snkrdunkLatestByGrade?: GradeData[]
   onClose: () => void
   onEdit: () => void
   onUpdated?: () => void
@@ -26,7 +35,7 @@ interface CardDetailHeaderProps {
 
 export default function CardDetailHeader({
   card, cardImageUrl, latestPurchase, latestPurchaseByLabel, latestPrices,
-  priceDiffs, onClose, onEdit, onUpdated, onImageChanged,
+  priceDiffs, snkrdunkLatestByGrade, onClose, onEdit, onUpdated, onImageChanged,
 }: CardDetailHeaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
@@ -188,7 +197,7 @@ export default function CardDetailHeader({
         <div className="flex flex-wrap gap-3 mt-4">
           {/* 買取価格カード */}
           <div className="bg-blue-50 rounded-xl p-4 min-w-[160px] flex-1">
-            <div className="flex items-center gap-2 text-blue-600 text-sm mb-1">
+            <div className="flex items-center gap-2 text-blue-600 text-sm mb-2">
               <Store size={16} />
               最新買取価格
             </div>
@@ -196,14 +205,15 @@ export default function CardDetailHeader({
               {latestPurchase ? `¥${latestPurchase.toLocaleString()}` : '-'}
             </p>
             {Object.keys(latestPurchaseByLabel).length > 0 && (
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+              <div className="mt-2 space-y-1">
                 {Object.entries(latestPurchaseByLabel)
                   .sort((a, b) => b[1].price - a[1].price)
                   .map(([key, data]) => (
-                    <span key={key} className="text-xs text-blue-500">
-                      {data.label} ¥{data.price.toLocaleString()}
-                      <span className="text-blue-400 ml-0.5">({data.shopName})</span>
-                    </span>
+                    <div key={key} className="flex items-baseline gap-2">
+                      <span className="text-xs font-medium text-blue-600 w-12 shrink-0">{data.label}</span>
+                      <span className="text-sm font-bold text-blue-700 tabular-nums">¥{data.price.toLocaleString()}</span>
+                      <span className="text-xs text-blue-400">({data.shopName})</span>
+                    </div>
                   ))}
               </div>
             )}
@@ -230,36 +240,73 @@ export default function CardDetailHeader({
             )}
           </div>
 
-          {/* 販売価格カード（最大3つ） */}
-          {Object.entries(latestPrices)
-            .filter(([, data]) => data.stock !== 0)
-            .sort((a, b) => a[1].price - b[1].price)
-            .slice(0, 3)
-            .map(([siteId, data], index) => (
-              <div key={siteId} className={`rounded-xl p-4 min-w-[140px] flex-1 ${
-                index === 0 ? 'bg-green-50' : index === 1 ? 'bg-emerald-50' : 'bg-teal-50'
-              }`}>
-                <div className={`flex items-center gap-2 text-sm mb-1 ${
-                  index === 0 ? 'text-green-600' : index === 1 ? 'text-emerald-600' : 'text-teal-600'
-                }`}>
-                  <Globe size={16} />
-                  {data.siteName}
+          {/* スニダン グレード別販売カード */}
+          {snkrdunkLatestByGrade && snkrdunkLatestByGrade.length > 0 ? (
+            snkrdunkLatestByGrade.map((gradeData) => {
+              const GRADE_BG: Record<string, string> = { PSA10: 'bg-purple-50', A: 'bg-green-50', B: 'bg-amber-50', BOX: 'bg-sky-50' }
+              const GRADE_TEXT: Record<string, string> = { PSA10: 'text-purple-700', A: 'text-green-700', B: 'text-amber-700', BOX: 'text-sky-700' }
+              const GRADE_SUB: Record<string, string> = { PSA10: 'text-purple-500', A: 'text-green-500', B: 'text-amber-500', BOX: 'text-sky-500' }
+              const bg = GRADE_BG[gradeData.grade] || 'bg-slate-50'
+              const text = GRADE_TEXT[gradeData.grade] || 'text-slate-700'
+              const sub = GRADE_SUB[gradeData.grade] || 'text-slate-500'
+              return (
+                <div key={gradeData.grade} className={`${bg} rounded-xl p-4 min-w-[140px] flex-1`}>
+                  <div className={`flex items-center gap-2 text-sm mb-1 ${sub}`}>
+                    <ShoppingCart size={16} />
+                    {gradeData.grade}
+                    {gradeData.stock != null && (
+                      <span className="text-xs ml-auto">({gradeData.stock}件出品中)</span>
+                    )}
+                  </div>
+                  <p className={`text-2xl font-bold tabular-nums ${text}`}>
+                    ¥{gradeData.price.toLocaleString()}
+                  </p>
+                  {/* トップ3 */}
+                  {gradeData.topPrices && gradeData.topPrices.length > 1 && (
+                    <div className="mt-1.5 space-y-0.5">
+                      {gradeData.topPrices.slice(1, 3).map((price, i) => (
+                        <div key={i} className={`flex items-baseline gap-1.5 text-xs ${sub}`}>
+                          <span className="w-4 text-right font-medium">{i + 2}位</span>
+                          <span className="tabular-nums font-medium">¥{price.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className={`text-2xl font-bold tabular-nums ${
-                  index === 0 ? 'text-green-700' : index === 1 ? 'text-emerald-700' : 'text-teal-700'
+              )
+            })
+          ) : (
+            /* フォールバック: サイト別表示（グレードデータがない場合） */
+            Object.entries(latestPrices)
+              .filter(([, data]) => data.stock !== 0)
+              .sort((a, b) => a[1].price - b[1].price)
+              .slice(0, 3)
+              .map(([siteId, data], index) => (
+                <div key={siteId} className={`rounded-xl p-4 min-w-[140px] flex-1 ${
+                  index === 0 ? 'bg-green-50' : index === 1 ? 'bg-emerald-50' : 'bg-teal-50'
                 }`}>
-                  ¥{data.price.toLocaleString()}
-                </p>
-                {data.stock !== null && (
-                  <p className={`text-sm flex items-center gap-1 ${
+                  <div className={`flex items-center gap-2 text-sm mb-1 ${
                     index === 0 ? 'text-green-600' : index === 1 ? 'text-emerald-600' : 'text-teal-600'
                   }`}>
-                    <Package size={14} />
-                    在庫: {data.stock}
+                    <Globe size={16} />
+                    {data.siteName}
+                  </div>
+                  <p className={`text-2xl font-bold tabular-nums ${
+                    index === 0 ? 'text-green-700' : index === 1 ? 'text-emerald-700' : 'text-teal-700'
+                  }`}>
+                    ¥{data.price.toLocaleString()}
                   </p>
-                )}
-              </div>
-            ))}
+                  {data.stock !== null && (
+                    <p className={`text-sm flex items-center gap-1 ${
+                      index === 0 ? 'text-green-600' : index === 1 ? 'text-emerald-600' : 'text-teal-600'
+                    }`}>
+                      <Package size={14} />
+                      在庫: {data.stock}
+                    </p>
+                  )}
+                </div>
+              ))
+          )}
         </div>
       </div>
     </div>

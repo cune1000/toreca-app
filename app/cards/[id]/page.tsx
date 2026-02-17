@@ -50,6 +50,7 @@ export default function CardDetailPage({ params }: Props) {
 
   // ── Overseas price state ──
   const [overseasLatest, setOverseasLatest] = useState<any | null>(null)
+  const [overseasHistory, setOverseasHistory] = useState<any[]>([])
 
   // ── Fetch card data ──
   useEffect(() => {
@@ -80,7 +81,7 @@ export default function CardDetailPage({ params }: Props) {
       fetchPrices()
       fetchSnkrdunkSales()
       fetchPurchaseLinks()
-      fetchOverseasLatest()
+      fetchOverseasPrices()
     }
   }, [card?.id, card?.pricecharting_id])
 
@@ -115,12 +116,13 @@ export default function CardDetailPage({ params }: Props) {
     } catch (error) { console.error('Failed to fetch snkrdunk sales:', error) } finally { setSnkrdunkLoading(false) }
   }
 
-  const fetchOverseasLatest = async () => {
+  const fetchOverseasPrices = async () => {
     if (!card.pricecharting_id) return
     try {
-      const res = await fetch(`/api/overseas-prices?card_id=${card.id}&days=30`)
+      const res = await fetch(`/api/overseas-prices?card_id=${card.id}&days=0`)
       const json = await res.json()
       if (json.success && json.data?.length > 0) {
+        setOverseasHistory(json.data)
         setOverseasLatest(json.data[json.data.length - 1])
       }
     } catch (err) { console.error('Failed to fetch overseas prices:', err) }
@@ -216,7 +218,7 @@ export default function CardDetailPage({ params }: Props) {
         }
         if (data.gradePrices && data.gradePrices.length > 0) {
           await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.price, stock, grade: null })
-          for (const gp of data.gradePrices) { await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: gp.price, grade: gp.grade }) }
+          for (const gp of data.gradePrices) { await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: gp.price, grade: gp.grade, stock: gp.stock ?? null, top_prices: gp.topPrices ?? null }) }
           alert(`更新完了: 全体¥${data.price.toLocaleString()}`)
         } else {
           await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.priceNumber || data.price, stock })
@@ -261,23 +263,66 @@ export default function CardDetailPage({ params }: Props) {
     const filteredPurchase = filterByPeriod(purchasePrices)
     const filteredSale = filterByPeriod(salePrices)
     const dataMap = new Map<number, any>()
+    const makeDateLabel = (d: Date) => d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
     filteredPurchase.forEach((p: any) => {
       const d = formatDate(p.tweet_time || p.recorded_at || p.created_at); if (!d) return
       const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
-      const existing = dataMap.get(ts) || { timestamp: ts, date: rd.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }
+      const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
       existing[`purchase_${p.condition || (p.is_psa ? 'psa' : 'normal')}`] = p.price
       dataMap.set(ts, existing)
     })
     filteredSale.forEach((p: any) => {
       const d = formatDate(p.recorded_at || p.created_at); if (!d) return
       const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
-      const existing = dataMap.get(ts) || { timestamp: ts, date: rd.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }
-      if (p.grade) { existing[`sale_grade_${p.grade}`] = p.price }
-      else { const siteId = p.site?.id || 'other'; existing[`price_${siteId}`] = p.price; if (p.stock != null) existing[`stock_${siteId}`] = p.stock }
+      const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
+      if (p.grade) {
+        existing[`sale_grade_${p.grade}`] = p.price
+        if (p.stock != null) existing[`stock_grade_${p.grade}`] = p.stock
+      } else {
+        const siteId = p.site?.id || 'other'; existing[`price_${siteId}`] = p.price; if (p.stock != null) existing[`stock_${siteId}`] = p.stock
+      }
       dataMap.set(ts, existing)
     })
-    return Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp).slice(-100)
-  }, [purchasePrices, salePrices, selectedPeriod])
+
+    // 海外価格データを日次で追加
+    if (overseasHistory.length > 0) {
+      const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
+      for (const op of overseasHistory) {
+        const d = formatDate(op.recorded_at); if (!d) continue
+        if (cutoff && d < cutoff) continue
+        const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
+        const ts = dayNoon.getTime()
+        const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(dayNoon) }
+        if (op.loose_price_jpy) existing.overseas_loose = op.loose_price_jpy
+        if (op.graded_price_jpy) existing.overseas_graded = op.graded_price_jpy
+        dataMap.set(ts, existing)
+      }
+    }
+
+    // 売買日次平均を追加
+    if (snkrdunkSales.length > 0) {
+      const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
+      const tradeByDay: Record<number, number[]> = {}
+      for (const s of snkrdunkSales) {
+        const d = formatDate(s.sold_at); if (!d || !s.price || s.price <= 0) continue
+        if (cutoff && d < cutoff) continue
+        const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
+        const ts = dayNoon.getTime()
+        if (!tradeByDay[ts]) tradeByDay[ts] = []
+        tradeByDay[ts].push(s.price)
+      }
+      for (const [tsStr, prices] of Object.entries(tradeByDay)) {
+        const ts = Number(tsStr)
+        const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
+        const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(new Date(ts)) }
+        existing.daily_trade_avg = avg
+        dataMap.set(ts, existing)
+      }
+    }
+
+    return Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp).slice(-300)
+  }, [purchasePrices, salePrices, overseasHistory, snkrdunkSales, selectedPeriod])
 
   const latestPrices = useMemo(() => {
     const latest: Record<string, { price: number; stock: number | null; siteName: string }> = {}
@@ -307,17 +352,21 @@ export default function CardDetailPage({ params }: Props) {
     const entries = Object.values(latestPurchaseByLabel); return entries.length === 0 ? null : Math.max(...entries.map(e => e.price))
   }, [latestPurchaseByLabel])
 
-  const hasStockData = useMemo(() => salePrices.some((p: any) => p.stock != null), [salePrices])
+  const hasStockData = useMemo(() => salePrices.some((p: any) => p.stock != null && !p.grade), [salePrices])
+  const hasGradeStockData = useMemo(() => salePrices.some((p: any) => p.stock != null && p.grade), [salePrices])
   const purchaseConditions = useMemo(() => { const c = new Set<string>(); purchasePrices.forEach((p: any) => c.add(p.condition || (p.is_psa ? 'psa' : 'normal'))); return Array.from(c) }, [purchasePrices])
   const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade) g.add(p.grade) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices])
 
   const snkrdunkLatestByGrade = useMemo(() => {
-    const result: Record<string, { price: number; stock: number | null; grade: string; date: string }> = {}
+    const result: Record<string, { price: number; stock: number | null; grade: string; date: string; topPrices?: number[] }> = {}
     for (const p of salePrices as any[]) {
       const siteName = p.site?.name?.toLowerCase() || ''
       if (!siteName.includes('スニダン') && !siteName.includes('snkrdunk')) continue
       if (!p.grade) continue
-      if (!result[p.grade]) result[p.grade] = { price: p.price, stock: p.stock, grade: p.grade, date: p.created_at }
+      if (!result[p.grade]) result[p.grade] = {
+        price: p.price, stock: p.stock, grade: p.grade, date: p.created_at,
+        topPrices: p.top_prices || [p.price],
+      }
     }
     return Object.values(result).sort((a, b) => (GRADE_SORT_ORDER[a.grade] ?? 999) - (GRADE_SORT_ORDER[b.grade] ?? 999))
   }, [salePrices])
@@ -406,6 +455,7 @@ export default function CardDetailPage({ params }: Props) {
             latestPurchaseByLabel={latestPurchaseByLabel}
             latestPrices={latestPrices}
             priceDiffs={priceDiffs}
+            snkrdunkLatestByGrade={snkrdunkLatestByGrade}
             onClose={() => router.back()}
             onEdit={() => setShowEditForm(true)}
             onUpdated={handleCardUpdated}
@@ -458,8 +508,10 @@ export default function CardDetailPage({ params }: Props) {
                   purchaseConditions={purchaseConditions}
                   saleGrades={saleGrades}
                   hasStockData={hasStockData}
+                  hasGradeStockData={hasGradeStockData}
                   overseasLatest={overseasLatest}
                   snkrdunkLatestByGrade={snkrdunkLatestByGrade}
+                  onRefreshOverseas={fetchOverseasPrices}
                 />
               )}
 

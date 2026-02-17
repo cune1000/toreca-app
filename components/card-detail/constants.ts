@@ -74,7 +74,19 @@ export const SINGLE_CATEGORIES = [
 export const SALE_GRADE_COLORS: Record<string, { color: string; label: string }> = {
   PSA10: { color: '#8b5cf6', label: 'PSA10最安' },
   A: { color: '#10b981', label: '状態A最安' },
-  BOX: { color: '#f59e0b', label: 'BOX最安' },
+  B: { color: '#f59e0b', label: '状態B最安' },
+  BOX: { color: '#3b82f6', label: 'BOX最安' },
+}
+
+// 海外価格線カラー
+export const OVERSEAS_LINE_COLORS: Record<string, { color: string; label: string }> = {
+  loose: { color: '#6366f1', label: '海外素体' },   // indigo
+  graded: { color: '#a78bfa', label: '海外PSA10' },  // violet
+}
+
+// 日次平均カラー
+export const DAILY_AVG_COLORS: Record<string, { color: string; label: string }> = {
+  trade: { color: '#f97316', label: '売買平均' },     // orange
 }
 
 // 期間フィルタオプション

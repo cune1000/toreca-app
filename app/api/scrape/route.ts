@@ -36,7 +36,7 @@ async function scrapeSnkrdunk(url: string) {
   const info = await getProductInfo(apparelId)
   const productType: 'single' | 'box' = info?.isBox ? 'box' : 'single'
 
-  const prices: { grade: string; price: number }[] = []
+  const prices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
   let totalListings = 0
   let overallMin: number | null = null
 
@@ -53,7 +53,13 @@ async function scrapeSnkrdunk(url: string) {
       l.condition?.includes('PSA10')
     )
     if (psa10.length > 0) {
-      prices.push({ grade: 'PSA10', price: Math.min(...psa10.map(l => l.price)) })
+      const sorted = [...psa10].sort((a, b) => a.price - b.price)
+      prices.push({
+        grade: 'PSA10',
+        price: sorted[0].price,
+        stock: sorted.length,
+        topPrices: sorted.slice(0, 3).map(l => l.price),
+      })
     }
 
     // 状態A（PSA/ARS/BGS鑑定品を除外）
@@ -64,7 +70,13 @@ async function scrapeSnkrdunk(url: string) {
       !l.condition?.includes('BGS')
     )
     if (gradeA.length > 0) {
-      prices.push({ grade: 'A', price: Math.min(...gradeA.map(l => l.price)) })
+      const sorted = [...gradeA].sort((a, b) => a.price - b.price)
+      prices.push({
+        grade: 'A',
+        price: sorted[0].price,
+        stock: sorted.length,
+        topPrices: sorted.slice(0, 3).map(l => l.price),
+      })
     }
 
     // 状態B（鑑定品を除外）
@@ -75,7 +87,13 @@ async function scrapeSnkrdunk(url: string) {
       !l.condition?.includes('BGS')
     )
     if (gradeB.length > 0) {
-      prices.push({ grade: 'B', price: Math.min(...gradeB.map(l => l.price)) })
+      const sorted = [...gradeB].sort((a, b) => a.price - b.price)
+      prices.push({
+        grade: 'B',
+        price: sorted[0].price,
+        stock: sorted.length,
+        topPrices: sorted.slice(0, 3).map(l => l.price),
+      })
     }
   } else {
     // BOX: /sizes APIから価格・出品数を取得
