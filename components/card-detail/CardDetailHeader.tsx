@@ -240,43 +240,43 @@ export default function CardDetailHeader({
             )}
           </div>
 
-          {/* スニダン グレード別販売カード */}
+          {/* スニダン販売中 — 統合カード */}
           {snkrdunkLatestByGrade && snkrdunkLatestByGrade.length > 0 ? (
-            snkrdunkLatestByGrade.map((gradeData) => {
-              const GRADE_BG: Record<string, string> = { PSA10: 'bg-purple-50', A: 'bg-green-50', B: 'bg-amber-50', BOX: 'bg-sky-50' }
-              const GRADE_TEXT: Record<string, string> = { PSA10: 'text-purple-700', A: 'text-green-700', B: 'text-amber-700', BOX: 'text-sky-700' }
-              const GRADE_SUB: Record<string, string> = { PSA10: 'text-purple-500', A: 'text-green-500', B: 'text-amber-500', BOX: 'text-sky-500' }
-              const bg = GRADE_BG[gradeData.grade] || 'bg-slate-50'
-              const text = GRADE_TEXT[gradeData.grade] || 'text-slate-700'
-              const sub = GRADE_SUB[gradeData.grade] || 'text-slate-500'
-              return (
-                <div key={gradeData.grade} className={`${bg} rounded-xl p-4 min-w-[140px] flex-1`}>
-                  <div className={`flex items-center gap-2 text-sm mb-1 ${sub}`}>
-                    <ShoppingCart size={16} />
-                    {gradeData.grade}
-                    {gradeData.stock != null && (
-                      <span className="text-xs ml-auto">({gradeData.stock}件出品中)</span>
-                    )}
-                  </div>
-                  <p className={`text-2xl font-bold tabular-nums ${text}`}>
-                    ¥{gradeData.price.toLocaleString()}
-                  </p>
-                  {/* トップ3 */}
-                  {gradeData.topPrices && gradeData.topPrices.length > 1 && (
-                    <div className="mt-1.5 space-y-0.5">
-                      {gradeData.topPrices.slice(1, 3).map((price, i) => (
-                        <div key={i} className={`flex items-baseline gap-1.5 text-xs ${sub}`}>
-                          <span className="w-4 text-right font-medium">{i + 2}位</span>
-                          <span className="tabular-nums font-medium">¥{price.toLocaleString()}</span>
-                        </div>
-                      ))}
+            <div className="bg-emerald-50 rounded-xl p-4 flex-[2] min-w-[280px]">
+              <div className="flex items-center gap-2 text-emerald-600 text-sm mb-3">
+                <ShoppingCart size={16} />
+                スニダン販売中
+              </div>
+              <div className="space-y-2">
+                {snkrdunkLatestByGrade.map((gd, idx) => {
+                  const GRADE_COLOR: Record<string, string> = { PSA10: 'text-purple-700', A: 'text-green-700', B: 'text-amber-700', BOX: 'text-sky-700' }
+                  const GRADE_BG: Record<string, string> = { PSA10: 'bg-purple-100 text-purple-700', A: 'bg-green-100 text-green-700', B: 'bg-amber-100 text-amber-700', BOX: 'bg-sky-100 text-sky-700' }
+                  return (
+                    <div key={gd.grade}>
+                      {idx > 0 && <div className="border-t border-emerald-200 mb-2" />}
+                      <div className="flex items-baseline gap-3 flex-wrap">
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${GRADE_BG[gd.grade] || 'bg-slate-100 text-slate-600'}`}>
+                          {gd.grade}
+                        </span>
+                        <span className={`text-xl font-bold tabular-nums ${GRADE_COLOR[gd.grade] || 'text-slate-700'}`}>
+                          ¥{gd.price.toLocaleString()}
+                        </span>
+                        {gd.stock != null && (
+                          <span className="text-xs text-emerald-500 font-medium">({gd.stock}件)</span>
+                        )}
+                        {gd.topPrices && gd.topPrices.length > 1 && (
+                          <span className="text-xs text-slate-400 tabular-nums">
+                            {gd.topPrices.slice(1, 3).map((p, i) => `${i + 2}位 ¥${p.toLocaleString()}`).join('  ')}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              )
-            })
+                  )
+                })}
+              </div>
+            </div>
           ) : (
-            /* フォールバック: サイト別表示（グレードデータがない場合） */
+            /* フォールバック: サイト別表示 */
             Object.entries(latestPrices)
               .filter(([, data]) => data.stock !== 0)
               .sort((a, b) => a[1].price - b[1].price)

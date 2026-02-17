@@ -92,15 +92,21 @@ export default function PriceChartTab({
   purchaseConditions, saleGrades, hasStockData, hasGradeStockData,
   overseasLatest, snkrdunkLatestByGrade, onRefreshOverseas,
 }: PriceChartTabProps) {
-  // 海外・売買平均の表示トグル
+  // 表示トグル
   const [showOverseasLoose, setShowOverseasLoose] = useState(true)
   const [showOverseasGraded, setShowOverseasGraded] = useState(true)
   const [showDailyTrade, setShowDailyTrade] = useState(true)
   const [overseasUpdating, setOverseasUpdating] = useState(false)
+  const [visibleGrades, setVisibleGrades] = useState<Record<string, { price: boolean; stock: boolean }>>({})
 
   const hasOverseasData = chartData.some(d => d.overseas_loose || d.overseas_graded)
   const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
   const showStockAxis = hasStockData || hasGradeStockData
+
+  const isGradePriceVisible = (grade: string) => visibleGrades[grade]?.price !== false
+  const isGradeStockVisible = (grade: string) => visibleGrades[grade]?.stock !== false
+  const toggleGradePrice = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: !(prev[grade]?.price !== false), stock: prev[grade]?.stock ?? true } }))
+  const toggleGradeStock = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: prev[grade]?.price ?? true, stock: !(prev[grade]?.stock !== false) } }))
 
   // 海外価格手動更新
   const handleOverseasUpdate = async () => {
@@ -150,104 +156,113 @@ export default function PriceChartTab({
       </div>
 
       {/* グラフ表示設定 */}
-      <div className="bg-slate-50 rounded-xl p-4">
-        <p className="text-sm font-medium text-slate-700 mb-3">グラフ表示設定</p>
-        <div className="flex flex-wrap gap-3">
-          {/* 買取価格 */}
-          <button
-            onClick={() => onShowPurchaseChange(!showPurchase)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showPurchase
-              ? 'bg-blue-100 border-blue-300 text-blue-700'
-              : 'bg-white border-slate-200 text-slate-400'
-            }`}
-          >
-            <span className={`w-3 h-3 rounded-full ${showPurchase ? 'bg-blue-500' : 'bg-slate-300'}`}></span>
-            買取価格
-            <input type="checkbox" checked={showPurchase} onChange={() => onShowPurchaseChange(!showPurchase)} className="w-4 h-4 accent-blue-500" />
-          </button>
+      <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+        <p className="text-sm font-medium text-slate-700">グラフ表示設定</p>
 
-          {/* サイト別 */}
-          {siteList.map((site) => {
-            const colorIndex = siteList.findIndex(s => s.id === site.id)
-            const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
-            const hidden = isSiteHidden(site.id)
-            const v = visibleSites[site.id] || { price: true, stock: true }
-            return (
-              <div
-                key={site.id}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${hidden
-                  ? 'bg-white border-slate-200 text-slate-400'
-                  : 'bg-green-50 border-green-200 text-green-700'
-                }`}
-              >
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: hidden ? '#d1d5db' : color }}></span>
-                <span className="cursor-pointer" onClick={() => onToggleSiteAll(site.id)}>{site.name}</span>
-                <span className="flex items-center gap-1 ml-1 text-xs">
-                  <label className="flex items-center gap-0.5 cursor-pointer">
-                    <input type="checkbox" checked={v.price !== false} onChange={() => onToggleSitePrice(site.id)} className="w-3 h-3 accent-green-500" />
-                    <span>●価格</span>
-                  </label>
-                  <label className="flex items-center gap-0.5 cursor-pointer">
-                    <input type="checkbox" checked={v.stock !== false} onChange={() => onToggleSiteStock(site.id)} className="w-3 h-3 accent-green-500" />
-                    <span>◇在庫</span>
-                  </label>
-                </span>
-              </div>
-            )
-          })}
+        {/* 買取 */}
+        <div>
+          <p className="text-[11px] text-slate-400 font-medium mb-1.5">買取</p>
+          <div className="flex flex-wrap gap-2">
+            <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showPurchase ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+              <input type="checkbox" checked={showPurchase} onChange={() => onShowPurchaseChange(!showPurchase)} className="w-3.5 h-3.5 accent-blue-500" />
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+              買取価格
+            </label>
+          </div>
         </div>
 
-        {/* 海外・売買平均トグル */}
+        {/* サイト別 */}
+        {siteList.length > 0 && (
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium mb-1.5">販売サイト</p>
+            <div className="flex flex-wrap gap-2">
+              {siteList.map((site) => {
+                const colorIndex = siteList.findIndex(s => s.id === site.id)
+                const color = SITE_COLORS[colorIndex % SITE_COLORS.length]
+                const v = visibleSites[site.id] || { price: true, stock: true }
+                return (
+                  <div key={site.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border bg-white border-slate-200">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }}></span>
+                    <span className="text-slate-600 mr-1">{site.name}</span>
+                    <label className="flex items-center gap-0.5 cursor-pointer">
+                      <input type="checkbox" checked={v.price !== false} onChange={() => onToggleSitePrice(site.id)} className="w-3.5 h-3.5 accent-green-500" />
+                      <span className="text-xs text-slate-500">価格</span>
+                    </label>
+                    <label className="flex items-center gap-0.5 cursor-pointer">
+                      <input type="checkbox" checked={v.stock !== false} onChange={() => onToggleSiteStock(site.id)} className="w-3.5 h-3.5 accent-green-500" />
+                      <span className="text-xs text-slate-500">在庫</span>
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* グレード別 */}
+        {saleGrades.length > 0 && (
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium mb-1.5">グレード別最安値</p>
+            <div className="flex flex-wrap gap-2">
+              {saleGrades.map((grade) => {
+                const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: grade }
+                return (
+                  <div key={grade} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border bg-white border-slate-200">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: config.color }}></span>
+                    <span className="text-slate-600 mr-1">{grade}</span>
+                    <label className="flex items-center gap-0.5 cursor-pointer">
+                      <input type="checkbox" checked={isGradePriceVisible(grade)} onChange={() => toggleGradePrice(grade)} className="w-3.5 h-3.5 accent-purple-500" />
+                      <span className="text-xs text-slate-500">価格</span>
+                    </label>
+                    {hasGradeStockData && (
+                      <label className="flex items-center gap-0.5 cursor-pointer">
+                        <input type="checkbox" checked={isGradeStockVisible(grade)} onChange={() => toggleGradeStock(grade)} className="w-3.5 h-3.5 accent-purple-500" />
+                        <span className="text-xs text-slate-500">在庫</span>
+                      </label>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 海外・その他 */}
         {(card.pricecharting_id || hasDailyTradeData) && (
-          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-slate-200">
-            {card.pricecharting_id && (
-              <>
-                <button
-                  onClick={() => setShowOverseasLoose(!showOverseasLoose)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showOverseasLoose
-                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                    : 'bg-white border-slate-200 text-slate-400'
-                  }`}
-                >
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: showOverseasLoose ? OVERSEAS_LINE_COLORS.loose.color : '#d1d5db' }}></span>
-                  {OVERSEAS_LINE_COLORS.loose.label}
-                  <input type="checkbox" checked={showOverseasLoose} onChange={() => setShowOverseasLoose(!showOverseasLoose)} className="w-3 h-3 accent-indigo-500" />
-                </button>
-                <button
-                  onClick={() => setShowOverseasGraded(!showOverseasGraded)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showOverseasGraded
-                    ? 'bg-violet-50 border-violet-200 text-violet-700'
-                    : 'bg-white border-slate-200 text-slate-400'
-                  }`}
-                >
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: showOverseasGraded ? OVERSEAS_LINE_COLORS.graded.color : '#d1d5db' }}></span>
-                  {OVERSEAS_LINE_COLORS.graded.label}
-                  <input type="checkbox" checked={showOverseasGraded} onChange={() => setShowOverseasGraded(!showOverseasGraded)} className="w-3 h-3 accent-violet-500" />
-                </button>
-                <button
-                  onClick={handleOverseasUpdate}
-                  disabled={overseasUpdating}
-                  className="px-2.5 py-1.5 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-1"
-                  title="PriceChartingから最新価格を取得"
-                >
-                  <RefreshCw size={12} className={overseasUpdating ? 'animate-spin' : ''} />
-                  海外更新
-                </button>
-              </>
-            )}
-            {hasDailyTradeData && (
-              <button
-                onClick={() => setShowDailyTrade(!showDailyTrade)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showDailyTrade
-                  ? 'bg-orange-50 border-orange-200 text-orange-700'
-                  : 'bg-white border-slate-200 text-slate-400'
-                }`}
-              >
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: showDailyTrade ? DAILY_AVG_COLORS.trade.color : '#d1d5db' }}></span>
-                {DAILY_AVG_COLORS.trade.label}
-                <input type="checkbox" checked={showDailyTrade} onChange={() => setShowDailyTrade(!showDailyTrade)} className="w-3 h-3 accent-orange-500" />
-              </button>
-            )}
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium mb-1.5">海外・その他</p>
+            <div className="flex flex-wrap gap-2 items-center">
+              {card.pricecharting_id && (
+                <>
+                  <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showOverseasLoose ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                    <input type="checkbox" checked={showOverseasLoose} onChange={() => setShowOverseasLoose(!showOverseasLoose)} className="w-3.5 h-3.5 accent-indigo-500" />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: OVERSEAS_LINE_COLORS.loose.color }}></span>
+                    {OVERSEAS_LINE_COLORS.loose.label}
+                  </label>
+                  <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showOverseasGraded ? 'bg-violet-50 border-violet-200 text-violet-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                    <input type="checkbox" checked={showOverseasGraded} onChange={() => setShowOverseasGraded(!showOverseasGraded)} className="w-3.5 h-3.5 accent-violet-500" />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: OVERSEAS_LINE_COLORS.graded.color }}></span>
+                    {OVERSEAS_LINE_COLORS.graded.label}
+                  </label>
+                  <button
+                    onClick={handleOverseasUpdate}
+                    disabled={overseasUpdating}
+                    className="px-2.5 py-1.5 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-1"
+                    title="PriceChartingから最新価格を取得"
+                  >
+                    <RefreshCw size={12} className={overseasUpdating ? 'animate-spin' : ''} />
+                    海外更新
+                  </button>
+                </>
+              )}
+              {hasDailyTradeData && (
+                <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border cursor-pointer transition-colors ${showDailyTrade ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                  <input type="checkbox" checked={showDailyTrade} onChange={() => setShowDailyTrade(!showDailyTrade)} className="w-3.5 h-3.5 accent-orange-500" />
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DAILY_AVG_COLORS.trade.color }}></span>
+                  {DAILY_AVG_COLORS.trade.label}
+                </label>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -324,7 +339,7 @@ export default function PriceChartTab({
                 })}
 
               {/* グレード別最安値線 */}
-              {saleGrades.map((grade) => {
+              {saleGrades.filter(grade => isGradePriceVisible(grade)).map((grade) => {
                 const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: `${grade}最安` }
                 return (
                   <Line
@@ -366,7 +381,7 @@ export default function PriceChartTab({
                 })}
 
               {/* グレード別在庫線 */}
-              {hasGradeStockData && saleGrades.map((grade) => {
+              {hasGradeStockData && saleGrades.filter(grade => isGradeStockVisible(grade)).map((grade) => {
                 const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: grade }
                 return (
                   <Line
