@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, TABLES } from '@/lib/supabase'
 import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
+import { getUsdJpyRate } from '@/lib/exchange-rate'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,9 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // 最新の為替レートを取得
+    // 最新の為替レートを取得（DBになければAPIから直接取得）
+    let exchangeRate: number
+
     const { data: rateData } = await supabase
       .from(TABLES.EXCHANGE_RATES)
       .select('rate')
@@ -32,12 +35,16 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .single()
 
-    const exchangeRate = rateData?.rate
-    if (!exchangeRate) {
-      return NextResponse.json(
-        { success: false, error: '為替レートが未取得です' },
-        { status: 500 }
-      )
+    if (rateData?.rate) {
+      exchangeRate = rateData.rate
+    } else {
+      // DBにレートがない場合、Frankfurter APIから直接取得して保存
+      exchangeRate = await getUsdJpyRate()
+      await supabase.from(TABLES.EXCHANGE_RATES).insert({
+        base_currency: 'USD',
+        target_currency: 'JPY',
+        rate: exchangeRate,
+      })
     }
 
     // PriceCharting APIで価格取得
