@@ -8,7 +8,8 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url)
         const cardId = searchParams.get('cardId')
-        const days = parseInt(searchParams.get('days') || '30')
+        const daysParam = searchParams.get('days')
+        const days = daysParam !== null ? parseInt(daysParam) : 30
 
         if (!cardId) {
             return NextResponse.json(
@@ -17,16 +18,20 @@ export async function GET(req: Request) {
             )
         }
 
-        // 期間フィルタ
-        const cutoffDate = new Date()
-        cutoffDate.setDate(cutoffDate.getDate() - days)
-
-        const { data, error } = await supabase
+        // 期間フィルタ（days=0 は全期間）
+        let query = supabase
             .from('snkrdunk_sales_history')
             .select('*')
             .eq('card_id', cardId)
-            .gte('sold_at', cutoffDate.toISOString())
             .order('sold_at', { ascending: true })
+
+        if (days > 0) {
+            const cutoffDate = new Date()
+            cutoffDate.setDate(cutoffDate.getDate() - days)
+            query = query.gte('sold_at', cutoffDate.toISOString())
+        }
+
+        const { data, error } = await query
 
         if (error) {
             console.error('Database query error:', error)

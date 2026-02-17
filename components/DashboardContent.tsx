@@ -311,8 +311,7 @@ export default function DashboardContent({ onSelectCard }: DashboardContentProps
                   return (
                     <div
                       key={i}
-                      className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                      onClick={() => change.card_id && onSelectCard?.(change.card_id)}
+                      className="p-3 bg-gray-50 rounded-lg"
                     >
                       <p className="text-sm font-medium text-gray-800 truncate mb-1">{change.card_name}</p>
                       <p className="text-xs text-gray-500 mb-1">{change.site_name}</p>

@@ -31,13 +31,9 @@ import type { Shop, SaleSite, PendingImage, CardWithRelations } from '@/lib/type
 // =============================================================================
 
 const TorekaApp = () => {
-  // ページ状態
-  const [currentPage, setCurrentPage] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('toreca-currentPage') || 'dashboard'
-    }
-    return 'dashboard'
-  })
+  // ページ状態（SSR-safe: 初期値は常に'dashboard'、クライアントマウント後にlocalStorageから復元）
+  const [currentPage, setCurrentPage] = useState('dashboard')
+  const [isHydrated, setIsHydrated] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsTab, setSettingsTab] = useState<'cron' | 'snkrdunk'>('cron')
 
@@ -75,6 +71,27 @@ const TorekaApp = () => {
   // Data Fetching
   // =============================================================================
 
+  // SSR-safe: クライアントマウント後にlocalStorageからページ状態を復元
+  useEffect(() => {
+    const saved = localStorage.getItem('toreca-currentPage')
+    if (saved) {
+      setCurrentPage(saved)
+    }
+
+    // カード詳細の復元
+    const savedCardId = localStorage.getItem('toreca-selectedCardId')
+    if (savedCardId) {
+      getCard(savedCardId).then(card => {
+        if (card) {
+          setSelectedCard(card)
+          setShowCardDetail(true)
+        }
+      })
+    }
+
+    setIsHydrated(true)
+  }, [])
+
   useEffect(() => {
     fetchData()
   }, [refresh])
@@ -91,10 +108,13 @@ const TorekaApp = () => {
   }
 
   // ページ変更時にlocalStorageに保存＆オーバーレイを閉じる
+  // isHydrated前はデフォルト値'dashboard'なので、保存するとlocalStorageを上書きしてしまう
   useEffect(() => {
-    localStorage.setItem('toreca-currentPage', currentPage)
+    if (isHydrated) {
+      localStorage.setItem('toreca-currentPage', currentPage)
+    }
     setShowTwitterFeed(false)
-  }, [currentPage])
+  }, [currentPage, isHydrated])
 
   // =============================================================================
   // Handlers
@@ -138,12 +158,29 @@ const TorekaApp = () => {
     setRefresh(r => r + 1)
   }
 
+  // CardDetail内でカードデータが更新された場合、selectedCardを再取得して反映する
+  const handleCardUpdated = async () => {
+    handleRefresh()
+    if (selectedCard?.id) {
+      const updated = await getCard(selectedCard.id)
+      if (updated) {
+        setSelectedCard(updated)
+      }
+    }
+  }
+
+  // カード詳細を開くヘルパー（localStorage保存付き）
+  const openCardDetail = (card: CardWithRelations) => {
+    setSelectedCard(card)
+    setShowCardDetail(true)
+    localStorage.setItem('toreca-selectedCardId', card.id)
+  }
+
   // ダッシュボードからカード選択時のハンドラ
   const handleDashboardCardSelect = async (cardId: string) => {
     const card = await getCard(cardId)
     if (card) {
-      setSelectedCard(card)
-      setShowCardDetail(true)
+      openCardDetail(card)
     }
   }
 
@@ -291,7 +328,7 @@ const TorekaApp = () => {
               onAddCard={() => setShowCardForm(true)}
               onImportCards={() => setShowCardImporter(true)}
               onAIRecognition={() => setShowImageRecognition(true)}
-              onSelectCard={(card) => { setSelectedCard(card); setShowCardDetail(true); }}
+              onSelectCard={(card) => { openCardDetail(card) }}
             />
           </>
         )
@@ -388,6 +425,11 @@ const TorekaApp = () => {
   // Render
   // =============================================================================
 
+  // Hydration完了前はスケルトンを表示（フラッシュ防止）
+  if (!isHydrated) {
+    return <div className="min-h-screen bg-gray-50" />
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
@@ -433,8 +475,11 @@ const TorekaApp = () => {
       {showCardDetail && selectedCard && (
         <CardDetail
           card={selectedCard}
-          onClose={() => setShowCardDetail(false)}
-          onUpdated={handleRefresh}
+          onClose={() => {
+            setShowCardDetail(false)
+            localStorage.removeItem('toreca-selectedCardId')
+          }}
+          onUpdated={handleCardUpdated}
         />
       )}
 

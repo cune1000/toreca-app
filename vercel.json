@@ -31,6 +31,14 @@
     {
       "path": "/api/cron/toreca-lounge",
       "schedule": "30 2,4,13 * * *"
+    },
+    {
+      "path": "/api/cron/exchange-rate-sync",
+      "schedule": "55 17 * * *"
+    },
+    {
+      "path": "/api/cron/overseas-price-sync",
+      "schedule": "0 18 * * *"
     }
   ]
 }

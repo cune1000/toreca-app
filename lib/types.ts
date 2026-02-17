@@ -19,6 +19,8 @@ export interface Card {
   category_detail_id?: string
   shinsoku_item_id?: string | null
   shinsoku_linked_at?: string | null
+  pricecharting_id?: string | null
+  pricecharting_name?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -74,6 +76,51 @@ export interface SalePrice {
   price: number
   product_url?: string
   created_at?: string
+}
+
+// =============================================================================
+// PriceCharting / 海外価格関連
+// =============================================================================
+
+/** 海外価格（PriceCharting） */
+export interface OverseasPrice {
+  id: string
+  card_id: string
+  pricecharting_id: string
+  loose_price_usd?: number | null   // ペニー単位
+  cib_price_usd?: number | null
+  new_price_usd?: number | null
+  graded_price_usd?: number | null
+  exchange_rate?: number | null       // USD/JPY
+  loose_price_jpy?: number | null     // 円換算
+  graded_price_jpy?: number | null
+  recorded_at?: string
+  created_at?: string
+}
+
+/** 為替レート */
+export interface ExchangeRate {
+  id: string
+  base_currency: string
+  target_currency: string
+  rate: number
+  recorded_at?: string
+}
+
+/** PriceCharting API 商品レスポンス */
+export interface PriceChartingProduct {
+  status: string
+  id: string
+  'product-name': string
+  'console-name': string
+  genre?: string
+  'loose-price'?: number
+  'cib-price'?: number
+  'new-price'?: number
+  'graded-price'?: number
+  'bgs-10-price'?: number
+  'release-date'?: string
+  'sales-volume'?: string
 }
 
 // =============================================================================

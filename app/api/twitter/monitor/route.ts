@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabase = createClient(supabaseUrl, supabaseKey)
+import { createServiceClient } from '@/lib/supabase'
 
 /**
  * X自動監視API
@@ -21,9 +17,21 @@ export async function POST(request: NextRequest) {
     const startTime = Date.now()
 
     try {
+        // CRON_SECRET認証
+        const authHeader = request.headers.get('authorization')
+        const cronSecret = process.env.CRON_SECRET
+        if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+            return NextResponse.json(
+                { success: false, error: 'Unauthorized' },
+                { status: 401 }
+            )
+        }
+
         // 現在のJST時刻
         const now = new Date()
         const jstHour = (now.getUTCHours() + 9) % 24
+
+        const supabase = createServiceClient()
 
         // 監視対象の店舗を取得
         const { data: settings, error: settingsError } = await supabase

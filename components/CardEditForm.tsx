@@ -31,6 +31,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
 
   const [form, setForm] = useState({
     name: card?.name || '',
+    pricecharting_name: card?.pricecharting_name || '',
     card_number: card?.card_number || '',
     category_large_id: card?.category_large_id || '',
     category_medium_id: card?.category_medium_id || '',
@@ -214,6 +215,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
       .from('cards')
       .update({
         name: form.name,
+        pricecharting_name: form.pricecharting_name || null,
         card_number: form.card_number || null,
         category_large_id: form.category_large_id || null,
         category_medium_id: form.category_medium_id || null,
@@ -315,6 +317,21 @@ export default function CardEditForm({ card, onClose, onSaved }) {
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* 英語名 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              英語名（PriceCharting）
+              <span className="text-xs text-gray-400 ml-1">※紐付けから自動設定</span>
+            </label>
+            <input
+              type="text"
+              value={form.pricecharting_name}
+              onChange={(e) => setForm({ ...form, pricecharting_name: e.target.value })}
+              placeholder="PriceCharting紐付けで自動設定されます"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

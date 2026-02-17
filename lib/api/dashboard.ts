@@ -19,7 +19,7 @@ export interface CronStats {
 }
 
 export interface PriceChange {
-  card_id?: string
+  card_sale_url_id?: string
   card_name: string
   site_name: string
   old_price: number | null
@@ -73,7 +73,7 @@ export async function getPriceChanges(hours: number = 24, limit: number = 10): P
 
   const { data, error } = await supabase
     .from('cron_logs')
-    .select('card_id, card_name, site_name, old_price, new_price, executed_at')
+    .select('card_sale_url_id, card_name, site_name, old_price, new_price, executed_at')
     .eq('price_changed', true)
     .gte('executed_at', cutoff)
     .order('executed_at', { ascending: false })

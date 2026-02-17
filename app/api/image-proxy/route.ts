@@ -25,12 +25,17 @@ export async function GET(request: NextRequest) {
   try {
     // URLを検証
     const parsedUrl = new URL(url)
-    
-    // ドメインチェック（オプション：セキュリティ強化用）
-    // const isAllowed = ALLOWED_DOMAINS.some(domain => parsedUrl.hostname.includes(domain))
-    // if (!isAllowed) {
-    //   return NextResponse.json({ error: 'Domain not allowed' }, { status: 403 })
-    // }
+
+    // プロトコルチェック（httpとhttpsのみ許可）
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return NextResponse.json({ error: 'Invalid protocol' }, { status: 400 })
+    }
+
+    // ドメインチェック
+    const isAllowed = ALLOWED_DOMAINS.some(domain => parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`))
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Domain not allowed' }, { status: 403 })
+    }
 
     // 画像を取得
     const response = await fetch(url, {
@@ -83,6 +88,17 @@ export async function POST(request: NextRequest) {
     }
 
     const parsedUrl = new URL(url)
+
+    // プロトコルチェック
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return NextResponse.json({ error: 'Invalid protocol' }, { status: 400 })
+    }
+
+    // ドメインチェック
+    const isAllowed = ALLOWED_DOMAINS.some(domain => parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`))
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Domain not allowed' }, { status: 403 })
+    }
 
     const response = await fetch(url, {
       headers: {

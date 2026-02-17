@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Database, Search, RefreshCw, Plus, Cpu, Globe, CheckSquare, Square, Settings, Link, Loader2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
@@ -29,22 +29,18 @@ export default function CardsPage({
   onAIRecognition,
   onSelectCard
 }: Props) {
-  // sessionStorage永続化ヘルパー
+  // sessionStorage永続化ヘルパー（保存のみ、復元は一括で行う）
   const useSessionState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
-    const [value, setValue] = useState<T>(() => {
-      if (typeof window !== 'undefined') {
-        const saved = sessionStorage.getItem(`cards-filter-${key}`)
-        if (saved !== null) {
-          try { return JSON.parse(saved) } catch { return defaultValue }
-        }
-      }
-      return defaultValue
-    })
+    const [value, setValue] = useState<T>(defaultValue)
     useEffect(() => {
-      sessionStorage.setItem(`cards-filter-${key}`, JSON.stringify(value))
+      if (filtersHydrated) {
+        sessionStorage.setItem(`cards-filter-${key}`, JSON.stringify(value))
+      }
     }, [key, value])
     return [value, setValue]
   }
+
+  const [filtersHydrated, setFiltersHydrated] = useState(false)
 
   // State（sessionStorageに永続化）
   const [searchQuery, setSearchQuery] = useSessionState('searchQuery', '')
@@ -55,6 +51,25 @@ export default function CardsPage({
   const [filterExpansion, setFilterExpansion] = useSessionState('expansion', '')
   const [expansions, setExpansions] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useSessionState('page', 1)
+
+  // マウント後にsessionStorageから全フィルタを一括復元
+  useEffect(() => {
+    const restore = (key: string) => {
+      const saved = sessionStorage.getItem(`cards-filter-${key}`)
+      if (saved !== null) {
+        try { return JSON.parse(saved) } catch { return undefined }
+      }
+      return undefined
+    }
+    const sq = restore('searchQuery'); if (sq !== undefined) setSearchQuery(sq)
+    const cl = restore('categoryLarge'); if (cl !== undefined) setFilterCategoryLarge(cl)
+    const cm = restore('categoryMedium'); if (cm !== undefined) setFilterCategoryMedium(cm)
+    const cs = restore('categorySmall'); if (cs !== undefined) setFilterCategorySmall(cs)
+    const r = restore('rarity'); if (r !== undefined) setFilterRarity(r)
+    const e = restore('expansion'); if (e !== undefined) setFilterExpansion(e)
+    const p = restore('page'); if (p !== undefined) setCurrentPage(p)
+    setFiltersHydrated(true)
+  }, [])
   const [totalCount, setTotalCount] = useState(0)
   const [filteredCards, setFilteredCards] = useState<CardWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -327,8 +342,10 @@ export default function CardsPage({
     fetchStatuses()
   }, [])
 
-  // 検索・フィルタ・ページネーション
+  // 検索・フィルタ・ページネーション（復元完了後にのみ実行）
   useEffect(() => {
+    if (!filtersHydrated) return
+
     const fetchFilteredCards = async () => {
       setIsLoading(true)
 
@@ -393,13 +410,18 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, currentPage, refreshKey])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, currentPage, refreshKey, filtersHydrated])
 
-  // フィルタ変更時は1ページ目に戻る
+  // フィルタ変更時は1ページ目に戻る（sessionStorage復元時はスキップ）
+  const filterChangeCount = useRef(0)
   useEffect(() => {
+    if (!filtersHydrated) return
+    // 初回（復元直後）はスキップ
+    filterChangeCount.current++
+    if (filterChangeCount.current <= 1) return
     setCurrentPage(1)
     setSelectedIds(new Set())
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, filtersHydrated])
 
   // =============================================================================
   // Checkbox Logic

@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { X, TrendingUp, TrendingDown, ExternalLink, RefreshCw, Store, Globe, Edit, Plus, Package, Eye, EyeOff } from 'lucide-react'
 import ShinsokuLink from '@/components/chart/ShinsokuLink'
 import LoungeLink from '@/components/chart/LoungeLink'
+import PriceChartingLink from '@/components/chart/PriceChartingLink'
+import OverseasPriceChart from '@/components/chart/OverseasPriceChart'
 import MarketChart from './MarketChart'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import CardEditForm from './CardEditForm'
@@ -101,38 +103,39 @@ export default function CardDetail({ card, onClose, onUpdated }) {
 
   // 表示切り替え用state
   const [showPurchase, setShowPurchase] = useState(true)
-  const [chartTab, setChartTab] = useState<'price' | 'snkrdunk' | 'daily'>('price')
+  const [chartTab, setChartTab] = useState<'price' | 'snkrdunk' | 'daily' | 'overseas'>('price')
   const [visibleSites, setVisibleSites] = useState<Record<string, { price: boolean; stock: boolean }>>({})
 
   // スニダン売買履歴用state
   const [snkrdunkSales, setSnkrdunkSales] = useState([])
   const [snkrdunkLoading, setSnkrdunkLoading] = useState(false)
   const [snkrdunkScraping, setSnkrdunkScraping] = useState(false)
-  const [visibleGrades, setVisibleGrades] = useState<Record<string, boolean>>(() => {
-    // localStorageから初期値を取得
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('visibleGrades')
-      if (saved) {
-        try {
-          return JSON.parse(saved)
-        } catch { }
-      }
-    }
-    return {
-      PSA10: true,
-      PSA9: true,
-      A: true,
-      B: true,
-      C: true
-    }
+  const [visibleGrades, setVisibleGrades] = useState<Record<string, boolean>>({
+    PSA10: true,
+    PSA9: true,
+    A: true,
+    B: true,
+    C: true
   })
+  const [gradesHydrated, setGradesHydrated] = useState(false)
 
-  // visibleGradesが変更されたらlocalStorageに保存
+  // マウント後にlocalStorageから復元
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('visibleGrades')
+    if (saved) {
+      try {
+        setVisibleGrades(JSON.parse(saved))
+      } catch { }
+    }
+    setGradesHydrated(true)
+  }, [])
+
+  // visibleGradesが変更されたらlocalStorageに保存（ハイドレーション後のみ）
+  useEffect(() => {
+    if (gradesHydrated) {
       localStorage.setItem('visibleGrades', JSON.stringify(visibleGrades))
     }
-  }, [visibleGrades])
+  }, [visibleGrades, gradesHydrated])
 
   useEffect(() => {
     if (card?.id) {
@@ -259,8 +262,7 @@ export default function CardDetail({ card, onClose, onUpdated }) {
   const fetchSnkrdunkSales = async () => {
     setSnkrdunkLoading(true)
     try {
-      const days = selectedPeriod || 365
-      const res = await fetch(`/api/snkrdunk-sales?cardId=${card.id}&days=${days}`)
+      const res = await fetch(`/api/snkrdunk-sales?cardId=${card.id}&days=0`)
       const data = await res.json()
       if (data.success) {
         setSnkrdunkSales(data.data || [])
@@ -855,6 +857,9 @@ export default function CardDetail({ card, onClose, onUpdated }) {
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-800">{card?.name}</h2>
+                {card?.pricecharting_name && (
+                  <p className="text-sm text-gray-400 mt-0.5">{card.pricecharting_name}</p>
+                )}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   {card?.card_number && (
                     <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-sm">
@@ -1055,6 +1060,15 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                       }`}
                   >
                     📊 日次平均推移
+                  </button>
+                  <button
+                    onClick={() => setChartTab('overseas')}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${chartTab === 'overseas'
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    🌐 海外価格
                   </button>
                 </div>
 
@@ -1374,6 +1388,13 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                 {chartTab === 'daily' && (
                   <MarketChart cardId={card.id} />
                 )}
+
+                {chartTab === 'overseas' && (
+                  <OverseasPriceChart
+                    cardId={card.id}
+                    pricechartingId={card.pricecharting_id}
+                  />
+                )}
               </div>
 
               {/* 販売URL一覧 */}
@@ -1616,6 +1637,24 @@ export default function CardDetail({ card, onClose, onUpdated }) {
                     cardName={card.name}
                     links={purchaseLinks.filter((l: any) => l.shop?.name === 'トレカラウンジ（郵送買取）')}
                     onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); onUpdated?.() }}
+                  />
+                </div>
+
+                {/* PriceCharting 海外価格 紐付け */}
+                <div>
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-blue-500">🌐</span>
+                    PriceCharting 海外価格 紐付け
+                  </h3>
+                  <p className="text-xs text-gray-400 mb-3">
+                    PriceChartingの商品と紐付けると、海外価格（USD）を自動追跡します。紐付けは1つのみです。
+                  </p>
+                  <PriceChartingLink
+                    cardId={card.id}
+                    cardName={card.name}
+                    pricechartingId={card.pricecharting_id}
+                    pricechartingName={card.pricecharting_name}
+                    onLinked={() => { onUpdated?.() }}
                   />
                 </div>
               </div>

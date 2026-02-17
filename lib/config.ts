@@ -17,3 +17,8 @@ export const GEMINI_API_KEY = process.env.GEMINI_API_KEY
  * Cron認証用シークレット
  */
 export const CRON_SECRET = process.env.CRON_SECRET
+
+/**
+ * PriceCharting APIトークン
+ */
+export const PRICECHARTING_TOKEN = process.env.PRICECHARTING_TOKEN

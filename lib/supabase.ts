@@ -117,6 +117,10 @@ export const TABLES = {
   // X自動監視システム
   FETCHED_TWEETS: 'fetched_tweets',
   SHOP_MONITOR_SETTINGS: 'shop_monitor_settings',
+
+  // PriceCharting / 海外価格
+  OVERSEAS_PRICES: 'overseas_prices',
+  EXCHANGE_RATES: 'exchange_rates',
 } as const
 
 export type TableName = typeof TABLES[keyof typeof TABLES]
