@@ -12,6 +12,7 @@ export const SITE_COLORS = [
 export const PURCHASE_CONDITION_COLORS: Record<string, { color: string; label: string }> = {
   normal: { color: '#3b82f6', label: '素体' },
   psa: { color: '#8b5cf6', label: 'PSA' },
+  psa10: { color: '#8b5cf6', label: 'PSA10' },
   sealed: { color: '#06b6d4', label: '未開封' },
   opened: { color: '#f97316', label: '開封済み' },
 }
