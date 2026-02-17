@@ -220,7 +220,7 @@ export async function getAllSalesHistory(
 }
 
 /**
- * 出品一覧（販売価格）を取得
+ * 出品一覧（販売価格）を1ページ取得
  */
 export async function getListings(
     apparelId: number,
@@ -262,6 +262,37 @@ export async function getListings(
             updatedAt: item.updatedAt || '',
             imageUrl: item.primaryPhoto?.imageUrl || null,
         }))
+}
+
+/**
+ * 出品一覧を全ページ取得（最安値を正確に算出するため）
+ * APIのソート順が不明なため、全出品を取得して最安値を探す
+ */
+export async function getAllListings(
+    apparelId: number,
+    productType: 'single' | 'box',
+    maxPages: number = 10,
+    perPage: number = 50
+): Promise<SnkrdunkListing[]> {
+    const allListings: SnkrdunkListing[] = []
+
+    for (let page = 1; page <= maxPages; page++) {
+        const listings = await getListings(apparelId, productType, page, perPage)
+
+        if (listings.length === 0) break
+
+        allListings.push(...listings)
+
+        // 最終ページ（取得件数 < perPage）なら終了
+        if (listings.length < perPage) break
+
+        // レート制限対策: 500ms待機
+        if (page < maxPages) {
+            await new Promise(resolve => setTimeout(resolve, 500))
+        }
+    }
+
+    return allListings
 }
 
 export interface SnkrdunkBoxSize {

@@ -5,7 +5,7 @@ const supabase = createServiceClient()
 import {
   extractApparelId,
   getProductInfo,
-  getListings,
+  getAllListings,
   getBoxSizes,
 } from '@/lib/snkrdunk-api'
 
@@ -118,7 +118,7 @@ async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceRe
 
   if (productType === 'single') {
     // シングル: 出品一覧からグレード別最安値を取得
-    const listings = await getListings(apparelId, 'single', 1, 50)
+    const listings = await getAllListings(apparelId, 'single', 5)
     totalListings = listings.length
 
     // 全体最安値（全出品の中から）

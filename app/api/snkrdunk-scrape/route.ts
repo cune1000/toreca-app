@@ -8,7 +8,7 @@ import {
     getProductInfo,
     getSalesHistory,
     getAllSalesHistory,
-    getListings,
+    getAllListings,
     type SnkrdunkSaleRecord,
 } from '@/lib/snkrdunk-api'
 
@@ -211,7 +211,7 @@ export async function POST(req: Request) {
         if (productType === 'single') {
             // シングル: 出品一覧からPSA10/状態A の最安値を取得
             try {
-                const listings = await getListings(apparelId, 'single', 1, 50)
+                const listings = await getAllListings(apparelId, 'single')
                 console.log(`[SnkrdunkAPI] Fetched ${listings.length} listings`)
 
                 // PSA10 の最安値

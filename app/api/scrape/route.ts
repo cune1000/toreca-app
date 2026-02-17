@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  getListings,
+  getAllListings,
   getProductInfo,
   getBoxSizes,
 } from '@/lib/snkrdunk-api'
@@ -41,7 +41,7 @@ async function scrapeSnkrdunk(url: string) {
   let overallMin: number | null = null
 
   if (productType === 'single') {
-    const listings = await getListings(apparelId, 'single', 1, 50)
+    const listings = await getAllListings(apparelId, 'single')
     totalListings = listings.length
 
     if (listings.length > 0) {
