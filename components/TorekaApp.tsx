@@ -13,7 +13,6 @@ import CardForm from './CardForm'
 import ShopForm from './ShopForm'
 import ImageRecognition from './ImageRecognition'
 import TwitterFeed from './TwitterFeed'
-import CardDetail from './CardDetail'
 import CategoryManager from './CategoryManager'
 import CardImporter from './CardImporter'
 import BulkRecognition from './BulkRecognition'
@@ -23,8 +22,8 @@ import CronDashboard from './CronDashboard'
 import { PendingPage, ShopsPage, SitesPage, CardsPage, SnkrdunkMonitorPage, ShopDetailPage } from './pages'
 
 // API
-import { getShops, getSaleSites, getPendingImages, getCard } from '@/lib/api'
-import type { Shop, SaleSite, PendingImage, CardWithRelations } from '@/lib/types'
+import { getShops, getSaleSites, getPendingImages } from '@/lib/api'
+import type { Shop, SaleSite, PendingImage } from '@/lib/types'
 
 // =============================================================================
 // Component
@@ -42,14 +41,12 @@ const TorekaApp = () => {
   const [showShopForm, setShowShopForm] = useState(false)
   const [showImageRecognition, setShowImageRecognition] = useState(false)
   const [showTwitterFeed, setShowTwitterFeed] = useState(false)
-  const [showCardDetail, setShowCardDetail] = useState(false)
   const [showCardImporter, setShowCardImporter] = useState(false)
   const [showBulkRecognition, setShowBulkRecognition] = useState(false)
 
   // 選択状態
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null)
   const [editingShop, setEditingShop] = useState<any>(null)
-  const [selectedCard, setSelectedCard] = useState<CardWithRelations | null>(null)
 
   // ★ 修正: pendingImageIdとaiResultを追加
   const [bulkRecognitionImage, setBulkRecognitionImage] = useState<{
@@ -76,17 +73,6 @@ const TorekaApp = () => {
     const saved = localStorage.getItem('toreca-currentPage')
     if (saved) {
       setCurrentPage(saved)
-    }
-
-    // カード詳細の復元
-    const savedCardId = localStorage.getItem('toreca-selectedCardId')
-    if (savedCardId) {
-      getCard(savedCardId).then(card => {
-        if (card) {
-          setSelectedCard(card)
-          setShowCardDetail(true)
-        }
-      })
     }
 
     setIsHydrated(true)
@@ -156,32 +142,6 @@ const TorekaApp = () => {
 
   const handleRefresh = () => {
     setRefresh(r => r + 1)
-  }
-
-  // CardDetail内でカードデータが更新された場合、selectedCardを再取得して反映する
-  const handleCardUpdated = async () => {
-    handleRefresh()
-    if (selectedCard?.id) {
-      const updated = await getCard(selectedCard.id)
-      if (updated) {
-        setSelectedCard(updated)
-      }
-    }
-  }
-
-  // カード詳細を開くヘルパー（localStorage保存付き）
-  const openCardDetail = (card: CardWithRelations) => {
-    setSelectedCard(card)
-    setShowCardDetail(true)
-    localStorage.setItem('toreca-selectedCardId', card.id)
-  }
-
-  // ダッシュボードからカード選択時のハンドラ
-  const handleDashboardCardSelect = async (cardId: string) => {
-    const card = await getCard(cardId)
-    if (card) {
-      openCardDetail(card)
-    }
   }
 
   // =============================================================================
@@ -317,7 +277,7 @@ const TorekaApp = () => {
         return (
           <>
             <Header title="ダッシュボード" />
-            <DashboardContent key={refresh} onSelectCard={handleDashboardCardSelect} />
+            <DashboardContent key={refresh} />
           </>
         )
       case 'cards':
@@ -328,7 +288,6 @@ const TorekaApp = () => {
               onAddCard={() => setShowCardForm(true)}
               onImportCards={() => setShowCardImporter(true)}
               onAIRecognition={() => setShowImageRecognition(true)}
-              onSelectCard={(card) => { openCardDetail(card) }}
             />
           </>
         )
@@ -469,17 +428,6 @@ const TorekaApp = () => {
             console.log('Selected image:', imageUrl)
             setShowTwitterFeed(false)
           }}
-        />
-      )}
-
-      {showCardDetail && selectedCard && (
-        <CardDetail
-          card={selectedCard}
-          onClose={() => {
-            setShowCardDetail(false)
-            localStorage.removeItem('toreca-selectedCardId')
-          }}
-          onUpdated={handleCardUpdated}
         />
       )}
 

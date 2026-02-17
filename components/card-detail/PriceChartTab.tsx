@@ -27,7 +27,6 @@ interface PriceChartTabProps {
   hasStockData: boolean
   // 海外比較用
   overseasLatest: any | null
-  latestPurchaseByLabel: Record<string, { price: number; label: string; shopName: string; date: string }>
   snkrdunkLatestByGrade: { price: number; stock: number | null; grade: string; date: string }[]
 }
 
@@ -88,7 +87,7 @@ export default function PriceChartTab({
   showPurchase, onShowPurchaseChange,
   siteList, visibleSites, onToggleSitePrice, onToggleSiteStock, onToggleSiteAll, isSiteHidden,
   purchaseConditions, saleGrades, hasStockData,
-  overseasLatest, latestPurchaseByLabel, snkrdunkLatestByGrade,
+  overseasLatest, snkrdunkLatestByGrade,
 }: PriceChartTabProps) {
   return (
     <div className="space-y-6">
@@ -301,7 +300,6 @@ export default function PriceChartTab({
       {card.pricecharting_id && (
         <OverseasComparisonSection
           overseasLatest={overseasLatest}
-          latestPurchaseByLabel={latestPurchaseByLabel}
           snkrdunkLatestByGrade={snkrdunkLatestByGrade}
         />
       )}

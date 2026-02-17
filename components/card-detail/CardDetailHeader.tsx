@@ -210,7 +210,7 @@ export default function CardDetailHeader({
             {/* 海外価格差バッジ */}
             {priceDiffs.length > 0 && (
               <div className="mt-2 pt-2 border-t border-blue-100">
-                <p className="text-[10px] text-blue-400 font-medium mb-1">vs 海外</p>
+                <p className="text-[10px] text-blue-400 font-medium mb-1">海外転売利益</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                   {priceDiffs.map(diff => {
                     const isPositive = diff.diffJpy > 0

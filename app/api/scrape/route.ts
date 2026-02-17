@@ -66,6 +66,17 @@ async function scrapeSnkrdunk(url: string) {
     if (gradeA.length > 0) {
       prices.push({ grade: 'A', price: Math.min(...gradeA.map(l => l.price)) })
     }
+
+    // 状態B（鑑定品を除外）
+    const gradeB = listings.filter(l =>
+      (l.condition?.startsWith('B') || l.condition?.includes('B（')) &&
+      !l.condition?.includes('PSA') &&
+      !l.condition?.includes('ARS') &&
+      !l.condition?.includes('BGS')
+    )
+    if (gradeB.length > 0) {
+      prices.push({ grade: 'B', price: Math.min(...gradeB.map(l => l.price)) })
+    }
   } else {
     // BOX: /sizes APIから価格・出品数を取得
     // productInfoはBOXでminPrice=0, totalListingCount=0を返すため

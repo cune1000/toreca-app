@@ -1,17 +1,30 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, use } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { RefreshCw } from 'lucide-react'
-import CardDetailHeader from './card-detail/CardDetailHeader'
-import PriceChartTab from './card-detail/PriceChartTab'
-import SnkrdunkTab from './card-detail/SnkrdunkTab'
-import SettingsTab from './card-detail/SettingsTab'
-import CardEditForm from './CardEditForm'
-import SaleUrlForm from './SaleUrlForm'
-import { GRADE_SORT_ORDER } from './card-detail/constants'
+import { RefreshCw, ArrowLeft, Home } from 'lucide-react'
+import Link from 'next/link'
+import CardDetailHeader from '@/components/card-detail/CardDetailHeader'
+import PriceChartTab from '@/components/card-detail/PriceChartTab'
+import SnkrdunkTab from '@/components/card-detail/SnkrdunkTab'
+import SettingsTab from '@/components/card-detail/SettingsTab'
+import CardEditForm from '@/components/CardEditForm'
+import SaleUrlForm from '@/components/SaleUrlForm'
+import { GRADE_SORT_ORDER } from '@/components/card-detail/constants'
 
-export default function CardDetail({ card, onClose, onUpdated }: { card: any; onClose: () => void; onUpdated?: () => void }) {
+interface Props {
+  params: Promise<{ id: string }>
+}
+
+export default function CardDetailPage({ params }: Props) {
+  const { id } = use(params)
+  const router = useRouter()
+
+  // ── Card data ──
+  const [card, setCard] = useState<any>(null)
+  const [cardLoading, setCardLoading] = useState(true)
+
   // ── Core data state ──
   const [purchasePrices, setPurchasePrices] = useState<any[]>([])
   const [salePrices, setSalePrices] = useState<any[]>([])
@@ -24,7 +37,7 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
   const [showEditForm, setShowEditForm] = useState(false)
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(30)
-  const [cardImageUrl, setCardImageUrl] = useState(card?.image_url || null)
+  const [cardImageUrl, setCardImageUrl] = useState<string | null>(null)
   const [showPurchase, setShowPurchase] = useState(true)
   const [chartTab, setChartTab] = useState<'price' | 'snkrdunk' | 'settings'>('price')
   const [visibleSites, setVisibleSites] = useState<Record<string, { price: boolean; stock: boolean }>>({})
@@ -38,14 +51,36 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
   // ── Overseas price state ──
   const [overseasLatest, setOverseasLatest] = useState<any | null>(null)
 
-  // ── Initial data fetch ──
+  // ── Fetch card data ──
+  useEffect(() => {
+    const fetchCard = async () => {
+      setCardLoading(true)
+      try {
+        const { data } = await supabase
+          .from('cards')
+          .select('*, category_large:category_large_id(id, name, icon), category_medium:category_medium_id(id, name), category_small:category_small_id(id, name), category_detail:category_detail_id(id, name), rarity:rarity_id(id, name)')
+          .eq('id', id)
+          .single()
+        if (data) {
+          setCard(data)
+          setCardImageUrl(data.image_url || null)
+        }
+      } catch (err) {
+        console.error('Failed to fetch card:', err)
+      } finally {
+        setCardLoading(false)
+      }
+    }
+    fetchCard()
+  }, [id])
+
+  // ── Fetch prices & related data when card is loaded ──
   useEffect(() => {
     if (card?.id) {
       fetchPrices()
       fetchSnkrdunkSales()
       fetchPurchaseLinks()
       fetchOverseasLatest()
-      setCardImageUrl(card?.image_url || null)
     }
   }, [card?.id, card?.pricecharting_id])
 
@@ -91,6 +126,18 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
     } catch (err) { console.error('Failed to fetch overseas prices:', err) }
   }
 
+  const handleCardUpdated = async () => {
+    const { data } = await supabase
+      .from('cards')
+      .select('*, category_large:category_large_id(id, name, icon), category_medium:category_medium_id(id, name), category_small:category_small_id(id, name), category_detail:category_detail_id(id, name), rarity:rarity_id(id, name)')
+      .eq('id', id)
+      .single()
+    if (data) {
+      setCard(data)
+      setCardImageUrl(data.image_url || null)
+    }
+  }
+
   // ── Actions ──
   const scrapeSnkrdunk = async () => {
     const snkrdunkUrl = saleUrls.find((url: any) =>
@@ -124,18 +171,18 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
     try {
       const { error } = await supabase.from('card_sale_urls').update({ auto_scrape_mode: mode }).eq('id', saleUrlId)
       if (error) throw error
-      alert('✅ 自動更新モードを変更しました')
+      alert('自動更新モードを変更しました')
       fetchPrices()
-    } catch (error: any) { alert('❌ エラー: ' + error.message) }
+    } catch (error: any) { alert('エラー: ' + error.message) }
   }
 
   const updateScrapeInterval = async (saleUrlId: string, intervalMinutes: number) => {
     try {
       const { error } = await supabase.from('card_sale_urls').update({ auto_scrape_interval_minutes: intervalMinutes }).eq('id', saleUrlId)
       if (error) throw error
-      alert(`✅ 更新間隔を${intervalMinutes}分に変更しました`)
+      alert(`更新間隔を${intervalMinutes}分に変更しました`)
       fetchPrices()
-    } catch (error: any) { alert('❌ エラー: ' + error.message) }
+    } catch (error: any) { alert('エラー: ' + error.message) }
   }
 
   const updateCheckInterval = async (saleUrlId: string, intervalMinutes: number) => {
@@ -143,7 +190,7 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
       const { error } = await supabase.from('card_sale_urls').update({ check_interval: intervalMinutes, next_check_at: new Date(Date.now() + intervalMinutes * 60000).toISOString() }).eq('id', saleUrlId)
       if (error) throw error
       fetchPrices()
-    } catch (error: any) { alert('❌ エラー: ' + error.message) }
+    } catch (error: any) { alert('エラー: ' + error.message) }
   }
 
   const updatePrice = async (saleUrl: any) => {
@@ -275,24 +322,28 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
     return Object.values(result).sort((a, b) => (GRADE_SORT_ORDER[a.grade] ?? 999) - (GRADE_SORT_ORDER[b.grade] ?? 999))
   }, [salePrices])
 
-  // ── Price diffs for header badge ──
+  // ── Price diffs for header badge (海外で売る利益: overseas - domestic) ──
   const priceDiffs = useMemo(() => {
     if (!overseasLatest) return []
     const diffs: { label: string; displayLabel: string; diffJpy: number; diffPercent: number }[] = []
-    const normalP = latestPurchaseByLabel['normal']
     const looseJpy = overseasLatest.loose_price_jpy
-    if (normalP && looseJpy) {
-      const diff = normalP.price - looseJpy
-      diffs.push({ label: 'normal', displayLabel: '素体', diffJpy: diff, diffPercent: Math.round((diff / looseJpy) * 1000) / 10 })
+    if (looseJpy) {
+      const saleA = snkrdunkLatestByGrade.find((g: any) => g.grade === 'A')
+      if (saleA) {
+        const profit = looseJpy - saleA.price
+        diffs.push({ label: 'A', displayLabel: 'A→海外', diffJpy: profit, diffPercent: Math.round((profit / saleA.price) * 1000) / 10 })
+      }
     }
-    const psa10P = latestPurchaseByLabel['psa10']
     const gradedJpy = overseasLatest.graded_price_jpy
-    if (psa10P && gradedJpy) {
-      const diff = psa10P.price - gradedJpy
-      diffs.push({ label: 'psa10', displayLabel: 'PSA10', diffJpy: diff, diffPercent: Math.round((diff / gradedJpy) * 1000) / 10 })
+    if (gradedJpy) {
+      const salePSA10 = snkrdunkLatestByGrade.find((g: any) => g.grade === 'PSA10')
+      if (salePSA10) {
+        const profit = gradedJpy - salePSA10.price
+        diffs.push({ label: 'psa10', displayLabel: 'PSA10→海外', diffJpy: profit, diffPercent: Math.round((profit / salePSA10.price) * 1000) / 10 })
+      }
     }
     return diffs
-  }, [overseasLatest, latestPurchaseByLabel])
+  }, [overseasLatest, snkrdunkLatestByGrade])
 
   // ── Site visibility toggles ──
   const toggleSitePrice = (siteId: string) => setVisibleSites(prev => ({ ...prev, [siteId]: { ...prev[siteId], price: !prev[siteId]?.price } }))
@@ -300,26 +351,70 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
   const toggleSiteAll = (siteId: string) => setVisibleSites(prev => { const c = prev[siteId] || { price: true, stock: true }; const allOn = c.price !== false && c.stock !== false; return { ...prev, [siteId]: { price: !allOn, stock: !allOn } } })
   const isSiteHidden = (siteId: string) => { const v = visibleSites[siteId]; return v?.price === false && v?.stock === false }
 
-  // ── Render ──
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-[90vw] max-w-[1400px] max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        {/* ヘッダー */}
-        <CardDetailHeader
-          card={card}
-          cardImageUrl={cardImageUrl}
-          latestPurchase={latestPurchase}
-          latestPurchaseByLabel={latestPurchaseByLabel}
-          latestPrices={latestPrices}
-          priceDiffs={priceDiffs}
-          onClose={onClose}
-          onEdit={() => setShowEditForm(true)}
-          onUpdated={onUpdated}
-          onImageChanged={setCardImageUrl}
-        />
+  // ── Loading state ──
+  if (cardLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <RefreshCw className="animate-spin text-blue-500" size={32} />
+      </div>
+    )
+  }
 
-        {/* コンテンツ */}
-        <div className="p-6 overflow-y-auto flex-1">
+  if (!card) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-slate-500 mb-4">カードが見つかりません</p>
+          <Link href="/" className="text-blue-500 hover:underline">ホームに戻る</Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* トップバー */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-4">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 transition-colors text-sm"
+          >
+            <ArrowLeft size={16} />
+            戻る
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-bold text-slate-800 truncate">{card.name}</h1>
+          </div>
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors text-sm"
+          >
+            <Home size={16} />
+          </Link>
+        </div>
+      </header>
+
+      {/* メインコンテンツ */}
+      <main className="max-w-[1400px] mx-auto">
+        {/* ヘッダー */}
+        <div className="bg-white border-b border-slate-200">
+          <CardDetailHeader
+            card={card}
+            cardImageUrl={cardImageUrl}
+            latestPurchase={latestPurchase}
+            latestPurchaseByLabel={latestPurchaseByLabel}
+            latestPrices={latestPrices}
+            priceDiffs={priceDiffs}
+            onClose={() => router.back()}
+            onEdit={() => setShowEditForm(true)}
+            onUpdated={handleCardUpdated}
+            onImageChanged={setCardImageUrl}
+          />
+        </div>
+
+        {/* タブコンテンツ */}
+        <div className="p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="animate-spin text-blue-500" size={32} />
@@ -364,7 +459,6 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
                   saleGrades={saleGrades}
                   hasStockData={hasStockData}
                   overseasLatest={overseasLatest}
-                  latestPurchaseByLabel={latestPurchaseByLabel}
                   snkrdunkLatestByGrade={snkrdunkLatestByGrade}
                 />
               )}
@@ -400,20 +494,20 @@ export default function CardDetail({ card, onClose, onUpdated }: { card: any; on
                   onUpdateCheckInterval={updateCheckInterval}
                   onUpdatePrice={updatePrice}
                   onShowSaleUrlForm={() => setShowSaleUrlForm(true)}
-                  onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); onUpdated?.() }}
-                  onUpdated={onUpdated}
+                  onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); handleCardUpdated() }}
+                  onUpdated={handleCardUpdated}
                 />
               )}
             </div>
           )}
         </div>
-      </div>
+      </main>
 
       {showEditForm && (
         <CardEditForm
           card={card}
           onClose={() => setShowEditForm(false)}
-          onSaved={() => { setShowEditForm(false); onUpdated?.() }}
+          onSaved={() => { setShowEditForm(false); handleCardUpdated() }}
         />
       )}
 

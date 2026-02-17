@@ -12,7 +12,6 @@ interface OverseasComparisonSectionProps {
     exchange_rate?: number | null
     recorded_at?: string
   } | null
-  latestPurchaseByLabel: Record<string, { price: number; label: string; shopName: string; date: string }>
   snkrdunkLatestByGrade: { price: number; stock: number | null; grade: string; date: string }[]
 }
 
@@ -22,13 +21,13 @@ interface ComparisonRow {
   domesticSource: string
   overseasJpy: number
   overseasUsd: number // cents
-  diffJpy: number
-  diffPercent: number
+  profitJpy: number    // overseas - domestic（正=利益）
+  profitPercent: number
 }
 
-function DiffBadge({ diff, percent }: { diff: number; percent: number }) {
-  const isPositive = diff > 0
-  const isZero = diff === 0
+function ProfitBadge({ profit, percent }: { profit: number; percent: number }) {
+  const isPositive = profit > 0
+  const isZero = profit === 0
   const colorClass = isZero
     ? 'text-slate-500 bg-slate-50'
     : isPositive
@@ -39,7 +38,7 @@ function DiffBadge({ diff, percent }: { diff: number; percent: number }) {
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold tabular-nums ${colorClass}`}>
       <Icon size={12} />
-      {isPositive ? '+' : ''}¥{diff.toLocaleString()}
+      {isPositive ? '+' : ''}¥{profit.toLocaleString()}
       <span className="text-[10px] font-medium opacity-70">
         ({isPositive ? '+' : ''}{percent.toFixed(1)}%)
       </span>
@@ -47,10 +46,9 @@ function DiffBadge({ diff, percent }: { diff: number; percent: number }) {
   )
 }
 
-function ComparisonCard({ title, rows, overseasUsdLabel, exchangeRate }: {
+function ComparisonCard({ title, rows, exchangeRate }: {
   title: string
   rows: ComparisonRow[]
-  overseasUsdLabel: string
   exchangeRate: number | null
 }) {
   if (rows.length === 0) return null
@@ -65,15 +63,15 @@ function ComparisonCard({ title, rows, overseasUsdLabel, exchangeRate }: {
           <div key={i} className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-slate-500">{row.label}</span>
-              <DiffBadge diff={row.diffJpy} percent={row.diffPercent} />
+              <ProfitBadge profit={row.profitJpy} percent={row.profitPercent} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-slate-50 rounded-lg px-3 py-2">
-                <p className="text-[10px] text-slate-400 font-medium">国内 ({row.domesticSource})</p>
+                <p className="text-[10px] text-slate-400 font-medium">国内仕入 ({row.domesticSource})</p>
                 <p className="text-sm font-bold text-slate-800 tabular-nums">¥{row.domesticPrice.toLocaleString()}</p>
               </div>
               <div className="bg-indigo-50 rounded-lg px-3 py-2">
-                <p className="text-[10px] text-indigo-400 font-medium">海外 (PriceCharting)</p>
+                <p className="text-[10px] text-indigo-400 font-medium">海外売値 (PC)</p>
                 <p className="text-sm font-bold text-indigo-800 tabular-nums">¥{row.overseasJpy.toLocaleString()}</p>
                 <p className="text-[10px] text-indigo-300">${(row.overseasUsd / 100).toFixed(2)}</p>
               </div>
@@ -90,7 +88,6 @@ function ComparisonCard({ title, rows, overseasUsdLabel, exchangeRate }: {
 
 export default function OverseasComparisonSection({
   overseasLatest,
-  latestPurchaseByLabel,
   snkrdunkLatestByGrade,
 }: OverseasComparisonSectionProps) {
   if (!overseasLatest) return null
@@ -102,65 +99,56 @@ export default function OverseasComparisonSection({
 
   if (!looseJpy && !gradedJpy) return null
 
-  // 買取 vs 海外
-  const purchaseRows: ComparisonRow[] = []
-  const normalPurchase = latestPurchaseByLabel['normal']
-  if (normalPurchase && looseJpy && looseUsd) {
-    const diff = normalPurchase.price - looseJpy
-    purchaseRows.push({
-      label: '素体',
-      domesticPrice: normalPurchase.price,
-      domesticSource: normalPurchase.shopName,
-      overseasJpy: looseJpy,
-      overseasUsd: looseUsd,
-      diffJpy: diff,
-      diffPercent: (diff / looseJpy) * 100,
-    })
-  }
-  const psa10Purchase = latestPurchaseByLabel['psa10']
-  if (psa10Purchase && gradedJpy && gradedUsd) {
-    const diff = psa10Purchase.price - gradedJpy
-    purchaseRows.push({
-      label: 'PSA10',
-      domesticPrice: psa10Purchase.price,
-      domesticSource: psa10Purchase.shopName,
-      overseasJpy: gradedJpy,
-      overseasUsd: gradedUsd,
-      diffJpy: diff,
-      diffPercent: (diff / gradedJpy) * 100,
-    })
-  }
-
-  // 販売最安 vs 海外
-  const saleRows: ComparisonRow[] = []
-  const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
-  if (saleA && looseJpy && looseUsd) {
-    const diff = saleA.price - looseJpy
-    saleRows.push({
-      label: '素体 (A最安)',
-      domesticPrice: saleA.price,
-      domesticSource: 'スニダン',
-      overseasJpy: looseJpy,
-      overseasUsd: looseUsd,
-      diffJpy: diff,
-      diffPercent: (diff / looseJpy) * 100,
-    })
-  }
-  const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
-  if (salePSA10 && gradedJpy && gradedUsd) {
-    const diff = salePSA10.price - gradedJpy
-    saleRows.push({
-      label: 'PSA10 最安',
-      domesticPrice: salePSA10.price,
-      domesticSource: 'スニダン',
-      overseasJpy: gradedJpy,
-      overseasUsd: gradedUsd,
-      diffJpy: diff,
-      diffPercent: (diff / gradedJpy) * 100,
-    })
+  // 素体: スニダンB/A vs 海外loose（海外で売る利益）
+  const looseRows: ComparisonRow[] = []
+  if (looseJpy && looseUsd) {
+    const saleB = snkrdunkLatestByGrade.find(g => g.grade === 'B')
+    if (saleB) {
+      const profit = looseJpy - saleB.price
+      looseRows.push({
+        label: 'B仕入 → 海外売',
+        domesticPrice: saleB.price,
+        domesticSource: 'スニダンB',
+        overseasJpy: looseJpy,
+        overseasUsd: looseUsd,
+        profitJpy: profit,
+        profitPercent: (profit / saleB.price) * 100,
+      })
+    }
+    const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
+    if (saleA) {
+      const profit = looseJpy - saleA.price
+      looseRows.push({
+        label: 'A仕入 → 海外売',
+        domesticPrice: saleA.price,
+        domesticSource: 'スニダンA',
+        overseasJpy: looseJpy,
+        overseasUsd: looseUsd,
+        profitJpy: profit,
+        profitPercent: (profit / saleA.price) * 100,
+      })
+    }
   }
 
-  if (purchaseRows.length === 0 && saleRows.length === 0) return null
+  // PSA10: スニダンPSA10 vs 海外graded
+  const gradedRows: ComparisonRow[] = []
+  if (gradedJpy && gradedUsd) {
+    const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
+    if (salePSA10) {
+      const profit = gradedJpy - salePSA10.price
+      gradedRows.push({
+        label: 'PSA10仕入 → 海外売',
+        domesticPrice: salePSA10.price,
+        domesticSource: 'スニダンPSA10',
+        overseasJpy: gradedJpy,
+        overseasUsd: gradedUsd,
+        profitJpy: profit,
+        profitPercent: (profit / salePSA10.price) * 100,
+      })
+    }
+  }
+
+  if (looseRows.length === 0 && gradedRows.length === 0) return null
 
   return (
     <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
@@ -168,7 +156,7 @@ export default function OverseasComparisonSection({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Globe size={16} className="text-indigo-600" />
-            <h4 className="text-sm font-semibold text-slate-800 tracking-tight">海外 vs 国内 価格比較</h4>
+            <h4 className="text-sm font-semibold text-slate-800 tracking-tight">海外転売シミュレーション</h4>
           </div>
           {overseasLatest.recorded_at && (
             <span className="text-[10px] text-slate-400">
@@ -176,20 +164,19 @@ export default function OverseasComparisonSection({
             </span>
           )}
         </div>
+        <p className="text-[10px] text-slate-400 mt-0.5">国内スニダンで仕入 → 海外PriceChartingで売った場合の差額</p>
       </div>
       <div className="p-5">
         <div className="flex flex-wrap gap-4">
           <ComparisonCard
-            title="🏪 国内買取 vs 海外"
-            rows={purchaseRows}
-            overseasUsdLabel="PriceCharting"
+            title="素体 (B / A)"
+            rows={looseRows}
             exchangeRate={overseasLatest.exchange_rate ?? null}
           />
           <ComparisonCard
-            title="🛒 国内販売最安 vs 海外"
-            rows={saleRows}
-            overseasUsdLabel="PriceCharting"
-            exchangeRate={purchaseRows.length === 0 ? (overseasLatest.exchange_rate ?? null) : null}
+            title="PSA10"
+            rows={gradedRows}
+            exchangeRate={looseRows.length === 0 ? (overseasLatest.exchange_rate ?? null) : null}
           />
         </div>
       </div>

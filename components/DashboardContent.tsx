@@ -51,10 +51,10 @@ const PRICE_CHANGE_THRESHOLD_PERCENT = 10
 const PRICE_CHANGE_THRESHOLD_YEN = 1000
 
 interface DashboardContentProps {
-  onSelectCard?: (cardId: string) => void
+  onSelectCard?: (cardId: string) => void  // unused, kept for compat
 }
 
-export default function DashboardContent({ onSelectCard }: DashboardContentProps) {
+export default function DashboardContent({ }: DashboardContentProps) {
   const [stats, setStats] = useState<Stats>({ cards: 0, shops: 0, sites: 0, pending: 0 })
   const [categories, setCategories] = useState<any[]>([])
   const [saleSites, setSaleSites] = useState<any[]>([])
@@ -421,7 +421,7 @@ export default function DashboardContent({ onSelectCard }: DashboardContentProps
               <div
                 key={card.id}
                 className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => onSelectCard?.(card.id)}
+                onClick={() => window.open(`/cards/${card.id}`, '_blank')}
               >
                 {card.image_url && (
                   <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow flex-shrink-0" />
