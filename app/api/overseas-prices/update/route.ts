@@ -23,29 +23,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // 最新の為替レートを取得（DBになければAPIから直接取得）
-    let exchangeRate: number
-
-    const { data: rateData } = await supabase
-      .from(TABLES.EXCHANGE_RATES)
-      .select('rate')
-      .eq('base_currency', 'USD')
-      .eq('target_currency', 'JPY')
-      .order('recorded_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (rateData?.rate) {
-      exchangeRate = rateData.rate
-    } else {
-      // DBにレートがない場合、Frankfurter APIから直接取得して保存
-      exchangeRate = await getUsdJpyRate()
-      await supabase.from(TABLES.EXCHANGE_RATES).insert({
-        base_currency: 'USD',
-        target_currency: 'JPY',
-        rate: exchangeRate,
-      })
-    }
+    // 手動更新時は常にAPIから最新為替レートを取得
+    const exchangeRate = await getUsdJpyRate()
+    // 取得したレートをDBにも保存
+    await supabase.from(TABLES.EXCHANGE_RATES).insert({
+      base_currency: 'USD',
+      target_currency: 'JPY',
+      rate: exchangeRate,
+    })
 
     // PriceCharting APIで価格取得
     const product = await getProduct(pricecharting_id)
