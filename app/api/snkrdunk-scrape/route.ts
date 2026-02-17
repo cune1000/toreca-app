@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
+
+const supabase = createServiceClient()
 import { parseRelativeTime, normalizeGrade } from '@/lib/scraping/helpers'
 import {
     extractApparelId,

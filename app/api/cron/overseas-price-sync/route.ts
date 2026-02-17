@@ -108,8 +108,8 @@ export async function GET(req: Request) {
             new_price_usd: product['new-price'] ?? null,
             graded_price_usd: gradedUsd,
             exchange_rate: exchangeRate,
-            loose_price_jpy: looseUsd ? penniesToJpy(looseUsd, exchangeRate) : null,
-            graded_price_jpy: gradedUsd ? penniesToJpy(gradedUsd, exchangeRate) : null,
+            loose_price_jpy: looseUsd != null ? penniesToJpy(looseUsd, exchangeRate) : null,
+            graded_price_jpy: gradedUsd != null ? penniesToJpy(gradedUsd, exchangeRate) : null,
           })
 
         if (insertError) {

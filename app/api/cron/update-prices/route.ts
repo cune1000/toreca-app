@@ -305,7 +305,7 @@ export async function GET(request: NextRequest) {
             continue
           }
 
-          newPrice = scrapeResult.price || scrapeResult.mainPrice
+          newPrice = scrapeResult.price ?? scrapeResult.mainPrice
           newStock = scrapeResult.stock
 
           if (typeof newStock !== 'number') {
@@ -586,7 +586,7 @@ export async function POST(request: NextRequest) {
             continue
           }
 
-          newPrice = scrapeResult.price || scrapeResult.mainPrice
+          newPrice = scrapeResult.price ?? scrapeResult.mainPrice
           newStock = scrapeResult.stock
 
           if (typeof newStock !== 'number') {

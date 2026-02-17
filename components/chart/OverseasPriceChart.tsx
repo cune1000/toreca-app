@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { RefreshCw } from 'lucide-react'
 import { OverseasPrice } from '@/lib/types'
 
 interface Props {
@@ -20,32 +21,62 @@ const PERIOD_OPTIONS = [
 export default function OverseasPriceChart({ cardId, pricechartingId, days: initialDays = 30 }: Props) {
   const [prices, setPrices] = useState<OverseasPrice[]>([])
   const [loading, setLoading] = useState(false)
+  const [updating, setUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedDays, setSelectedDays] = useState(initialDays)
 
-  useEffect(() => {
+  const fetchPrices = useCallback(async () => {
     if (!pricechartingId) return
-    const fetchPrices = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const params = new URLSearchParams({ card_id: cardId, days: String(selectedDays) })
-        const res = await fetch(`/api/overseas-prices?${params}`)
-        const json = await res.json()
-        if (json.success) {
-          setPrices(json.data || [])
-        } else {
-          setError(json.error || '取得に失敗しました')
-        }
-      } catch (err: any) {
-        setError('海外価格の取得に失敗しました')
-        console.error('Failed to fetch overseas prices:', err)
-      } finally {
-        setLoading(false)
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ card_id: cardId, days: String(selectedDays) })
+      const res = await fetch(`/api/overseas-prices?${params}`)
+      const json = await res.json()
+      if (json.success) {
+        setPrices(json.data || [])
+      } else {
+        setError(json.error || '取得に失敗しました')
       }
+    } catch (err: any) {
+      setError('海外価格の取得に失敗しました')
+      console.error('Failed to fetch overseas prices:', err)
+    } finally {
+      setLoading(false)
     }
-    fetchPrices()
   }, [cardId, pricechartingId, selectedDays])
+
+  useEffect(() => {
+    fetchPrices()
+  }, [fetchPrices])
+
+  // 手動更新
+  const handleManualUpdate = async () => {
+    if (!pricechartingId) return
+    setUpdating(true)
+    try {
+      const res = await fetch('/api/overseas-prices/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: cardId, pricecharting_id: pricechartingId }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        const d = json.data
+        const parts = []
+        if (d.looseUsd != null) parts.push(`素体: $${(d.looseUsd / 100).toFixed(2)}`)
+        if (d.gradedUsd != null) parts.push(`鑑定: $${(d.gradedUsd / 100).toFixed(2)}`)
+        alert(`更新完了: ${parts.join(' / ')}${d.looseJpy != null ? ` (≈¥${d.looseJpy.toLocaleString()})` : ''}`)
+        fetchPrices()
+      } else {
+        alert('更新失敗: ' + (json.error || '不明なエラー'))
+      }
+    } catch (err: any) {
+      alert('エラー: ' + err.message)
+    } finally {
+      setUpdating(false)
+    }
+  }
 
   const chartData = useMemo(() => {
     return prices.map(p => ({
@@ -71,29 +102,46 @@ export default function OverseasPriceChart({ cardId, pricechartingId, days: init
 
   return (
     <div className="space-y-3">
-      {/* 最新価格サマリー */}
-      {latest && (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-blue-50 rounded-xl p-3">
-            <p className="text-[10px] text-blue-500 font-medium">素体（Loose）</p>
-            <p className="text-lg font-bold text-gray-800">
-              {latest.loose_price_usd != null ? `$${(latest.loose_price_usd / 100).toFixed(2)}` : '-'}
-            </p>
-            {latest.loose_price_jpy != null && (
-              <p className="text-xs text-gray-500">≈ ¥{latest.loose_price_jpy.toLocaleString()}</p>
-            )}
-          </div>
-          <div className="bg-purple-50 rounded-xl p-3">
-            <p className="text-[10px] text-purple-500 font-medium">鑑定品（Graded）</p>
-            <p className="text-lg font-bold text-gray-800">
-              {latest.graded_price_usd != null ? `$${(latest.graded_price_usd / 100).toFixed(2)}` : '-'}
-            </p>
-            {latest.graded_price_jpy != null && (
-              <p className="text-xs text-gray-500">≈ ¥{latest.graded_price_jpy.toLocaleString()}</p>
-            )}
-          </div>
+      {/* 最新価格サマリー + 更新ボタン */}
+      <div className="flex items-center justify-between">
+        <div className="flex-1 grid grid-cols-2 gap-2">
+          {latest ? (
+            <>
+              <div className="bg-blue-50 rounded-xl p-3">
+                <p className="text-[10px] text-blue-500 font-medium">素体（Loose）</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {latest.loose_price_usd != null ? `$${(latest.loose_price_usd / 100).toFixed(2)}` : '-'}
+                </p>
+                {latest.loose_price_jpy != null && (
+                  <p className="text-xs text-gray-500">≈ ¥{latest.loose_price_jpy.toLocaleString()}</p>
+                )}
+              </div>
+              <div className="bg-purple-50 rounded-xl p-3">
+                <p className="text-[10px] text-purple-500 font-medium">鑑定品（Graded）</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {latest.graded_price_usd != null ? `$${(latest.graded_price_usd / 100).toFixed(2)}` : '-'}
+                </p>
+                {latest.graded_price_jpy != null && (
+                  <p className="text-xs text-gray-500">≈ ¥{latest.graded_price_jpy.toLocaleString()}</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="col-span-2 text-center py-2 text-gray-400 text-sm">
+              価格データなし
+            </div>
+          )}
         </div>
-      )}
+        <button
+          onClick={handleManualUpdate}
+          disabled={updating}
+          className="ml-2 px-3 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1 shrink-0"
+          title="PriceChartingから最新価格を取得"
+        >
+          <RefreshCw size={14} className={updating ? 'animate-spin' : ''} />
+          更新
+        </button>
+      </div>
 
       {/* 期間フィルタ */}
       <div className="flex gap-1">

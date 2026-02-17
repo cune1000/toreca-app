@@ -150,8 +150,8 @@ export async function getProductInfo(apparelId: number): Promise<SnkrdunkProduct
         productNumber: data.productNumber || '',
         name: data.name || '',
         localizedName: data.localizedName || data.name || '',
-        minPrice: data.minPrice || null,
-        totalListingCount: data.totalListingCount || 0,
+        minPrice: data.minPrice ?? null,
+        totalListingCount: data.totalListingCount ?? 0,
         isSingleCard,
         isBox,
         category: categoryNames[0] || 'unknown',
@@ -187,7 +187,7 @@ export async function getSalesHistory(
 
     return {
         history,
-        minPrice: data.minPrice || null,
+        minPrice: data.minPrice ?? null,
     }
 }
 
