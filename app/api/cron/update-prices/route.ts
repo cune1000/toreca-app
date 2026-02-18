@@ -179,16 +179,251 @@ async function logCronResult(
   })
 }
 
+// ===== 共通処理 =====
+
+interface UpdateResults {
+  processed: number
+  updated: number
+  noChange: number
+  errors: number
+  skipped: number
+  details: any[]
+}
+
+// 1つのURLを処理する共通関数
+async function processSingleUrl(
+  site: any,
+  results: UpdateResults,
+  logPrefix: string
+): Promise<void> {
+  results.processed++
+
+  const cardName = (site.card as any)?.name || 'Unknown'
+  const siteName = (site.site as any)?.name || 'Unknown'
+  const oldPrice = site.last_price
+  const oldStock = site.last_stock
+  const currentNoChangeCount = site.no_change_count || 0
+
+  try {
+    const isSnkrdunk = site.product_url?.includes('snkrdunk.com')
+
+    let newPrice: number | null = null
+    let newStock: number | null = null
+    let gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
+
+    if (isSnkrdunk) {
+      const result = await scrapeSnkrdunkPrices(site.product_url)
+      gradePrices = result.prices
+      newPrice = result.overallMin
+      newStock = result.totalListings
+    } else {
+      const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
+
+      if (!scrapeResult.success) {
+        results.errors++
+        const errorMsg = scrapeResult.error || 'Scrape failed'
+        const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
+
+        await supabase
+          .from('card_sale_urls')
+          .update({
+            last_checked_at: new Date().toISOString(),
+            next_check_at: calculateNextCheckAt(nextInterval),
+            check_interval: CONFIG.ERROR_RETRY_INTERVAL,
+            error_count: (site.error_count || 0) + 1,
+            last_error: errorMsg
+          })
+          .eq('id', site.id)
+
+        results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
+        await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
+        return
+      }
+
+      newPrice = scrapeResult.price ?? scrapeResult.mainPrice
+      newStock = scrapeResult.stock
+
+      if (typeof newStock !== 'number') {
+        newStock = newStock ? parseInt(newStock, 10) : 0
+      }
+
+      if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
+        const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
+        const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
+
+        if (conditionA?.price) {
+          newPrice = conditionA.price
+          newStock = conditionA.stock ?? 0
+        } else if (conditionNew?.price) {
+          newPrice = conditionNew.price
+          newStock = conditionNew.stock ?? 0
+        }
+      }
+    }
+
+    if (newPrice !== null && newPrice !== undefined) {
+      const priceChanged = oldPrice !== newPrice
+      const stockChanged = oldStock !== newStock
+
+      let nextBaseInterval: number
+      let newNoChangeCount: number
+      let status: 'success' | 'no_change'
+
+      if (newStock === 0) {
+        nextBaseInterval = CONFIG.OUT_OF_STOCK_INTERVAL
+        newNoChangeCount = currentNoChangeCount
+        status = 'no_change'
+        results.noChange++
+      } else {
+        const currentCheckInterval = site.check_interval || CONFIG.DEFAULT_INTERVAL
+        nextBaseInterval = calculateNextInterval(currentCheckInterval, oldPrice, newPrice)
+
+        if (priceChanged) {
+          newNoChangeCount = 0
+          status = 'success'
+          results.updated++
+        } else {
+          newNoChangeCount = currentNoChangeCount + 1
+          status = 'no_change'
+          results.noChange++
+        }
+      }
+
+      const nextInterval = getJitteredInterval(nextBaseInterval)
+
+      await supabase
+        .from('card_sale_urls')
+        .update({
+          last_price: newPrice,
+          last_stock: newStock,
+          last_checked_at: new Date().toISOString(),
+          next_check_at: calculateNextCheckAt(nextInterval),
+          check_interval: nextBaseInterval,
+          no_change_count: newNoChangeCount,
+          error_count: 0,
+          last_error: null
+        })
+        .eq('id', site.id)
+
+      // 毎回履歴に追加
+      if (gradePrices.length > 0) {
+        const { error: overallErr } = await supabase
+          .from('sale_prices')
+          .insert({
+            card_id: site.card_id,
+            site_id: site.site_id,
+            price: newPrice,
+            stock: newStock,
+            grade: null,
+          })
+        if (overallErr) console.error(`[${logPrefix}] sale_prices insert (overall) error for ${cardName}:`, overallErr)
+
+        for (const gp of gradePrices) {
+          const { error: gradeErr } = await supabase
+            .from('sale_prices')
+            .insert({
+              card_id: site.card_id,
+              site_id: site.site_id,
+              price: gp.price,
+              grade: gp.grade,
+              stock: gp.stock ?? null,
+              top_prices: gp.topPrices ?? null,
+            })
+          if (gradeErr) {
+            console.error(`[${logPrefix}] sale_prices insert (grade ${gp.grade}) error for ${cardName}:`, gradeErr)
+            if (gradeErr.message?.includes('top_prices') || gradeErr.code === '42703') {
+              const { error: retryErr } = await supabase
+                .from('sale_prices')
+                .insert({
+                  card_id: site.card_id,
+                  site_id: site.site_id,
+                  price: gp.price,
+                  grade: gp.grade,
+                  stock: gp.stock ?? null,
+                })
+              if (retryErr) console.error(`[${logPrefix}] sale_prices insert (grade ${gp.grade} retry) error for ${cardName}:`, retryErr)
+            }
+          }
+        }
+      } else {
+        const { error: saleErr } = await supabase
+          .from('sale_prices')
+          .insert({
+            card_id: site.card_id,
+            site_id: site.site_id,
+            price: newPrice,
+            stock: newStock
+          })
+        if (saleErr) console.error(`[${logPrefix}] sale_prices insert error for ${cardName}:`, saleErr)
+      }
+
+      results.details.push({
+        cardName, siteName, status,
+        oldPrice, newPrice, oldStock, newStock,
+        priceChanged, stockChanged,
+        nextInterval,
+        noChangeCount: newNoChangeCount
+      })
+      await logCronResult(site.id, cardName, siteName, status, oldPrice, newPrice, oldStock, newStock, nextInterval)
+
+    } else {
+      results.errors++
+      const errorMsg = 'Price not found in response'
+      const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
+
+      await supabase
+        .from('card_sale_urls')
+        .update({
+          last_checked_at: new Date().toISOString(),
+          next_check_at: calculateNextCheckAt(nextInterval),
+          error_count: (site.error_count || 0) + 1,
+          last_error: errorMsg
+        })
+        .eq('id', site.id)
+
+      results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
+      await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
+    }
+
+    // レート制限対策
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+  } catch (err: any) {
+    results.errors++
+    const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
+
+    await supabase
+      .from('card_sale_urls')
+      .update({
+        last_checked_at: new Date().toISOString(),
+        next_check_at: calculateNextCheckAt(nextInterval),
+        error_count: (site.error_count || 0) + 1,
+        last_error: err.message
+      })
+      .eq('id', site.id)
+
+    results.details.push({ cardName, siteName, status: 'error', error: err.message, nextInterval })
+    await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, err.message)
+  }
+}
+
+// URLリストを取得する共通クエリ
+const SALE_URL_SELECT = `
+  id, card_id, site_id, product_url,
+  last_price, last_stock, check_interval, no_change_count,
+  next_check_at, error_count,
+  card:card_id(name),
+  site:site_id(name, site_key)
+`
+
 // ===== メイン処理 =====
 
 // GET: Cronジョブとして実行
 export async function GET(request: NextRequest) {
-  // 認証チェック
   if (!verifyCronAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 休み時間チェック
   if (isRestTime()) {
     return NextResponse.json({
       success: true,
@@ -198,35 +433,13 @@ export async function GET(request: NextRequest) {
   }
 
   const startTime = Date.now()
-  const results = {
-    processed: 0,
-    updated: 0,
-    noChange: 0,
-    errors: 0,
-    skipped: 0,
-    details: [] as any[]
-  }
+  const results: UpdateResults = { processed: 0, updated: 0, noChange: 0, errors: 0, skipped: 0, details: [] }
 
   try {
-    // next_check_atが現在時刻以前のものを取得（チェック予定を過ぎたもの）
     const now = new Date().toISOString()
-
     const { data: saleUrls, error: fetchError } = await supabase
       .from('card_sale_urls')
-      .select(`
-        id,
-        card_id,
-        site_id,
-        product_url,
-        last_price,
-        last_stock,
-        check_interval,
-        no_change_count,
-        next_check_at,
-        error_count,
-        card:card_id(name),
-        site:site_id(name, site_key)
-      `)
+      .select(SALE_URL_SELECT)
       .not('product_url', 'is', null)
       .or(`next_check_at.is.null,next_check_at.lte.${now}`)
       .order('next_check_at', { ascending: true, nullsFirst: true })
@@ -235,251 +448,17 @@ export async function GET(request: NextRequest) {
     if (fetchError) throw fetchError
 
     if (!saleUrls || saleUrls.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No URLs to check at this time',
-        ...results,
-        duration: Date.now() - startTime
-      })
+      return NextResponse.json({ success: true, message: 'No URLs to check at this time', ...results, duration: Date.now() - startTime })
     }
 
     for (const site of saleUrls) {
-      results.processed++
-
-      const cardName = (site.card as any)?.name || 'Unknown'
-      const siteName = (site.site as any)?.name || 'Unknown'
-      const oldPrice = site.last_price
-      const oldStock = site.last_stock
-      const currentNoChangeCount = site.no_change_count || 0
-
-      try {
-        // スニダンURL判定
-        const isSnkrdunk = site.product_url?.includes('snkrdunk.com')
-
-        let newPrice: number | null = null
-        let newStock: number | null = null
-        let gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
-
-        if (isSnkrdunk) {
-          // 新API方式: グレード別最安値 + 全体最安値 + 出品数を取得
-          const result = await scrapeSnkrdunkPrices(site.product_url)
-          gradePrices = result.prices
-          newPrice = result.overallMin
-          newStock = result.totalListings  // 全出品数を在庫として記録
-        } else {
-          // 既存のRailway方式
-          const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
-
-          if (!scrapeResult.success) {
-            results.errors++
-            const errorMsg = scrapeResult.error || 'Scrape failed'
-            const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-
-            await supabase
-              .from('card_sale_urls')
-              .update({
-                last_checked_at: new Date().toISOString(),
-                next_check_at: calculateNextCheckAt(nextInterval),
-                check_interval: CONFIG.ERROR_RETRY_INTERVAL,
-                error_count: (site.error_count || 0) + 1,
-                last_error: errorMsg
-              })
-              .eq('id', site.id)
-
-            results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
-            await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
-            continue
-          }
-
-          newPrice = scrapeResult.price ?? scrapeResult.mainPrice
-          newStock = scrapeResult.stock
-
-          if (typeof newStock !== 'number') {
-            newStock = newStock ? parseInt(newStock, 10) : 0
-          }
-
-          if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
-            const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
-            const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
-
-            if (conditionA?.price) {
-              newPrice = conditionA.price
-              newStock = conditionA.stock ?? 0
-            } else if (conditionNew?.price) {
-              newPrice = conditionNew.price
-              newStock = conditionNew.stock ?? 0
-            }
-          }
-        }
-
-        if (newPrice !== null && newPrice !== undefined) {
-          const priceChanged = oldPrice !== newPrice
-          const stockChanged = oldStock !== newStock
-
-          let nextBaseInterval: number
-          let newNoChangeCount: number
-          let status: 'success' | 'no_change'
-
-          if (newStock === 0) {
-            // 在庫0 → 6時間
-            nextBaseInterval = CONFIG.OUT_OF_STOCK_INTERVAL
-            newNoChangeCount = currentNoChangeCount
-            status = 'no_change'
-            results.noChange++
-          } else {
-            // 価格変動率に応じて間隔を調整
-            const currentCheckInterval = site.check_interval || CONFIG.DEFAULT_INTERVAL
-            nextBaseInterval = calculateNextInterval(currentCheckInterval, oldPrice, newPrice)
-
-            if (priceChanged) {
-              newNoChangeCount = 0
-              status = 'success'
-              results.updated++
-            } else {
-              newNoChangeCount = currentNoChangeCount + 1
-              status = 'no_change'
-              results.noChange++
-            }
-          }
-
-          const nextInterval = getJitteredInterval(nextBaseInterval)
-
-          // DB更新
-          await supabase
-            .from('card_sale_urls')
-            .update({
-              last_price: newPrice,
-              last_stock: newStock,
-              last_checked_at: new Date().toISOString(),
-              next_check_at: calculateNextCheckAt(nextInterval),
-              check_interval: nextBaseInterval,
-              no_change_count: newNoChangeCount,
-              error_count: 0,
-              last_error: null
-            })
-            .eq('id', site.id)
-
-          // 毎回履歴に追加（価格・在庫の変動有無に関係なく）
-          if (gradePrices.length > 0) {
-            // スニダン: 全体最安値 + 出品数（grade=null）を保存
-            const { error: overallErr } = await supabase
-              .from('sale_prices')
-              .insert({
-                card_id: site.card_id,
-                site_id: site.site_id,
-                price: newPrice,
-                stock: newStock,
-                grade: null,
-              })
-            if (overallErr) console.error(`[cron] sale_prices insert (overall) error for ${cardName}:`, overallErr)
-
-            // スニダン: グレード別に保存（stock + top_prices含む）
-            for (const gp of gradePrices) {
-              const { error: gradeErr } = await supabase
-                .from('sale_prices')
-                .insert({
-                  card_id: site.card_id,
-                  site_id: site.site_id,
-                  price: gp.price,
-                  grade: gp.grade,
-                  stock: gp.stock ?? null,
-                  top_prices: gp.topPrices ?? null,
-                })
-              if (gradeErr) {
-                console.error(`[cron] sale_prices insert (grade ${gp.grade}) error for ${cardName}:`, gradeErr)
-                // top_pricesカラムが未認識の場合、top_pricesなしでリトライ
-                if (gradeErr.message?.includes('top_prices') || gradeErr.code === '42703') {
-                  const { error: retryErr } = await supabase
-                    .from('sale_prices')
-                    .insert({
-                      card_id: site.card_id,
-                      site_id: site.site_id,
-                      price: gp.price,
-                      grade: gp.grade,
-                      stock: gp.stock ?? null,
-                    })
-                  if (retryErr) console.error(`[cron] sale_prices insert (grade ${gp.grade} retry) error for ${cardName}:`, retryErr)
-                }
-              }
-            }
-          } else {
-            // 通常サイト: grade無しで保存
-            const { error: saleErr } = await supabase
-              .from('sale_prices')
-              .insert({
-                card_id: site.card_id,
-                site_id: site.site_id,
-                price: newPrice,
-                stock: newStock
-              })
-            if (saleErr) console.error(`[cron] sale_prices insert error for ${cardName}:`, saleErr)
-          }
-
-          results.details.push({
-            cardName, siteName, status,
-            oldPrice, newPrice, oldStock, newStock,
-            priceChanged, stockChanged,
-            nextInterval,
-            noChangeCount: newNoChangeCount
-          })
-          await logCronResult(site.id, cardName, siteName, status, oldPrice, newPrice, oldStock, newStock, nextInterval)
-
-        } else {
-          // 価格取得失敗
-          results.errors++
-          const errorMsg = 'Price not found in response'
-          const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-
-          await supabase
-            .from('card_sale_urls')
-            .update({
-              last_checked_at: new Date().toISOString(),
-              next_check_at: calculateNextCheckAt(nextInterval),
-              error_count: (site.error_count || 0) + 1,
-              last_error: errorMsg
-            })
-            .eq('id', site.id)
-
-          results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
-          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
-        }
-
-        // レート制限対策
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-      } catch (err: any) {
-        results.errors++
-        const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-
-        await supabase
-          .from('card_sale_urls')
-          .update({
-            last_checked_at: new Date().toISOString(),
-            next_check_at: calculateNextCheckAt(nextInterval),
-            error_count: (site.error_count || 0) + 1,
-            last_error: err.message
-          })
-          .eq('id', site.id)
-
-        results.details.push({ cardName, siteName, status: 'error', error: err.message, nextInterval })
-        await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, err.message)
-      }
+      await processSingleUrl(site, results, 'cron')
     }
 
-    return NextResponse.json({
-      success: true,
-      ...results,
-      duration: Date.now() - startTime
-    })
-
+    return NextResponse.json({ success: true, ...results, duration: Date.now() - startTime })
   } catch (error: any) {
     console.error('Cron error:', error)
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-      ...results,
-      duration: Date.now() - startTime
-    }, { status: 500 })
+    return NextResponse.json({ success: false, error: error.message, ...results, duration: Date.now() - startTime }, { status: 500 })
   }
 }
 
@@ -497,37 +476,16 @@ export async function POST(request: NextRequest) {
   }
 
   const startTime = Date.now()
-  const results = {
-    processed: 0,
-    updated: 0,
-    noChange: 0,
-    errors: 0,
-    skipped: 0,
-    details: [] as any[]
-  }
+  const results: UpdateResults = { processed: 0, updated: 0, noChange: 0, errors: 0, skipped: 0, details: [] }
 
   try {
     let query = supabase
       .from('card_sale_urls')
-      .select(`
-        id,
-        card_id,
-        site_id,
-        product_url,
-        last_price,
-        last_stock,
-        check_interval,
-        no_change_count,
-        next_check_at,
-        error_count,
-        card:card_id(name),
-        site:site_id(name, site_key)
-      `)
+      .select(SALE_URL_SELECT)
       .not('product_url', 'is', null)
       .order('next_check_at', { ascending: true, nullsFirst: true })
       .limit(limit)
 
-    // forceUpdateでない場合は、next_check_atを過ぎたもののみ
     if (!forceUpdate) {
       const now = new Date().toISOString()
       query = query.or(`next_check_at.is.null,next_check_at.lte.${now}`)
@@ -538,244 +496,16 @@ export async function POST(request: NextRequest) {
     if (fetchError) throw fetchError
 
     if (!saleUrls || saleUrls.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No URLs to update',
-        duration: Date.now() - startTime
-      })
+      return NextResponse.json({ success: true, message: 'No URLs to update', duration: Date.now() - startTime })
     }
 
     for (const site of saleUrls) {
-      results.processed++
-
-      const cardName = (site.card as any)?.name || 'Unknown'
-      const siteName = (site.site as any)?.name || 'Unknown'
-      const oldPrice = site.last_price
-      const oldStock = site.last_stock
-      const currentNoChangeCount = site.no_change_count || 0
-
-      try {
-        // スニダンURL判定
-        const isSnkrdunk = site.product_url?.includes('snkrdunk.com')
-
-        let newPrice: number | null = null
-        let newStock: number | null = null
-        let gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
-
-        if (isSnkrdunk) {
-          // 新API方式: グレード別最安値 + 全体最安値 + 出品数を取得
-          const result = await scrapeSnkrdunkPrices(site.product_url)
-          gradePrices = result.prices
-          newPrice = result.overallMin
-          newStock = result.totalListings  // 全出品数を在庫として記録
-        } else {
-          // 既存のRailway方式
-          const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
-
-          if (!scrapeResult.success) {
-            results.errors++
-            const errorMsg = scrapeResult.error || 'Scrape failed'
-            const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-
-            await supabase
-              .from('card_sale_urls')
-              .update({
-                last_checked_at: new Date().toISOString(),
-                next_check_at: calculateNextCheckAt(nextInterval),
-                check_interval: CONFIG.ERROR_RETRY_INTERVAL,
-                error_count: (site.error_count || 0) + 1,
-                last_error: errorMsg
-              })
-              .eq('id', site.id)
-
-            results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
-            await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
-            continue
-          }
-
-          newPrice = scrapeResult.price ?? scrapeResult.mainPrice
-          newStock = scrapeResult.stock
-
-          if (typeof newStock !== 'number') {
-            newStock = newStock ? parseInt(newStock, 10) : 0
-          }
-
-          if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
-            const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
-            const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
-
-            if (conditionA?.price) {
-              newPrice = conditionA.price
-              newStock = conditionA.stock ?? 0
-            } else if (conditionNew?.price) {
-              newPrice = conditionNew.price
-              newStock = conditionNew.stock ?? 0
-            }
-          }
-        }
-
-        if (newPrice !== null && newPrice !== undefined) {
-          const priceChanged = oldPrice !== newPrice
-          const stockChanged = oldStock !== newStock
-
-          let nextBaseInterval: number
-          let newNoChangeCount: number
-          let status: 'success' | 'no_change'
-
-          if (newStock === 0) {
-            nextBaseInterval = CONFIG.OUT_OF_STOCK_INTERVAL
-            newNoChangeCount = currentNoChangeCount
-            status = 'no_change'
-            results.noChange++
-          } else {
-            const currentCheckInterval = site.check_interval || CONFIG.DEFAULT_INTERVAL
-            nextBaseInterval = calculateNextInterval(currentCheckInterval, oldPrice, newPrice)
-
-            if (priceChanged) {
-              newNoChangeCount = 0
-              status = 'success'
-              results.updated++
-            } else {
-              newNoChangeCount = currentNoChangeCount + 1
-              status = 'no_change'
-              results.noChange++
-            }
-          }
-
-          const nextInterval = getJitteredInterval(nextBaseInterval)
-
-          await supabase
-            .from('card_sale_urls')
-            .update({
-              last_price: newPrice,
-              last_stock: newStock,
-              last_checked_at: new Date().toISOString(),
-              next_check_at: calculateNextCheckAt(nextInterval),
-              check_interval: nextBaseInterval,
-              no_change_count: newNoChangeCount,
-              error_count: 0,
-              last_error: null
-            })
-            .eq('id', site.id)
-
-          // 毎回履歴に追加（価格・在庫の変動有無に関係なく）
-          if (gradePrices.length > 0) {
-            // スニダン: 全体最安値 + 出品数（grade=null）を保存
-            const { error: overallErr } = await supabase
-              .from('sale_prices')
-              .insert({
-                card_id: site.card_id,
-                site_id: site.site_id,
-                price: newPrice,
-                stock: newStock,
-                grade: null,
-              })
-            if (overallErr) console.error(`[manual] sale_prices insert (overall) error for ${cardName}:`, overallErr)
-
-            // スニダン: グレード別に保存（stock + top_prices含む）
-            for (const gp of gradePrices) {
-              const { error: gradeErr } = await supabase
-                .from('sale_prices')
-                .insert({
-                  card_id: site.card_id,
-                  site_id: site.site_id,
-                  price: gp.price,
-                  grade: gp.grade,
-                  stock: gp.stock ?? null,
-                  top_prices: gp.topPrices ?? null,
-                })
-              if (gradeErr) {
-                console.error(`[manual] sale_prices insert (grade ${gp.grade}) error for ${cardName}:`, gradeErr)
-                // top_pricesカラムが未認識の場合、top_pricesなしでリトライ
-                if (gradeErr.message?.includes('top_prices') || gradeErr.code === '42703') {
-                  const { error: retryErr } = await supabase
-                    .from('sale_prices')
-                    .insert({
-                      card_id: site.card_id,
-                      site_id: site.site_id,
-                      price: gp.price,
-                      grade: gp.grade,
-                      stock: gp.stock ?? null,
-                    })
-                  if (retryErr) console.error(`[manual] sale_prices insert (grade ${gp.grade} retry) error for ${cardName}:`, retryErr)
-                }
-              }
-            }
-          } else {
-            // 通常サイト
-            const { error: saleErr } = await supabase
-              .from('sale_prices')
-              .insert({
-                card_id: site.card_id,
-                site_id: site.site_id,
-                price: newPrice,
-                stock: newStock
-              })
-            if (saleErr) console.error(`[manual] sale_prices insert error for ${cardName}:`, saleErr)
-          }
-
-          results.details.push({
-            cardName, siteName, status,
-            oldPrice, newPrice, oldStock, newStock,
-            priceChanged, stockChanged,
-            nextInterval,
-            noChangeCount: newNoChangeCount
-          })
-          await logCronResult(site.id, cardName, siteName, status, oldPrice, newPrice, oldStock, newStock, nextInterval)
-
-        } else {
-          results.errors++
-          const errorMsg = 'Price not found'
-          const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-
-          await supabase
-            .from('card_sale_urls')
-            .update({
-              last_checked_at: new Date().toISOString(),
-              next_check_at: calculateNextCheckAt(nextInterval),
-              error_count: (site.error_count || 0) + 1,
-              last_error: errorMsg
-            })
-            .eq('id', site.id)
-
-          results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
-          await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-      } catch (err: any) {
-        results.errors++
-        const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
-
-        await supabase
-          .from('card_sale_urls')
-          .update({
-            last_checked_at: new Date().toISOString(),
-            next_check_at: calculateNextCheckAt(nextInterval),
-            error_count: (site.error_count || 0) + 1,
-            last_error: err.message
-          })
-          .eq('id', site.id)
-
-        results.details.push({ cardName, siteName, status: 'error', error: err.message, nextInterval })
-        await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, err.message)
-      }
+      await processSingleUrl(site, results, 'manual')
     }
 
-    return NextResponse.json({
-      success: true,
-      ...results,
-      duration: Date.now() - startTime
-    })
-
+    return NextResponse.json({ success: true, ...results, duration: Date.now() - startTime })
   } catch (error: any) {
     console.error('Manual update error:', error)
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-      ...results,
-      duration: Date.now() - startTime
-    }, { status: 500 })
+    return NextResponse.json({ success: false, error: error.message, ...results, duration: Date.now() - startTime }, { status: 500 })
   }
 }

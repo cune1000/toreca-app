@@ -159,18 +159,16 @@ export default function CardDetailPage({ params }: Props) {
       if (!data.success) { alert('エラー: ' + data.error); return }
       if (data.jobId) {
         alert(`スクレイピングを開始しました`)
-        let attempts = 0
-        const pollJob = async (): Promise<boolean> => {
-          attempts++
-          const statusRes = await fetch(`${process.env.NEXT_PUBLIC_TORECA_SCRAPER_URL}/scrape/status/${data.jobId}`)
-          const statusData = await statusRes.json()
-          if (statusData.status === 'completed') { alert(`完了: ${statusData.result.count}件`); fetchSnkrdunkSales(); fetchPrices(); return true }
-          else if (statusData.status === 'failed') { alert('エラー: ' + (statusData.error || '不明')); return true }
-          else if (attempts >= 60) { alert('タイムアウト'); return true }
+        for (let attempts = 0; attempts < 60; attempts++) {
           await new Promise(resolve => setTimeout(resolve, 2000))
-          return pollJob()
+          try {
+            const statusRes = await fetch(`${process.env.NEXT_PUBLIC_TORECA_SCRAPER_URL}/scrape/status/${data.jobId}`)
+            const statusData = await statusRes.json()
+            if (statusData.status === 'completed') { alert(`完了: ${statusData.result.count}件`); fetchSnkrdunkSales(); fetchPrices(); break }
+            if (statusData.status === 'failed') { alert('エラー: ' + (statusData.error || '不明')); break }
+          } catch { /* ポーリング中のネットワークエラーは無視して再試行 */ }
+          if (attempts === 59) alert('タイムアウト')
         }
-        await pollJob()
       } else { alert(`完了: ${data.total}件 (新規: ${data.inserted}件)`); fetchSnkrdunkSales(); fetchPrices() }
     } catch (error: any) { alert('エラー: ' + error.message) } finally { setSnkrdunkScraping(false) }
   }
