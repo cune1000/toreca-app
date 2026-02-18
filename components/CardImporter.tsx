@@ -49,40 +49,61 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
   const [skipExisting, setSkipExisting] = useState(true)
   const [saveResult, setSaveResult] = useState<any>(null)
 
-  // 使用するURLを取得
-  const getTargetUrl = () => {
-    return useCustomUrl && customUrl ? customUrl : selectedPreset
+  // 使用するURLリストを取得（複数URL対応）
+  const getTargetUrls = (): string[] => {
+    if (useCustomUrl && customUrl) {
+      return customUrl.split('\n').map(u => u.trim()).filter(u => u.length > 0)
+    }
+    return [selectedPreset]
   }
 
-  // プレビュー取得（GET）
+  const [fetchProgress, setFetchProgress] = useState('')
+
+  // プレビュー取得（GET）- 複数URL対応
   const fetchPreview = async () => {
     setLoading(true)
     setError(null)
     setCards([])
     setSaveResult(null)
+    setFetchProgress('')
 
     try {
-      const targetUrl = getTargetUrl()
-      const apiUrl = `/api/pokemon-card-import?url=${encodeURIComponent(targetUrl)}&limit=${limit}`
-      
-      const res = await fetch(apiUrl)
-      const data = await res.json()
+      const urls = getTargetUrls()
+      let allCards: any[] = []
+      let totalFoundSum = 0
 
-      if (!data.success) {
-        throw new Error(data.error || '取得に失敗しました')
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i]
+        setFetchProgress(urls.length > 1 ? `${i + 1}/${urls.length} URL を取得中...` : '')
+
+        const apiUrl = `/api/pokemon-card-import?url=${encodeURIComponent(url)}&limit=${limit}`
+        const res = await fetch(apiUrl)
+        const data = await res.json()
+
+        if (!data.success) {
+          console.error(`URL取得失敗: ${url}`, data.error)
+          continue // 1つ失敗しても続行
+        }
+
+        totalFoundSum += data.totalFound || 0
+        if (data.cards) allCards.push(...data.cards)
       }
 
-      setTotalFound(data.totalFound)
-      
+      if (allCards.length === 0) {
+        throw new Error('カードが見つかりませんでした')
+      }
+
+      setTotalFound(totalFoundSum)
+
       // 既存チェック
       const cardsWithCheck = await Promise.all(
-        data.cards.map(async (card: any, index: number) => {
+        allCards.map(async (card: any, index: number) => {
           const { data: existing } = await supabase
             .from('cards')
             .select('id')
             .eq('image_url', card.imageUrl)
             .limit(1)
-          
+
           return {
             ...card,
             id: index,
@@ -97,6 +118,7 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
       setError(err.message)
     } finally {
       setLoading(false)
+      setFetchProgress('')
     }
   }
 
@@ -107,7 +129,6 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
     setSaveResult(null)
 
     try {
-      const targetUrl = getTargetUrl()
       const selectedCards = cards.filter(c => c.selected)
 
       // 選択されたカードのデータを直接送信
@@ -115,7 +136,6 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: targetUrl,
           cards: selectedCards.map(c => ({
             name: c.name,
             imageUrl: c.imageUrl,
@@ -235,15 +255,15 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
                   </label>
                   {useCustomUrl && (
                     <div className="space-y-2">
-                      <input
-                        type="url"
+                      <textarea
                         value={customUrl}
                         onChange={(e) => setCustomUrl(e.target.value)}
-                        placeholder="https://www.pokemon-card.com/card-search/details.php/card/49620/regu/all"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                        placeholder={"1行に1URLずつ入力（複数URL対応）\nhttps://www.pokemon-card.com/card-search/details.php/card/49620/regu/all\nhttps://www.pokemon-card.com/card-search/details.php/card/49621/regu/all"}
+                        rows={4}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-y text-sm"
                       />
                       <p className="text-xs text-gray-400">
-                        検索結果ページ（index.php?...）またはカード詳細ページ（details.php/card/...）のURLに対応
+                        1行に1URL。検索結果ページ（index.php?...）やカード詳細ページ（details.php/card/...）を混在可能
                       </p>
                     </div>
                   )}
@@ -285,6 +305,9 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
             <div className="text-center py-12">
               <RefreshCw size={40} className="text-yellow-500 animate-spin mx-auto mb-4" />
               <p className="text-gray-600">カード情報を取得中...</p>
+              {fetchProgress && (
+                <p className="text-sm text-yellow-600 mt-2 font-medium">{fetchProgress}</p>
+              )}
               <p className="text-sm text-gray-400 mt-2">詳細ページを1枚ずつ取得しています（時間がかかります）</p>
             </div>
           )}
