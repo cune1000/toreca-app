@@ -2,27 +2,79 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { TORECA_SCRAPER_URL } from '@/lib/config'
 
+/**
+ * 単体カードURLからcardIdを抽出
+ * 例: https://www.pokemon-card.com/card-search/details.php/card/49620/regu/all → 49620
+ */
+function extractCardId(url: string): string | null {
+  const match = url.match(/details\.php\/card\/(\d+)/)
+  return match ? match[1] : null
+}
+
+function isSingleCardUrl(url: string): boolean {
+  return url.includes('details.php/card/')
+}
+
 // GET: プレビュー取得（Railwayに転送）
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const listUrl = searchParams.get('url')
+  const inputUrl = searchParams.get('url')
   const limitParam = searchParams.get('limit')
   // limit=-1 または limit=all で全件取得
   const limit = (limitParam === 'all' || limitParam === '-1') ? '-1' : (limitParam || '20')
   const offset = searchParams.get('offset') || '0'
 
-  if (!listUrl) {
+  if (!inputUrl) {
     return NextResponse.json({
       message: 'Pokemon Card Import API (via Railway)',
-      usage: 'GET ?url=<list_url>&limit=20&offset=0',
-      note: 'Use limit=-1 or limit=all to fetch all cards',
-      example: '/api/pokemon-card-import?url=https://www.pokemon-card.com/card-search/index.php?sc_rare_sar=1&limit=20&offset=0'
+      usage: 'GET ?url=<list_url_or_detail_url>&limit=20&offset=0',
+      note: 'Supports both list URLs and single card detail URLs',
+      examples: [
+        '/api/pokemon-card-import?url=https://www.pokemon-card.com/card-search/index.php?sc_rare_sar=1&limit=20',
+        '/api/pokemon-card-import?url=https://www.pokemon-card.com/card-search/details.php/card/49620/regu/all'
+      ]
     })
   }
 
   try {
-    // Railwayに転送
-    const railwayUrl = `${TORECA_SCRAPER_URL}/pokemon-import?url=${encodeURIComponent(listUrl)}&limit=${limit}&offset=${offset}`
+    // 単体カードURLの場合
+    if (isSingleCardUrl(inputUrl)) {
+      const cardId = extractCardId(inputUrl)
+      if (!cardId) {
+        return NextResponse.json({ success: false, error: 'URLからカードIDを抽出できません' }, { status: 400 })
+      }
+
+      const railwayUrl = `${TORECA_SCRAPER_URL}/pokemon-detail?cardId=${cardId}`
+      console.log('Calling Railway (single card):', railwayUrl)
+
+      const res = await fetch(railwayUrl, { headers: { 'Content-Type': 'application/json' } })
+      const data = await res.json()
+
+      if (!data.success) {
+        return NextResponse.json(data, { status: 500 })
+      }
+
+      // リスト形式に変換して返す
+      return NextResponse.json({
+        success: true,
+        totalFound: 1,
+        isSingleCard: true,
+        cards: [{
+          cardId: data.cardId,
+          name: data.name,
+          imageUrl: data.imageUrl,
+          cardNumber: data.cardNumber,
+          rarity: data.rarity,
+          illustrator: data.illustrator,
+          expansion: data.expansion,
+          regulation: data.regulation,
+          sourceUrl: data.sourceUrl || inputUrl,
+        }]
+      })
+    }
+
+    // リストURLの場合（既存の処理）
+    const railwayUrl = `${TORECA_SCRAPER_URL}/pokemon-import?url=${encodeURIComponent(inputUrl)}&limit=${limit}&offset=${offset}`
     console.log('Calling Railway:', railwayUrl)
 
     const res = await fetch(railwayUrl, {
@@ -44,24 +96,37 @@ export async function GET(request: NextRequest) {
 
 // POST: DBに保存
 export async function POST(request: NextRequest) {
-  const { url: listUrl, limit = 20, offset = 0, skipExisting = true } = await request.json()
+  const { url: inputUrl, cards: directCards, limit = 20, offset = 0, skipExisting = true } = await request.json()
 
-  if (!listUrl) {
-    return NextResponse.json({ error: 'url is required' }, { status: 400 })
+  if (!inputUrl && !directCards) {
+    return NextResponse.json({ error: 'url or cards is required' }, { status: 400 })
   }
 
   try {
-    // Railwayからカードデータ取得
-    const railwayRes = await fetch(`${TORECA_SCRAPER_URL}/pokemon-import`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: listUrl, limit, offset })
-    })
+    let railwayData: any
 
-    const railwayData = await railwayRes.json()
-
-    if (!railwayData.success) {
-      return NextResponse.json(railwayData, { status: 500 })
+    if (directCards) {
+      // 直接カードデータが渡された場合（単体URLインポート用）
+      railwayData = { success: true, totalFound: directCards.length, processed: directCards.length, cards: directCards }
+    } else if (isSingleCardUrl(inputUrl)) {
+      // 単体カードURLの場合
+      const cardId = extractCardId(inputUrl)
+      if (!cardId) {
+        return NextResponse.json({ success: false, error: 'URLからカードIDを抽出できません' }, { status: 400 })
+      }
+      const res = await fetch(`${TORECA_SCRAPER_URL}/pokemon-detail?cardId=${cardId}`, { headers: { 'Content-Type': 'application/json' } })
+      const data = await res.json()
+      if (!data.success) return NextResponse.json(data, { status: 500 })
+      railwayData = { success: true, totalFound: 1, processed: 1, cards: [data] }
+    } else {
+      // リストURLの場合（既存の処理）
+      const railwayRes = await fetch(`${TORECA_SCRAPER_URL}/pokemon-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: inputUrl, limit, offset })
+      })
+      railwayData = await railwayRes.json()
+      if (!railwayData.success) return NextResponse.json(railwayData, { status: 500 })
     }
 
     // ポケモンカードのカテゴリIDを取得

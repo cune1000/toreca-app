@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceClient()
+    const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
+    console.log(`[OverseasUpdate] Service role key: ${hasServiceKey ? 'SET' : 'MISSING'}`)
 
     // 手動更新時は常にAPIから最新為替レートを取得
     const exchangeRate = await getUsdJpyRate()

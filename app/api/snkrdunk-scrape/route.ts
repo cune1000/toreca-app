@@ -131,16 +131,19 @@ export async function POST(req: Request) {
             let isDuplicate = false
 
             if (sale.user_icon_number) {
+                // user_icon_number + grade + price + 日時近似で重複判定
                 isDuplicate = existingData?.some(existing =>
                     existing.grade === sale.grade &&
                     existing.price === sale.price &&
-                    existing.user_icon_number === sale.user_icon_number
+                    existing.user_icon_number === sale.user_icon_number &&
+                    isSameTransaction(existing.sold_at, sale.sold_at)
                 ) || false
             } else {
+                // grade + price + 日時近似で重複判定
                 isDuplicate = existingData?.some(existing =>
                     existing.grade === sale.grade &&
                     existing.price === sale.price &&
-                    existing.sold_at === sale.sold_at &&
+                    isSameTransaction(existing.sold_at, sale.sold_at) &&
                     !existing.user_icon_number
                 ) || false
             }
@@ -311,6 +314,17 @@ export async function POST(req: Request) {
             { status: 500 }
         )
     }
+}
+
+/**
+ * 2つの sold_at が同一取引かどうかを判定
+ * 相対時刻パースの微小な差を吸収するため、10分以内の差を同一と判定
+ */
+function isSameTransaction(existingSoldAt: string, newSoldAt: string): boolean {
+    const t1 = new Date(existingSoldAt).getTime()
+    const t2 = new Date(newSoldAt).getTime()
+    if (isNaN(t1) || isNaN(t2)) return false
+    return Math.abs(t1 - t2) < 10 * 60 * 1000 // 10分
 }
 
 /**

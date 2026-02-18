@@ -126,11 +126,11 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
     }
   };
 
-  // 画像選択
-  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [isDragging, setIsDragging] = useState(false);
 
+  // ファイルをBase64に変換してセット
+  const loadImageFile = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = (event) => {
       setImage(event.target?.result as string);
@@ -140,6 +140,21 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
     };
     reader.readAsDataURL(file);
   }, []);
+
+  // 画像選択（クリック）
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadImageFile(file);
+  }, [loadImageFile]);
+
+  // ドラッグ&ドロップ
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) loadImageFile(file);
+  }, [loadImageFile]);
 
   // 認識実行
   const handleRecognize = async () => {
@@ -279,8 +294,16 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* 画像選択 */}
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+          {/* 画像選択（ドラッグ&ドロップ対応） */}
+          <div
+            className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
+              isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+            onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -289,7 +312,11 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
               className="hidden"
             />
 
-            {image ? (
+            {isDragging ? (
+              <div className="py-12 text-center">
+                <p className="text-blue-500 font-bold text-lg">ここにドロップ</p>
+              </div>
+            ) : image ? (
               <div className="space-y-4">
                 <img
                   src={image}
@@ -324,7 +351,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full py-12 text-gray-500 hover:text-gray-700"
               >
-                クリックしてカード画像を選択
+                クリックまたはドラッグ&ドロップでカード画像を選択
               </button>
             )}
           </div>

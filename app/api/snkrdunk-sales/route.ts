@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 
 /**
  * スニダン売買履歴を取得
+ * サービスロールクライアントを使用（RLSバイパス）
  */
 export async function GET(req: Request) {
     try {
+        const supabase = createServiceClient()
         const { searchParams } = new URL(req.url)
         const cardId = searchParams.get('cardId')
         const daysParam = searchParams.get('days')

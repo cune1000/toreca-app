@@ -8,6 +8,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const [categories, setCategories] = useState([])
   const [rarities, setRarities] = useState([])
   const [mediumCategories, setMediumCategories] = useState([])
@@ -154,10 +155,9 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     })
   }
 
-  // 画像選択
-  const handleImageSelect = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // 画像ファイルをアップロード
+  const uploadImageFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) return
 
     const reader = new FileReader()
     reader.onload = async (e) => {
@@ -177,7 +177,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         })
 
         if (!res.ok) {
-          const text = await res.text()
           throw new Error(res.status === 413 ? '画像が大きすぎます。もう少し小さい画像をお試しください。' : `サーバーエラー: ${res.status}`)
         }
 
@@ -194,6 +193,21 @@ export default function CardEditForm({ card, onClose, onSaved }) {
       setUploading(false)
     }
     reader.readAsDataURL(file)
+  }
+
+  // 画像選択（クリック）
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (file) uploadImageFile(file)
+  }
+
+  // ドラッグ&ドロップ
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) uploadImageFile(file)
   }
 
   // 収録弾のフィルタリング
@@ -280,9 +294,19 @@ export default function CardEditForm({ card, onClose, onSaved }) {
             </label>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+              onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleImageDrop}
+              className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+                isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+              }`}
             >
-              {imagePreview ? (
+              {isDragging ? (
+                <div className="py-4">
+                  <p className="text-blue-500 font-bold">ここにドロップ</p>
+                </div>
+              ) : imagePreview ? (
                 <div className="relative">
                   <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg" />
                   {uploading && (
@@ -294,7 +318,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
               ) : (
                 <div className="py-4">
                   <Image size={32} className="mx-auto text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-500">クリックして画像を選択</p>
+                  <p className="text-sm text-gray-500">クリックまたはドラッグ&ドロップで画像を選択</p>
                 </div>
               )}
             </div>

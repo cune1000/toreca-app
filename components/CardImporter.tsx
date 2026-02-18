@@ -108,25 +108,35 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
 
     try {
       const targetUrl = getTargetUrl()
-      
+      const selectedCards = cards.filter(c => c.selected)
+
+      // 選択されたカードのデータを直接送信
       const res = await fetch('/api/pokemon-card-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: targetUrl,
-          limit: limit,
+          cards: selectedCards.map(c => ({
+            name: c.name,
+            imageUrl: c.imageUrl,
+            cardNumber: c.cardNumber,
+            rarity: c.rarity,
+            illustrator: c.illustrator,
+            expansion: c.expansion,
+            regulation: c.regulation,
+          })),
           skipExisting: skipExisting,
         }),
       })
-      
+
       const data = await res.json()
-      
+
       if (!data.success) {
         throw new Error(data.error)
       }
 
       setSaveResult(data)
-      
+
       // 完了通知
       if (data.newCount > 0 || data.updateCount > 0) {
         if (onCompleted) onCompleted()
@@ -221,16 +231,21 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
                       className="rounded"
                     />
                     <Link size={16} />
-                    カスタムURLを使用（検索結果のURLを貼り付け）
+                    カスタムURLを使用（検索結果 or カード詳細のURLを貼り付け）
                   </label>
                   {useCustomUrl && (
-                    <input
-                      type="url"
-                      value={customUrl}
-                      onChange={(e) => setCustomUrl(e.target.value)}
-                      placeholder="https://www.pokemon-card.com/card-search/index.php?..."
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="url"
+                        value={customUrl}
+                        onChange={(e) => setCustomUrl(e.target.value)}
+                        placeholder="https://www.pokemon-card.com/card-search/details.php/card/49620/regu/all"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      />
+                      <p className="text-xs text-gray-400">
+                        検索結果ページ（index.php?...）またはカード詳細ページ（details.php/card/...）のURLに対応
+                      </p>
+                    </div>
                   )}
                 </div>
 
@@ -453,7 +468,7 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
             
             <div className="flex items-center justify-between">
               <p className="text-gray-600">
-                一覧に <strong className="text-yellow-600">{totalFound}件</strong> 見つかりました
+                <strong className="text-yellow-600">{selectedCount}件</strong> 選択中（全{totalFound}件中）
               </p>
               <div className="flex gap-3">
                 <button
@@ -475,7 +490,7 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
                   ) : (
                     <>
                       <Save size={16} />
-                      {totalFound}件をDBに保存
+                      {selectedCount}件をDBに保存
                     </>
                   )}
                 </button>

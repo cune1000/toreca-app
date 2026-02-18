@@ -18,10 +18,12 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKe
 export function createServiceClient(): SupabaseClient {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey) {
-    console.warn('SUPABASE_SERVICE_ROLE_KEY not set, using anon key')
+    console.error('[CRITICAL] SUPABASE_SERVICE_ROLE_KEY not set — falling back to anon key. RLS-enabled tables will fail!')
     return supabase
   }
-  return createClient(supabaseUrl, serviceKey)
+  return createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 }
 
 // =============================================================================
