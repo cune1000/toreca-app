@@ -8,6 +8,7 @@ import {
   OVERSEAS_LINE_COLORS, DAILY_AVG_COLORS,
   PERIOD_OPTIONS,
 } from './constants'
+import { isSnkrdunkSiteName } from '@/lib/snkrdunk-api'
 
 interface PriceChartTabProps {
   card: any
@@ -112,11 +113,7 @@ export default function PriceChartTab({
   const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
 
   // スニダン判定（グレード別で表示するのでサイト別からは除外）
-  const isSnkrdunkSite = (site: any) => {
-    const n = site.name?.toLowerCase() || ''
-    return n.includes('スニーカーダンク') || n.includes('スニダン') || n.includes('snkrdunk')
-  }
-  const nonSnkrdunkSites = siteList.filter(s => !isSnkrdunkSite(s))
+  const nonSnkrdunkSites = siteList.filter(s => !isSnkrdunkSiteName(s.name || ''))
   const showStockAxis = nonSnkrdunkSites.some(s => visibleSites[s.id]?.stock !== false) || hasGradeStockData
 
   const isGradePriceVisible = (grade: string) => visibleGrades[grade]?.price !== false

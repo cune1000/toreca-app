@@ -103,6 +103,24 @@ async function snkrdunkFetch(url: string): Promise<Response> {
 // ============================================================================
 
 /**
+ * URLがスニダンかどうか判定
+ */
+export function isSnkrdunkUrl(url: string): boolean {
+    return url.toLowerCase().includes('snkrdunk.com')
+}
+
+/**
+ * サイト名がスニダンかどうか判定
+ * DB上のサイト名は「スニーカーダンク」「スニダン」等の表記揺れがあるため、
+ * すべてのパターンをチェックする。
+ */
+export function isSnkrdunkSiteName(name: string): boolean {
+    if (!name) return false
+    const lower = name.toLowerCase()
+    return lower.includes('スニーカーダンク') || lower.includes('スニダン') || lower.includes('snkrdunk')
+}
+
+/**
  * スニダンのURLからapparelIdを抽出
  * @param url - https://snkrdunk.com/apparels/93021 or similar
  * @returns apparelId number, or null if not found

@@ -5,6 +5,7 @@ import ShinsokuLink from '@/components/chart/ShinsokuLink'
 import LoungeLink from '@/components/chart/LoungeLink'
 import PriceChartingLink from '@/components/chart/PriceChartingLink'
 import { formatRelativeTime } from './constants'
+import { isSnkrdunkSiteName, isSnkrdunkUrl } from '@/lib/snkrdunk-api'
 
 interface SettingsTabProps {
   card: any
@@ -45,9 +46,7 @@ export default function SettingsTab({
   onLinksChanged, onUpdated,
 }: SettingsTabProps) {
   const snkrdunkUrl = saleUrls.find((url: any) =>
-    url.site?.name?.toLowerCase().includes('スニダン') ||
-    url.site?.name?.toLowerCase().includes('snkrdunk') ||
-    url.product_url?.toLowerCase().includes('snkrdunk')
+    isSnkrdunkSiteName(url.site?.name || '') || isSnkrdunkUrl(url.product_url || '')
   )
 
   const currentMode = snkrdunkUrl?.auto_scrape_mode || 'off'

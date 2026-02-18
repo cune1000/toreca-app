@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
 const supabase = createServiceClient()
-import { parseRelativeTime, normalizeGrade } from '@/lib/scraping/helpers'
+import { parseRelativeTime, normalizeGrade, extractGradePrices } from '@/lib/scraping/helpers'
 import {
     extractApparelId,
     getProductInfo,
     getSalesHistory,
     getAllSalesHistory,
     getAllListings,
+    getBoxSizes,
     type SnkrdunkSaleRecord,
 } from '@/lib/snkrdunk-api'
 
@@ -206,55 +207,75 @@ export async function POST(req: Request) {
             .single()
         const siteId = saleUrlData?.site_id
 
-        const listingPrices: Record<string, number | null> = {}
+        let overallMin: number | null = null
+        let totalListings = 0
+        const gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
 
         if (productType === 'single') {
-            // シングル: 出品一覧からPSA10/状態A の最安値を取得
             try {
                 const listings = await getAllListings(apparelId, 'single')
+                totalListings = listings.length
                 console.log(`[SnkrdunkAPI] Fetched ${listings.length} listings`)
 
-                // PSA10 の最安値
-                const psa10Items = listings.filter(l => l.condition.includes('PSA10'))
-                const psa10Min = psa10Items.length > 0
-                    ? Math.min(...psa10Items.map(l => l.price))
-                    : null
-                listingPrices['PSA10'] = psa10Min
+                if (listings.length > 0) {
+                    overallMin = Math.min(...listings.map(l => l.price))
+                }
 
-                // 状態A の最安値（PSA/ARS/BGS鑑定品を除外）
-                const gradeAItems = listings.filter(l =>
-                    (l.condition.startsWith('A') || l.condition.includes('A（')) &&
-                    !l.condition.includes('PSA') &&
-                    !l.condition.includes('ARS') &&
-                    !l.condition.includes('BGS')
-                )
-                const gradeAMin = gradeAItems.length > 0
-                    ? Math.min(...gradeAItems.map(l => l.price))
-                    : null
-                listingPrices['A'] = gradeAMin
-
-                console.log(`[SnkrdunkAPI] Listing prices: PSA10=${psa10Min}, A=${gradeAMin}`)
+                // 共通ヘルパーでPSA10/A/Bのグレード別最安値・在庫・トップ3を抽出
+                gradePrices.push(...extractGradePrices(listings))
+                console.log(`[SnkrdunkAPI] Grade prices:`, gradePrices.map(g => `${g.grade}=¥${g.price}(${g.stock}件)`).join(', '))
             } catch (e: any) {
                 console.error(`[SnkrdunkAPI] Listings fetch error: ${e.message}`)
             }
         } else {
-            // BOX: productInfo.minPrice を使用
-            listingPrices['BOX'] = productInfo.minPrice
-            console.log(`[SnkrdunkAPI] BOX minPrice: ${productInfo.minPrice}`)
+            // BOX: /sizes APIから価格・出品数を取得
+            try {
+                const sizes = await getBoxSizes(apparelId)
+                totalListings = sizes.reduce((sum, s) => sum + s.listingCount, 0)
+                const oneBox = sizes.find(s => s.quantity === 1)
+                if (oneBox) {
+                    overallMin = oneBox.minPrice
+                    gradePrices.push({ grade: 'BOX', price: oneBox.minPrice })
+                } else if (sizes.length > 0) {
+                    const cheapest = sizes.reduce((a, b) => a.minPrice < b.minPrice ? a : b)
+                    overallMin = cheapest.minPrice
+                    gradePrices.push({ grade: 'BOX', price: cheapest.minPrice })
+                }
+            } catch (e: any) {
+                console.error(`[SnkrdunkAPI] Box sizes fetch error: ${e.message}`)
+            }
+            console.log(`[SnkrdunkAPI] BOX overallMin: ${overallMin}`)
         }
 
-        // sale_prices に保存
+        // sale_prices に保存（grade=null の全体最安値 + グレード別）
         if (siteId) {
-            for (const [grade, price] of Object.entries(listingPrices)) {
-                if (price !== null && price > 0) {
-                    await supabase
+            // 全体最安値（grade=null）— チャートのサイト別価格線に使用
+            if (overallMin !== null && overallMin > 0) {
+                const { error: overallErr } = await supabase
+                    .from('sale_prices')
+                    .insert({
+                        card_id: cardId,
+                        site_id: siteId,
+                        price: overallMin,
+                        stock: totalListings,
+                    })
+                if (overallErr) console.error(`[SnkrdunkAPI] sale_prices insert (overall) error:`, overallErr.message)
+            }
+
+            // グレード別最安値
+            for (const gp of gradePrices) {
+                if (gp.price > 0) {
+                    const { error: gradeErr } = await supabase
                         .from('sale_prices')
                         .insert({
                             card_id: cardId,
                             site_id: siteId,
-                            price,
-                            grade,
+                            price: gp.price,
+                            grade: gp.grade,
+                            stock: gp.stock ?? null,
+                            top_prices: gp.topPrices ?? null,
                         })
+                    if (gradeErr) console.error(`[SnkrdunkAPI] sale_prices insert (${gp.grade}) error:`, gradeErr.message)
                 }
             }
         }
@@ -276,8 +297,8 @@ export async function POST(req: Request) {
             apparelId,
             productType,
             productName: productInfo.localizedName,
-            minPrice: productInfo.minPrice,
-            listingPrices,
+            minPrice: overallMin,
+            gradePrices,
             total: processedData.length,
             inserted: insertedCount,
             skipped: skippedCount,

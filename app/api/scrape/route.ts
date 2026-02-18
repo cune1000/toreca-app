@@ -4,6 +4,7 @@ import {
   getProductInfo,
   getBoxSizes,
   extractApparelId,
+  isSnkrdunkUrl,
 } from '@/lib/snkrdunk-api'
 import { extractGradePrices } from '@/lib/scraping/helpers'
 import { TORECA_SCRAPER_URL } from '@/lib/config'
@@ -77,9 +78,6 @@ async function scrapeSnkrdunk(url: string) {
   }
 }
 
-function isSnkrdunkUrl(url: string): boolean {
-  return url.includes('snkrdunk.com')
-}
 
 export async function POST(request: NextRequest) {
   const { url, mode = 'auto' } = await request.json()

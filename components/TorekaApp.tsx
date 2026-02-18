@@ -424,8 +424,7 @@ const TorekaApp = () => {
         <TwitterFeed
           shop={selectedShop}
           onClose={() => setShowTwitterFeed(false)}
-          onImageSelect={(imageUrl: string) => {
-            console.log('Selected image:', imageUrl)
+          onImageSelect={() => {
             setShowTwitterFeed(false)
           }}
         />

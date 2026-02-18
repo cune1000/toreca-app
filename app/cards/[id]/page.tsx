@@ -12,6 +12,7 @@ import SettingsTab from '@/components/card-detail/SettingsTab'
 import CardEditForm from '@/components/CardEditForm'
 import SaleUrlForm from '@/components/SaleUrlForm'
 import { GRADE_SORT_ORDER } from '@/components/card-detail/constants'
+import { isSnkrdunkSiteName, isSnkrdunkUrl } from '@/lib/snkrdunk-api'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -148,7 +149,7 @@ export default function CardDetailPage({ params }: Props) {
   // ── Actions ──
   const scrapeSnkrdunk = async () => {
     const snkrdunkUrl = saleUrls.find((url: any) =>
-      url.site?.name?.includes('スニーカーダンク') || url.site?.name?.toLowerCase().includes('スニダン') || url.site?.name?.toLowerCase().includes('snkrdunk') || url.product_url?.toLowerCase().includes('snkrdunk')
+      isSnkrdunkSiteName(url.site?.name || '') || isSnkrdunkUrl(url.product_url || '')
     )
     if (!snkrdunkUrl) { alert('スニダンのURLが設定されていません。'); return }
     setSnkrdunkScraping(true)
@@ -205,7 +206,7 @@ export default function CardDetailPage({ params }: Props) {
     try {
       const siteName = saleUrl.site?.name?.toLowerCase() || ''
       let source = null
-      if (siteName.includes('スニーカーダンク') || siteName.includes('スニダン') || siteName.includes('snkrdunk')) source = 'snkrdunk'
+      if (isSnkrdunkSiteName(siteName)) source = 'snkrdunk'
       else if (siteName.includes('カードラッシュ') || siteName.includes('cardrush')) source = 'cardrush'
       else if (siteName.includes('トレカキャンプ') || siteName.includes('torecacamp')) source = 'torecacamp'
       const res = await fetch('/api/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: saleUrl.product_url, source }) })
@@ -383,8 +384,7 @@ export default function CardDetailPage({ params }: Props) {
   const snkrdunkLatestByGrade = useMemo(() => {
     const result: Record<string, { price: number; stock: number | null; grade: string; date: string; topPrices?: number[] }> = {}
     for (const p of salePrices as any[]) {
-      const siteName = p.site?.name?.toLowerCase() || ''
-      if (!siteName.includes('スニーカーダンク') && !siteName.includes('スニダン') && !siteName.includes('snkrdunk')) continue
+      if (!isSnkrdunkSiteName(p.site?.name || '')) continue
       if (!p.grade) continue
       if (!result[p.grade]) result[p.grade] = {
         price: p.price, stock: p.stock, grade: p.grade, date: p.created_at,

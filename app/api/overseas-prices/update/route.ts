@@ -26,11 +26,12 @@ export async function POST(request: NextRequest) {
     // 手動更新時は常にAPIから最新為替レートを取得
     const exchangeRate = await getUsdJpyRate()
     // 取得したレートをDBにも保存
-    await supabase.from(TABLES.EXCHANGE_RATES).insert({
+    const { error: rateErr } = await supabase.from(TABLES.EXCHANGE_RATES).insert({
       base_currency: 'USD',
       target_currency: 'JPY',
       rate: exchangeRate,
     })
+    if (rateErr) console.error('exchange_rates insert error:', rateErr.message)
 
     // PriceCharting APIで価格取得
     const product = await getProduct(pricecharting_id)

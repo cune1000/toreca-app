@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Loader2, Plus } from 'lucide-react'
+import { isSnkrdunkSiteName, isSnkrdunkUrl } from '@/lib/snkrdunk-api'
 
 interface SaleUrlFormProps {
   cardId: string
@@ -26,8 +27,8 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
     const lowerUrl = url.toLowerCase()
     let matchedSite: any = null
 
-    if (lowerUrl.includes('snkrdunk.com')) {
-      matchedSite = sites.find(s => s.name.includes('スニーカーダンク') || s.name.includes('スニダン') || s.name.toLowerCase().includes('snkrdunk'))
+    if (isSnkrdunkUrl(lowerUrl)) {
+      matchedSite = sites.find(s => isSnkrdunkSiteName(s.name))
     } else if (lowerUrl.includes('cardrush.jp')) {
       matchedSite = sites.find(s => s.name.includes('カードラッシュ') || s.name.toLowerCase().includes('cardrush'))
     } else if (lowerUrl.includes('torecacamp')) {
@@ -93,7 +94,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
     setSaving(true)
     try {
       // スニダンURLの場合、自動更新設定をデフォルトで追加
-      const isSnkrdunk = form.product_url.toLowerCase().includes('snkrdunk.com')
+      const isSnkrdunk = isSnkrdunkUrl(form.product_url)
 
       const { error: insertError } = await supabase
         .from('card_sale_urls')
@@ -116,7 +117,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
       const site = sites.find(s => s.id === form.site_id)
       const siteName = site?.name?.toLowerCase() || ''
       let source = null
-      if (siteName.includes('スニダン') || siteName.includes('スニーカーダンク') || siteName.includes('snkrdunk') || form.product_url.includes('snkrdunk.com')) {
+      if (isSnkrdunkSiteName(siteName) || isSnkrdunkUrl(form.product_url)) {
         source = 'snkrdunk'
       } else if (siteName.includes('カードラッシュ') || siteName.includes('cardrush')) {
         source = 'cardrush'
@@ -153,30 +154,35 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
         // gradePrices対応（CardDetail.tsxと統一）
         if (data.gradePrices?.length > 0) {
           // ① 全体最安値 + 出品数（grade=null）
-          await supabase.from('sale_prices').insert({
+          const { error: overallErr } = await supabase.from('sale_prices').insert({
             card_id: cardId,
             site_id: form.site_id,
             price: data.price,
             stock: stock,
             grade: null
           })
+          if (overallErr) console.error('sale_prices insert (overall) error:', overallErr.message)
           // ② グレード別（PSA10, A, BOXなど）
           for (const gp of data.gradePrices) {
-            await supabase.from('sale_prices').insert({
+            const { error: gradeErr } = await supabase.from('sale_prices').insert({
               card_id: cardId,
               site_id: form.site_id,
               price: gp.price,
               grade: gp.grade,
+              stock: gp.stock ?? null,
+              top_prices: gp.topPrices ?? null,
             })
+            if (gradeErr) console.error(`sale_prices insert (${gp.grade}) error:`, gradeErr.message)
           }
         } else {
           // 通常サイト
-          await supabase.from('sale_prices').insert({
+          const { error: insertErr } = await supabase.from('sale_prices').insert({
             card_id: cardId,
             site_id: form.site_id,
             price: data.priceNumber || data.price,
             stock: stock
           })
+          if (insertErr) console.error('sale_prices insert error:', insertErr.message)
         }
 
         // card_sale_urlsのlast_price/last_stockも更新
@@ -195,8 +201,7 @@ export default function SaleUrlForm({ cardId, onClose, onSaved }: SaleUrlFormPro
           }).eq('id', urls[0].id)
         }
 
-        console.log('Background scrape saved')
-      }).catch(err => console.log('Background scrape failed:', err))
+      }).catch(err => console.error('Background scrape failed:', err))
 
     } catch (err: any) {
       console.error('Save error:', err)
