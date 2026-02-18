@@ -173,12 +173,59 @@ export default function CardsPage({
     return null
   }
 
+  // PriceCharting URLからproduct IDを抽出
+  const extractPricechartingId = (url: string): string | null => {
+    const match = url.match(/[?&]product=(\d+)/)
+    return match ? match[1] : null
+  }
+
   // インラインURL保存
   const handleInlineUrlSave = async (cardId: string) => {
     const url = inlineUrlInputs[cardId]?.trim()
     if (!url) return
 
-    // サイト自動特定
+    // PriceCharting URLの場合は専用フロー
+    if (url.toLowerCase().includes('pricecharting.com')) {
+      const pcId = extractPricechartingId(url)
+      if (!pcId) {
+        setInlineUrlError(prev => ({ ...prev, [cardId]: 'PriceCharting URLからIDを抽出できません' }))
+        setTimeout(() => setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n }), 3000)
+        return
+      }
+
+      setInlineUrlSaving(prev => ({ ...prev, [cardId]: true }))
+      setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n })
+
+      try {
+        // PriceCharting紐付け
+        const linkRes = await fetch('/api/overseas-prices/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_id: cardId, pricecharting_id: pcId }),
+        })
+        const linkJson = await linkRes.json()
+        if (!linkJson.success) throw new Error(linkJson.error)
+
+        // 即時価格取得（バックグラウンド）
+        fetch('/api/overseas-prices/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_id: cardId, pricecharting_id: pcId }),
+        }).catch(() => { })
+
+        setInlineUrlInputs(prev => ({ ...prev, [cardId]: '' }))
+        setInlineUrlSuccess(prev => ({ ...prev, [cardId]: true }))
+        setTimeout(() => setInlineUrlSuccess(prev => { const n = { ...prev }; delete n[cardId]; return n }), 2000)
+      } catch (err: any) {
+        setInlineUrlError(prev => ({ ...prev, [cardId]: err.message }))
+        setTimeout(() => setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n }), 3000)
+      } finally {
+        setInlineUrlSaving(prev => ({ ...prev, [cardId]: false }))
+      }
+      return
+    }
+
+    // 通常サイトURL
     const site = detectSiteFromUrl(url)
     if (!site) {
       setInlineUrlError(prev => ({ ...prev, [cardId]: 'サイトを特定できません' }))
