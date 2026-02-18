@@ -50,11 +50,7 @@ interface SearchResult {
 const PRICE_CHANGE_THRESHOLD_PERCENT = 10
 const PRICE_CHANGE_THRESHOLD_YEN = 1000
 
-interface DashboardContentProps {
-  onSelectCard?: (cardId: string) => void  // unused, kept for compat
-}
-
-export default function DashboardContent({ }: DashboardContentProps) {
+export default function DashboardContent() {
   const [stats, setStats] = useState<Stats>({ cards: 0, shops: 0, sites: 0, pending: 0 })
   const [categories, setCategories] = useState<any[]>([])
   const [saleSites, setSaleSites] = useState<any[]>([])
