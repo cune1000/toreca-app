@@ -47,6 +47,7 @@ export default function CardsPage({
   const [filterCategorySmall, setFilterCategorySmall] = useSessionState('categorySmall', '')
   const [filterRarity, setFilterRarity] = useSessionState('rarity', '')
   const [filterExpansion, setFilterExpansion] = useSessionState('expansion', '')
+  const [filterCardNumber, setFilterCardNumber] = useSessionState('cardNumber', '')
   const [expansions, setExpansions] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useSessionState('page', 1)
 
@@ -65,6 +66,7 @@ export default function CardsPage({
     const cs = restore('categorySmall'); if (cs !== undefined) setFilterCategorySmall(cs)
     const r = restore('rarity'); if (r !== undefined) setFilterRarity(r)
     const e = restore('expansion'); if (e !== undefined) setFilterExpansion(e)
+    const cn = restore('cardNumber'); if (cn !== undefined) setFilterCardNumber(cn)
     const p = restore('page'); if (p !== undefined) setCurrentPage(p)
     setFiltersHydrated(true)
   }, [])
@@ -438,6 +440,35 @@ export default function CardsPage({
         query = query.eq('expansion', filterExpansion)
       }
 
+      // 型番フィルタ
+      if (filterCardNumber === UNSET) {
+        query = query.or('card_number.is.null,card_number.eq.')
+      } else if (filterCardNumber === '__DUPLICATE__') {
+        // 重複カード: image_urlが同じカードを取得
+        const { data: allCards } = await supabase.from('cards').select('id, image_url')
+        if (allCards) {
+          const urlCount = new Map<string, string[]>()
+          for (const c of allCards) {
+            if (!c.image_url) continue
+            const ids = urlCount.get(c.image_url) || []
+            ids.push(c.id)
+            urlCount.set(c.image_url, ids)
+          }
+          const dupIds = Array.from(urlCount.values()).filter(ids => ids.length > 1).flat()
+          if (dupIds.length > 0) {
+            query = query.in('id', dupIds)
+          } else {
+            // 重複なし
+            setFilteredCards([])
+            setTotalCount(0)
+            setIsLoading(false)
+            return
+          }
+        }
+      } else if (filterCardNumber) {
+        query = query.ilike('card_number', `%${filterCardNumber}%`)
+      }
+
       // ページネーション
       const from = (currentPage - 1) * ITEMS_PER_PAGE
       const to = from + ITEMS_PER_PAGE - 1
@@ -455,7 +486,7 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, currentPage, refreshKey, filtersHydrated])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, filterCardNumber, currentPage, refreshKey, filtersHydrated])
 
   // フィルタ変更時は1ページ目に戻る（sessionStorage復元時はスキップ）
   const filterChangeCount = useRef(0)
@@ -466,7 +497,7 @@ export default function CardsPage({
     if (filterChangeCount.current <= 1) return
     setCurrentPage(1)
     setSelectedIds(new Set())
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, filtersHydrated])
+  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, filterCardNumber, filtersHydrated])
 
   // =============================================================================
   // Checkbox Logic
@@ -785,6 +816,17 @@ export default function CardsPage({
               ))}
             </select>
 
+            {/* 型番フィルタ */}
+            <select
+              value={filterCardNumber}
+              onChange={(e) => setFilterCardNumber(e.target.value)}
+              className="px-3 py-1.5 border rounded-lg text-sm"
+            >
+              <option value="">全型番</option>
+              <option value={UNSET}>⚠️ 未登録</option>
+              <option value="__DUPLICATE__">🔁 重複</option>
+            </select>
+
             {/* 選択数 */}
             {selectedIds.size > 0 && (
               <span className="text-sm font-medium text-orange-600 ml-2">
@@ -793,7 +835,7 @@ export default function CardsPage({
             )}
 
             {/* フィルタリセット */}
-            {(searchQuery || filterCategoryLarge || filterCategoryMedium || filterCategorySmall || filterRarity || filterExpansion) && (
+            {(searchQuery || filterCategoryLarge || filterCategoryMedium || filterCategorySmall || filterRarity || filterExpansion || filterCardNumber) && (
               <button
                 onClick={() => {
                   setSearchQuery('')
@@ -802,6 +844,7 @@ export default function CardsPage({
                   setFilterCategorySmall('')
                   setFilterRarity('')
                   setFilterExpansion('')
+                  setFilterCardNumber('')
                   setCurrentPage(1)
                 }}
                 className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-lg flex items-center gap-1"
