@@ -73,26 +73,35 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
       const urls = getTargetUrls()
       let allCards: any[] = []
       let totalFoundSum = 0
+      const failedUrls: string[] = []
 
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i]
-        setFetchProgress(urls.length > 1 ? `${i + 1}/${urls.length} URL を取得中...` : '')
+        setFetchProgress(urls.length > 1 ? `${i + 1}/${urls.length} URL を取得中...` : '取得中...')
 
-        const apiUrl = `/api/pokemon-card-import?url=${encodeURIComponent(url)}&limit=${limit}`
-        const res = await fetch(apiUrl)
-        const data = await res.json()
+        try {
+          const apiUrl = `/api/pokemon-card-import?url=${encodeURIComponent(url)}&limit=${limit}`
+          const res = await fetch(apiUrl)
+          const data = await res.json()
 
-        if (!data.success) {
-          console.error(`URL取得失敗: ${url}`, data.error)
-          continue // 1つ失敗しても続行
+          if (!data.success) {
+            console.error(`URL取得失敗: ${url}`, data.error)
+            failedUrls.push(url)
+            continue
+          }
+
+          totalFoundSum += data.totalFound || 0
+          if (data.cards) allCards.push(...data.cards)
+        } catch (e) {
+          console.error(`URL取得エラー: ${url}`, e)
+          failedUrls.push(url)
         }
-
-        totalFoundSum += data.totalFound || 0
-        if (data.cards) allCards.push(...data.cards)
       }
 
       if (allCards.length === 0) {
-        throw new Error('カードが見つかりませんでした')
+        throw new Error(failedUrls.length > 0
+          ? `取得に失敗しました（サーバー起動中の可能性あり。もう一度お試しください）`
+          : 'カードが見つかりませんでした')
       }
 
       setTotalFound(totalFoundSum)

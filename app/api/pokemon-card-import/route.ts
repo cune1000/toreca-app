@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { TORECA_SCRAPER_URL } from '@/lib/config'
 
+export const maxDuration = 60
+
 /**
  * 単体カードURLからcardIdを抽出
  * 例: https://www.pokemon-card.com/card-search/details.php/card/49620/regu/all → 49620
@@ -13,6 +15,21 @@ function extractCardId(url: string): string | null {
 
 function isSingleCardUrl(url: string): boolean {
   return url.includes('details.php/card/')
+}
+
+/** Railwayへのfetch（コールドスタート対策: 30秒タイムアウト + 1回リトライ） */
+async function fetchRailway(url: string, options?: RequestInit): Promise<Response> {
+  const fetchWithTimeout = () => fetch(url, {
+    ...options,
+    signal: AbortSignal.timeout(30000),
+  })
+
+  try {
+    return await fetchWithTimeout()
+  } catch {
+    console.log('Railway fetch retry:', url)
+    return await fetchWithTimeout()
+  }
 }
 
 // GET: プレビュー取得（Railwayに転送）
@@ -47,7 +64,7 @@ export async function GET(request: NextRequest) {
       const railwayUrl = `${TORECA_SCRAPER_URL}/pokemon-detail?cardId=${cardId}`
       console.log('Calling Railway (single card):', railwayUrl)
 
-      const res = await fetch(railwayUrl, { headers: { 'Content-Type': 'application/json' } })
+      const res = await fetchRailway(railwayUrl, { headers: { 'Content-Type': 'application/json' } })
       const data = await res.json()
 
       if (!data.success) {
@@ -77,7 +94,7 @@ export async function GET(request: NextRequest) {
     const railwayUrl = `${TORECA_SCRAPER_URL}/pokemon-import?url=${encodeURIComponent(inputUrl)}&limit=${limit}&offset=${offset}`
     console.log('Calling Railway:', railwayUrl)
 
-    const res = await fetch(railwayUrl, {
+    const res = await fetchRailway(railwayUrl, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     })
@@ -114,13 +131,13 @@ export async function POST(request: NextRequest) {
       if (!cardId) {
         return NextResponse.json({ success: false, error: 'URLからカードIDを抽出できません' }, { status: 400 })
       }
-      const res = await fetch(`${TORECA_SCRAPER_URL}/pokemon-detail?cardId=${cardId}`, { headers: { 'Content-Type': 'application/json' } })
+      const res = await fetchRailway(`${TORECA_SCRAPER_URL}/pokemon-detail?cardId=${cardId}`, { headers: { 'Content-Type': 'application/json' } })
       const data = await res.json()
       if (!data.success) return NextResponse.json(data, { status: 500 })
       railwayData = { success: true, totalFound: 1, processed: 1, cards: [data] }
     } else {
       // リストURLの場合（既存の処理）
-      const railwayRes = await fetch(`${TORECA_SCRAPER_URL}/pokemon-import`, {
+      const railwayRes = await fetchRailway(`${TORECA_SCRAPER_URL}/pokemon-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: inputUrl, limit, offset })
