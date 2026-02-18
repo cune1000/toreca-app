@@ -52,7 +52,9 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
   // 使用するURLリストを取得（複数URL対応）
   const getTargetUrls = (): string[] => {
     if (useCustomUrl && customUrl) {
-      return customUrl.split('\n').map(u => u.trim()).filter(u => u.length > 0)
+      // 改行・スペース・タブ・カンマ区切りすべて対応。URLっぽい文字列だけ抽出
+      const tokens = customUrl.split(/[\n\r,\s]+/).map(u => u.trim()).filter(u => u.startsWith('http'))
+      return tokens.length > 0 ? tokens : []
     }
     return [selectedPreset]
   }
@@ -258,12 +260,24 @@ export default function CardImporter({ onClose, onCompleted }: Props) {
                       <textarea
                         value={customUrl}
                         onChange={(e) => setCustomUrl(e.target.value)}
-                        placeholder={"1行に1URLずつ入力（複数URL対応）\nhttps://www.pokemon-card.com/card-search/details.php/card/49620/regu/all\nhttps://www.pokemon-card.com/card-search/details.php/card/49621/regu/all"}
+                        onPaste={(e) => {
+                          e.preventDefault()
+                          const pasted = e.clipboardData.getData('text')
+                          // ペースト内容からURLを抽出して1行1URLに整形
+                          const urls = pasted.split(/[\n\r,\s]+/).map(s => s.trim()).filter(s => s.startsWith('http'))
+                          if (urls.length > 0) {
+                            const prev = customUrl.trim()
+                            setCustomUrl(prev ? prev + '\n' + urls.join('\n') : urls.join('\n'))
+                          } else {
+                            setCustomUrl(prev => prev + pasted)
+                          }
+                        }}
+                        placeholder={"URLをまとめて貼り付けOK（自動で1行1URLに整形）\nhttps://www.pokemon-card.com/card-search/details.php/card/49620/regu/all\nhttps://www.pokemon-card.com/card-search/details.php/card/49621/regu/all"}
                         rows={4}
                         className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-y text-sm"
                       />
                       <p className="text-xs text-gray-400">
-                        1行に1URL。検索結果ページ（index.php?...）やカード詳細ページ（details.php/card/...）を混在可能
+                        URLをまとめて貼り付け可能（スペース・カンマ区切りも自動整形）
                       </p>
                     </div>
                   )}
