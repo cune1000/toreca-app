@@ -102,7 +102,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
       const { data } = await supabase
         .from('category_medium')
         .select('id, name')
-        .eq('category_large_id', id)
+        .eq('large_id', id)
         .order('name');
       setCategories(prev => ({ ...prev, medium: data || [], small: [] }));
     } else {
@@ -118,7 +118,7 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
       const { data } = await supabase
         .from('category_small')
         .select('id, name')
-        .eq('category_medium_id', id)
+        .eq('medium_id', id)
         .order('name');
       setCategories(prev => ({ ...prev, small: data || [] }));
     } else {
