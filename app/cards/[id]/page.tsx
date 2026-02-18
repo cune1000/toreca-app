@@ -286,7 +286,8 @@ export default function CardDetailPage({ params }: Props) {
       const d = formatDate(p.tweet_time || p.recorded_at || p.created_at); if (!d) return
       const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
       const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
-      existing[`purchase_${p.condition || (p.is_psa ? 'psa' : 'normal')}`] = p.price
+      const pKey = `purchase_${p.condition || (p.is_psa ? 'psa' : '素体')}`
+      if (!(pKey in existing)) existing[pKey] = p.price  // 降順なので最初（最新）を優先
       dataMap.set(ts, existing)
     })
     filteredSale.forEach((p: any) => {
@@ -294,10 +295,13 @@ export default function CardDetailPage({ params }: Props) {
       const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
       const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
       if (p.grade) {
-        existing[`sale_grade_${p.grade}`] = p.price
-        if (p.stock != null) existing[`stock_grade_${p.grade}`] = p.stock
+        const gKey = `sale_grade_${p.grade}`
+        if (!(gKey in existing)) existing[gKey] = p.price  // 最新値を優先
+        if (p.stock != null && !(`stock_grade_${p.grade}` in existing)) existing[`stock_grade_${p.grade}`] = p.stock
       } else {
-        const siteId = p.site?.id || 'other'; existing[`price_${siteId}`] = p.price; if (p.stock != null) existing[`stock_${siteId}`] = p.stock
+        const siteId = p.site?.id || 'other'
+        if (!(`price_${siteId}` in existing)) existing[`price_${siteId}`] = p.price
+        if (p.stock != null && !(`stock_${siteId}` in existing)) existing[`stock_${siteId}`] = p.stock
       }
       dataMap.set(ts, existing)
     })
@@ -397,14 +401,14 @@ export default function CardDetailPage({ params }: Props) {
     // PSA10: 海外graded vs 国内買取PSA10
     const gradedJpy = overseasLatest.graded_price_jpy
     const purchasePSA10 = latestPurchaseByLabel['psa10']
-    if (gradedJpy && purchasePSA10) {
+    if (gradedJpy && purchasePSA10 && purchasePSA10.price > 0) {
       const profit = gradedJpy - purchasePSA10.price
       diffs.push({ label: 'psa10', displayLabel: 'PSA10→海外', diffJpy: profit, diffPercent: Math.round((profit / purchasePSA10.price) * 1000) / 10 })
     }
     // 素体: 海外loose vs 国内買取素体
     const looseJpy = overseasLatest.loose_price_jpy
     const purchaseNormal = latestPurchaseByLabel['normal']
-    if (looseJpy && purchaseNormal) {
+    if (looseJpy && purchaseNormal && purchaseNormal.price > 0) {
       const profit = looseJpy - purchaseNormal.price
       diffs.push({ label: 'normal', displayLabel: '素体→海外', diffJpy: profit, diffPercent: Math.round((profit / purchaseNormal.price) * 1000) / 10 })
     }

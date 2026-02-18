@@ -240,8 +240,8 @@ export default function CardDetailHeader({
                       <span key={diff.label} className={`text-xs font-medium flex items-center gap-0.5 ${colorClass}`}>
                         <Icon size={11} />
                         {diff.displayLabel}
-                        {' '}{isPositive ? '+' : ''}¥{diff.diffJpy.toLocaleString()}
-                        {' '}({isPositive ? '+' : ''}{diff.diffPercent.toFixed(1)}%)
+                        {' '}{isPositive ? '+' : '-'}¥{Math.abs(diff.diffJpy).toLocaleString()}
+                        {' '}({isPositive ? '+' : '-'}{Math.abs(diff.diffPercent).toFixed(1)}%)
                       </span>
                     )
                   })}
@@ -258,10 +258,10 @@ export default function CardDetailHeader({
                 スニダン販売中
               </div>
               <div className="space-y-2">
-                {snkrdunkLatestByGrade.map((gd, idx) => {
+                {(() => {
                   const GRADE_COLOR: Record<string, string> = { PSA10: 'text-purple-700', A: 'text-green-700', B: 'text-amber-700', BOX: 'text-sky-700' }
                   const GRADE_BG: Record<string, string> = { PSA10: 'bg-purple-100 text-purple-700', A: 'bg-green-100 text-green-700', B: 'bg-amber-100 text-amber-700', BOX: 'bg-sky-100 text-sky-700' }
-                  return (
+                  return snkrdunkLatestByGrade.map((gd, idx) => (
                     <div key={gd.grade}>
                       {idx > 0 && <div className="border-t border-emerald-200 mb-2" />}
                       <div className="flex items-baseline gap-3 flex-wrap">
@@ -281,8 +281,8 @@ export default function CardDetailHeader({
                         )}
                       </div>
                     </div>
-                  )
-                })}
+                  ))
+                })()}
               </div>
             </div>
           ) : (
@@ -323,14 +323,18 @@ export default function CardDetailHeader({
             const rows: { label: string; domestic: number; domesticLabel: string; overseasJpy: number; overseasUsd: number; profit: number; pct: number }[] = []
             const looseJpy = overseasLatest.loose_price_jpy
             const gradedJpy = overseasLatest.graded_price_jpy
-            // 国内買取価格 vs 海外販売価格の比較（PSA10 → 素体 の順）
-            const purchasePSA10 = latestPurchaseByLabel['psa10']
-            if (gradedJpy && overseasLatest.graded_price_usd && purchasePSA10) {
-              rows.push({ label: 'PSA10→海外', domestic: purchasePSA10.price, domesticLabel: '買取PSA10', overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - purchasePSA10.price, pct: ((gradedJpy - purchasePSA10.price) / purchasePSA10.price) * 100 })
+            // スニダン販売価格 vs 海外販売価格の比較（PSA10 → A → B の順）
+            const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
+            if (gradedJpy && overseasLatest.graded_price_usd && salePSA10 && salePSA10.price > 0) {
+              rows.push({ label: 'PSA10→海外', domestic: salePSA10.price, domesticLabel: 'PSA10', overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - salePSA10.price, pct: ((gradedJpy - salePSA10.price) / salePSA10.price) * 100 })
             }
-            const purchaseNormal = latestPurchaseByLabel['normal']
-            if (looseJpy && overseasLatest.loose_price_usd && purchaseNormal) {
-              rows.push({ label: '素体→海外', domestic: purchaseNormal.price, domesticLabel: '買取素体', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - purchaseNormal.price, pct: ((looseJpy - purchaseNormal.price) / purchaseNormal.price) * 100 })
+            const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
+            if (looseJpy && overseasLatest.loose_price_usd && saleA && saleA.price > 0) {
+              rows.push({ label: '素体(A)→海外', domestic: saleA.price, domesticLabel: 'A', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleA.price, pct: ((looseJpy - saleA.price) / saleA.price) * 100 })
+            }
+            const saleB = snkrdunkLatestByGrade.find(g => g.grade === 'B')
+            if (looseJpy && overseasLatest.loose_price_usd && saleB && saleB.price > 0) {
+              rows.push({ label: '素体(B)→海外', domestic: saleB.price, domesticLabel: 'B', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleB.price, pct: ((looseJpy - saleB.price) / saleB.price) * 100 })
             }
             if (rows.length === 0) return null
             return (
@@ -340,18 +344,18 @@ export default function CardDetailHeader({
                   海外転売シミュレーション
                 </div>
                 <div className="space-y-1.5">
-                  {rows.map((r, i) => {
+                  {rows.map((r) => {
                     const isPositive = r.profit > 0
                     return (
-                      <div key={i} className="flex items-baseline gap-2 flex-wrap">
+                      <div key={r.label} className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-xs text-indigo-400 w-[90px] shrink-0">{r.label}</span>
                         <span className="text-xs text-slate-500 tabular-nums">¥{r.domestic.toLocaleString()}</span>
                         <span className="text-xs text-slate-300">→</span>
                         <span className="text-xs text-indigo-600 tabular-nums font-medium">¥{r.overseasJpy.toLocaleString()}</span>
                         <span className={`text-xs font-bold tabular-nums flex items-center gap-0.5 ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                          {isPositive ? '+' : ''}¥{r.profit.toLocaleString()}
-                          <span className="font-medium opacity-70">({isPositive ? '+' : ''}{r.pct.toFixed(1)}%)</span>
+                          {isPositive ? '+' : '-'}¥{Math.abs(r.profit).toLocaleString()}
+                          <span className="font-medium opacity-70">({isPositive ? '+' : '-'}{Math.abs(r.pct).toFixed(1)}%)</span>
                         </span>
                       </div>
                     )
