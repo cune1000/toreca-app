@@ -235,26 +235,19 @@ export default function CardsPage({
       return
     }
 
-    // 重複チェック
-    const existing = cardSaleUrls[cardId] || []
-    if (existing.some(u => u.product_url === url)) {
-      setInlineUrlError(prev => ({ ...prev, [cardId]: 'このURLは登録済みです' }))
-      setTimeout(() => setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n }), 3000)
-      return
-    }
-
     setInlineUrlSaving(prev => ({ ...prev, [cardId]: true }))
     setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n })
 
     try {
       const isSnkrdunk = url.toLowerCase().includes('snkrdunk.com')
-      const { error } = await supabase.from('card_sale_urls').insert([{
+      // upsert: 同じcard+siteなら既存URLを上書き
+      const { error } = await supabase.from('card_sale_urls').upsert({
         card_id: cardId,
         site_id: site.id,
         product_url: url,
         check_interval: 180,
         ...(isSnkrdunk ? { auto_scrape_mode: 'manual', auto_scrape_interval_minutes: 1440 } : {})
-      }])
+      }, { onConflict: 'card_id,site_id' })
       if (error) throw error
 
       // 成功: 入力クリア、URL一覧更新

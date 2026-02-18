@@ -261,6 +261,26 @@ async function processSingleUrl(
       }
     }
 
+    // 在庫切れ（出品0件）: overallMin=null, totalListings=0 の場合
+    if (newPrice === null && newStock === 0) {
+      const nextInterval = getJitteredInterval(CONFIG.OUT_OF_STOCK_INTERVAL)
+      await supabase
+        .from('card_sale_urls')
+        .update({
+          last_stock: 0,
+          last_checked_at: new Date().toISOString(),
+          next_check_at: calculateNextCheckAt(nextInterval),
+          error_count: 0,
+          last_error: null,
+        })
+        .eq('id', site.id)
+
+      results.noChange++
+      results.details.push({ cardName, siteName, status: 'no_change', oldPrice, newPrice: oldPrice, oldStock, newStock: 0, priceChanged: false, stockChanged: oldStock !== 0, nextInterval, noChangeCount: currentNoChangeCount })
+      await logCronResult(site.id, cardName, siteName, 'no_change', oldPrice, oldPrice, oldStock, 0, nextInterval)
+      return
+    }
+
     if (newPrice !== null && newPrice !== undefined) {
       const priceChanged = oldPrice !== newPrice
       const stockChanged = oldStock !== newStock
@@ -319,6 +339,7 @@ async function processSingleUrl(
         if (overallErr) console.error(`[${logPrefix}] sale_prices insert (overall) error for ${cardName}:`, overallErr)
 
         for (const gp of gradePrices) {
+          if (!gp.price || gp.price <= 0) continue
           const { error: gradeErr } = await supabase
             .from('sale_prices')
             .insert({
