@@ -65,11 +65,11 @@ export default function SettingsTab({
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-slate-800 tracking-tight">スニダン自動更新</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">売買履歴・価格データを自動取得</p>
+                <p className="text-xs text-slate-400 mt-0.5">売買履歴・価格データを自動取得</p>
               </div>
             </div>
             {snkrdunkUrl && (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${statusConfig.bgClass}`}>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.bgClass}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dotClass}`} />
                 {statusConfig.label}
               </span>
@@ -88,7 +88,7 @@ export default function SettingsTab({
                   href={snkrdunkUrl.product_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-blue-500 hover:text-blue-600 truncate transition-colors flex items-center gap-1"
+                  className="text-xs text-blue-500 hover:text-blue-600 truncate transition-colors flex items-center gap-1"
                 >
                   {snkrdunkUrl.product_url}
                   <ExternalLink size={10} className="flex-shrink-0" />
@@ -99,7 +99,7 @@ export default function SettingsTab({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* 自動更新モード */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">更新モード</label>
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">更新モード</label>
                   <select
                     value={currentMode}
                     onChange={(e) => onUpdateAutoScrapeMode(snkrdunkUrl.id, e.target.value)}
@@ -117,7 +117,7 @@ export default function SettingsTab({
                 {/* 更新間隔（手動時のみ） */}
                 {currentMode === 'manual' && (
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">更新間隔</label>
+                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">更新間隔</label>
                     <select
                       value={snkrdunkUrl.auto_scrape_interval_minutes || 1440}
                       onChange={(e) => onUpdateScrapeInterval(snkrdunkUrl.id, parseInt(e.target.value))}
@@ -137,13 +137,13 @@ export default function SettingsTab({
               {/* タイムスタンプ行 */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 {snkrdunkUrl.last_scraped_at && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
                     <Clock size={11} />
                     <span>最終: <span className="text-slate-600 font-medium">{formatRelativeTime(snkrdunkUrl.last_scraped_at)}</span></span>
                   </div>
                 )}
                 {snkrdunkUrl.next_scrape_at && currentMode !== 'off' && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
                     <ChevronRight size={11} />
                     <span>次回: <span className="text-slate-600 font-medium">{formatRelativeTime(snkrdunkUrl.next_scrape_at)}</span></span>
                   </div>
@@ -155,8 +155,8 @@ export default function SettingsTab({
                 <div className="flex items-start gap-2.5 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">
                   <AlertTriangle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[11px] font-medium text-red-700">スクレイピングエラー</p>
-                    <p className="text-[11px] text-red-500 mt-0.5 leading-relaxed">{snkrdunkUrl.last_scrape_error}</p>
+                    <p className="text-xs font-medium text-red-700">スクレイピングエラー</p>
+                    <p className="text-xs text-red-500 mt-0.5 leading-relaxed">{snkrdunkUrl.last_scrape_error}</p>
                   </div>
                 </div>
               )}
@@ -195,7 +195,7 @@ export default function SettingsTab({
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-slate-800 tracking-tight">販売サイト</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">登録URL: {saleUrls.length}件</p>
+                <p className="text-xs text-slate-400 mt-0.5">登録URL: {saleUrls.length}件</p>
               </div>
             </div>
             <button
@@ -232,7 +232,7 @@ export default function SettingsTab({
                       href={url.product_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[11px] text-blue-400 hover:text-blue-500 truncate flex items-center gap-1 mt-0.5 transition-colors"
+                      className="text-xs text-blue-400 hover:text-blue-500 truncate flex items-center gap-1 mt-0.5 transition-colors"
                     >
                       <span className="truncate">{url.product_url.substring(0, 50)}...</span>
                       <ExternalLink size={10} className="flex-shrink-0" />
@@ -246,7 +246,7 @@ export default function SettingsTab({
                         ¥{url.last_price.toLocaleString()}
                       </p>
                       {url.last_stock != null && (
-                        <p className="text-[10px] text-slate-400 mt-0.5">在庫: {url.last_stock}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">在庫: {url.last_stock}</p>
                       )}
                     </div>
                   )}
@@ -255,7 +255,7 @@ export default function SettingsTab({
                   <select
                     value={url.check_interval || 180}
                     onChange={(e) => onUpdateCheckInterval(url.id, parseInt(e.target.value))}
-                    className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 font-medium
+                    className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 font-medium
                                focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 transition-all
                                hover:border-slate-300 cursor-pointer flex-shrink-0"
                     title="価格チェック間隔"
@@ -269,7 +269,7 @@ export default function SettingsTab({
                   <button
                     onClick={() => onUpdatePrice(url)}
                     disabled={scraping}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-[11px] font-medium
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-medium
                                hover:bg-slate-800 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none
                                transition-all flex-shrink-0"
                   >
@@ -285,7 +285,7 @@ export default function SettingsTab({
                 <ExternalLink size={20} className="text-slate-300" />
               </div>
               <p className="text-sm text-slate-400">販売URLが登録されていません</p>
-              <p className="text-[11px] text-slate-300 mt-1">「URL追加」から販売サイトを登録してください</p>
+              <p className="text-xs text-slate-300 mt-1">「URL追加」から販売サイトを登録してください</p>
             </div>
           )}
         </div>
@@ -299,7 +299,7 @@ export default function SettingsTab({
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-800 tracking-tight">買取・海外価格 紐付け</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">外部サービスと連携して価格を自動追跡</p>
+            <p className="text-xs text-slate-400 mt-0.5">外部サービスと連携して価格を自動追跡</p>
           </div>
         </div>
 
@@ -311,7 +311,7 @@ export default function SettingsTab({
                 <span className="text-base">🔗</span>
                 <div>
                   <h4 className="text-xs font-semibold text-slate-700">シンソク買取</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5">6時間ごとに自動追跡</p>
+                  <p className="text-xs text-slate-400 mt-0.5">6時間ごとに自動追跡</p>
                 </div>
               </div>
             </div>
@@ -332,7 +332,7 @@ export default function SettingsTab({
                 <span className="text-base">🏪</span>
                 <div>
                   <h4 className="text-xs font-semibold text-slate-700">トレカラウンジ買取</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5">買取価格を自動追跡</p>
+                  <p className="text-xs text-slate-400 mt-0.5">買取価格を自動追跡</p>
                 </div>
               </div>
             </div>
@@ -353,7 +353,7 @@ export default function SettingsTab({
                 <span className="text-base">🌐</span>
                 <div>
                   <h4 className="text-xs font-semibold text-slate-700">PriceCharting 海外価格</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5">海外価格（USD）を自動追跡</p>
+                  <p className="text-xs text-slate-400 mt-0.5">海外価格（USD）を自動追跡</p>
                 </div>
               </div>
             </div>

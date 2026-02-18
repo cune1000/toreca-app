@@ -38,14 +38,14 @@ export default function SnkrdunkTab({
             <button
               onClick={onScrape}
               disabled={snkrdunkScraping}
-              className="px-2.5 py-1 bg-purple-500 text-white rounded-lg text-[11px] hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1 shadow-sm transition-colors"
+              className="px-2.5 py-1 bg-purple-500 text-white rounded-lg text-xs hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1 shadow-sm transition-colors"
             >
               {snkrdunkScraping ? <RefreshCw size={11} className="animate-spin" /> : <RefreshCw size={11} />}
               更新
             </button>
           </div>
           {snkrdunkSales.length > 0 && (
-            <p className="text-[10px] text-purple-500 mt-1">
+            <p className="text-xs text-purple-500 mt-1">
               最終取引: {formatRelativeTime((snkrdunkSales as any[]).sort((a: any, b: any) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())[0]?.sold_at)}
             </p>
           )}
@@ -82,7 +82,7 @@ export default function SnkrdunkTab({
                     <button
                       key={cat.key}
                       onClick={() => onCategoryChange(cat.key)}
-                      className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+                      className={`px-2 py-0.5 rounded-lg text-xs font-medium transition-colors ${
                         selectedSnkrdunkCategory === cat.key
                           ? 'bg-purple-600 text-white shadow-sm'
                           : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -145,15 +145,15 @@ export default function SnkrdunkTab({
               <>
                 <div className="grid grid-cols-3 gap-1.5">
                   <div className="bg-gradient-to-b from-purple-50 to-purple-100/50 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-purple-500 font-medium">最新</p>
+                    <p className="text-xs text-purple-500 font-medium">最新</p>
                     <p className="text-xs font-bold text-purple-700">¥{latestPrice.toLocaleString()}</p>
                   </div>
                   <div className="bg-gradient-to-b from-slate-50 to-slate-100/50 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-slate-500 font-medium">平均</p>
+                    <p className="text-xs text-slate-500 font-medium">平均</p>
                     <p className="text-xs font-bold text-slate-700">¥{avg.toLocaleString()}</p>
                   </div>
                   <div className="bg-gradient-to-b from-blue-50 to-blue-100/50 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-blue-500 font-medium">最安</p>
+                    <p className="text-xs text-blue-500 font-medium">最安</p>
                     <p className="text-xs font-bold text-blue-700">¥{min.toLocaleString()}</p>
                   </div>
                 </div>
@@ -162,9 +162,9 @@ export default function SnkrdunkTab({
                   <table className="w-full text-sm">
                     <thead className="bg-purple-50/80 sticky top-0 z-10">
                       <tr>
-                        <th className="text-left px-3 py-2 text-[11px] font-medium text-purple-600">日時</th>
-                        <th className="text-center px-2 py-2 text-[11px] font-medium text-purple-600">グレード</th>
-                        <th className="text-right px-3 py-2 text-[11px] font-medium text-purple-600">価格</th>
+                        <th className="text-left px-3 py-2 text-xs font-medium text-purple-600">日時</th>
+                        <th className="text-center px-2 py-2 text-xs font-medium text-purple-600">グレード</th>
+                        <th className="text-right px-3 py-2 text-xs font-medium text-purple-600">価格</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -173,13 +173,13 @@ export default function SnkrdunkTab({
                         const gradeColor = SNKRDUNK_GRADE_COLORS[sale.grade] || '#6b7280'
                         return (
                           <tr key={i} className="hover:bg-purple-50/30 transition-colors">
-                            <td className="px-3 py-2 text-[11px] text-slate-500">
+                            <td className="px-3 py-2 text-xs text-slate-500">
                               {date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="px-2 py-2 text-center">
                               <span
-                                className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                style={{ backgroundColor: `${gradeColor}15`, color: gradeColor }}
+                                className="px-1.5 py-0.5 rounded text-xs font-medium"
+                                style={{ backgroundColor: `${gradeColor}12`, color: gradeColor }}
                               >
                                 {sale.grade}
                               </span>
@@ -204,7 +204,7 @@ export default function SnkrdunkTab({
         <div className="bg-blue-50 px-4 py-3 border-b border-blue-100">
           <h4 className="font-bold text-sm text-blue-800">🏪 買取（最高額店舗）</h4>
           {purchasePrices.length > 0 && (
-            <p className="text-[10px] text-blue-500 mt-1">
+            <p className="text-xs text-blue-500 mt-1">
               更新: {formatRelativeTime((purchasePrices as any[])[0]?.created_at)}
             </p>
           )}
@@ -221,14 +221,14 @@ export default function SnkrdunkTab({
                     <div key={key} className="bg-gradient-to-r from-slate-50 to-white border border-slate-100 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-1">
                         <span
-                          className="px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                          className="px-2 py-0.5 rounded-md text-xs font-semibold"
                           style={{ backgroundColor: `${config.color}12`, color: config.color }}
                         >
                           {data.label}
                         </span>
                         <span className="font-bold text-slate-900 text-base tabular-nums">¥{data.price.toLocaleString()}</span>
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
                         <span>{data.shopName}</span>
                         <span>{formatRelativeTime(data.date)}</span>
                       </div>
@@ -247,10 +247,10 @@ export default function SnkrdunkTab({
               <table className="w-full text-sm">
                 <thead className="bg-blue-50/80 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left px-3 py-2 text-[11px] font-medium text-blue-600">店舗</th>
-                    <th className="text-center px-2 py-2 text-[11px] font-medium text-blue-600">状態</th>
-                    <th className="text-right px-3 py-2 text-[11px] font-medium text-blue-600">価格</th>
-                    <th className="text-right px-2 py-2 text-[11px] font-medium text-blue-600">日時</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-blue-600">店舗</th>
+                    <th className="text-center px-2 py-2 text-xs font-medium text-blue-600">状態</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-blue-600">価格</th>
+                    <th className="text-right px-2 py-2 text-xs font-medium text-blue-600">日時</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -264,10 +264,10 @@ export default function SnkrdunkTab({
                     const date = formatDate(p.tweet_time || p.recorded_at || p.created_at)
                     return (
                       <tr key={i} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="px-3 py-2 text-[11px] text-slate-600">{p.shop?.name || '-'}</td>
+                        <td className="px-3 py-2 text-xs text-slate-600">{p.shop?.name || '-'}</td>
                         <td className="px-2 py-2 text-center">
                           <span
-                            className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                            className="px-1.5 py-0.5 rounded text-xs font-medium"
                             style={{ backgroundColor: `${condConfig.color}15`, color: condConfig.color }}
                           >
                             {condConfig.label}
@@ -276,7 +276,7 @@ export default function SnkrdunkTab({
                         <td className="px-3 py-2 text-right font-semibold text-slate-800 text-xs tabular-nums">
                           ¥{p.price.toLocaleString()}
                         </td>
-                        <td className="px-2 py-2 text-right text-[10px] text-slate-400">
+                        <td className="px-2 py-2 text-right text-xs text-slate-400">
                           {date ? date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
                         </td>
                       </tr>
@@ -294,7 +294,7 @@ export default function SnkrdunkTab({
         <div className="bg-green-50 px-4 py-3 border-b border-green-100">
           <h4 className="font-bold text-sm text-green-800">🛒 スニダン販売中最安値</h4>
           {snkrdunkLatestByGrade.length > 0 && (
-            <p className="text-[10px] text-green-500 mt-1">
+            <p className="text-xs text-green-500 mt-1">
               更新: {formatRelativeTime(snkrdunkLatestByGrade[0]?.date)}
             </p>
           )}
@@ -309,7 +309,7 @@ export default function SnkrdunkTab({
                   <div key={item.grade} className="bg-gradient-to-r from-slate-50 to-white border border-slate-100 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-1">
                       <span
-                        className="px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                        className="px-2 py-0.5 rounded-md text-xs font-semibold"
                         style={{ backgroundColor: `${gradeColor}12`, color: gradeColor }}
                       >
                         {item.grade}
@@ -317,11 +317,11 @@ export default function SnkrdunkTab({
                       <div className="text-right">
                         <span className="font-bold text-slate-900 text-base tabular-nums">¥{item.price.toLocaleString()}</span>
                         {item.stock !== null && (
-                          <span className="text-[10px] text-slate-400 ml-1.5">({item.stock}件)</span>
+                          <span className="text-xs text-slate-400 ml-1.5">({item.stock}件)</span>
                         )}
                       </div>
                     </div>
-                    <div className="text-right text-[10px] text-slate-400">
+                    <div className="text-right text-xs text-slate-400">
                       {formatRelativeTime(item.date)}
                     </div>
                   </div>
@@ -339,10 +339,10 @@ export default function SnkrdunkTab({
               <table className="w-full text-sm">
                 <thead className="bg-green-50/80 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left px-3 py-2 text-[11px] font-medium text-green-600">サイト</th>
-                    <th className="text-center px-2 py-2 text-[11px] font-medium text-green-600">グレード</th>
-                    <th className="text-right px-3 py-2 text-[11px] font-medium text-green-600">価格</th>
-                    <th className="text-right px-2 py-2 text-[11px] font-medium text-green-600">日時</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-green-600">サイト</th>
+                    <th className="text-center px-2 py-2 text-xs font-medium text-green-600">グレード</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-green-600">価格</th>
+                    <th className="text-right px-2 py-2 text-xs font-medium text-green-600">日時</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -350,16 +350,16 @@ export default function SnkrdunkTab({
                     const date = formatDate(p.recorded_at || p.created_at)
                     return (
                       <tr key={i} className="hover:bg-green-50/30 transition-colors">
-                        <td className="px-3 py-2 text-[11px] text-slate-600">{p.site?.name || '-'}</td>
+                        <td className="px-3 py-2 text-xs text-slate-600">{p.site?.name || '-'}</td>
                         <td className="px-2 py-2 text-center">
                           {p.grade ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">{p.grade}</span>
+                            <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-600 font-medium">{p.grade}</span>
                           ) : '-'}
                         </td>
                         <td className="px-3 py-2 text-right font-semibold text-slate-800 text-xs tabular-nums">
                           ¥{p.price.toLocaleString()}
                         </td>
-                        <td className="px-2 py-2 text-right text-[10px] text-slate-400">
+                        <td className="px-2 py-2 text-right text-xs text-slate-400">
                           {date ? date.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
                         </td>
                       </tr>

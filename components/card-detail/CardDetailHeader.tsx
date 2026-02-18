@@ -194,10 +194,10 @@ export default function CardDetailHeader({
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button onClick={onEdit} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
+            <button onClick={onEdit} aria-label="カード情報を編集" className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
               <Edit size={20} />
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
+            <button onClick={onClose} aria-label="閉じる" className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
               <X size={24} />
             </button>
           </div>
@@ -230,7 +230,7 @@ export default function CardDetailHeader({
             {/* 海外価格差バッジ */}
             {priceDiffs.length > 0 && (
               <div className="mt-2 pt-2 border-t border-blue-100">
-                <p className="text-[10px] text-blue-400 font-medium mb-1">海外転売利益</p>
+                <p className="text-xs text-blue-400 font-medium mb-1">海外転売利益</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                   {priceDiffs.map(diff => {
                     const isPositive = diff.diffJpy > 0
@@ -359,7 +359,7 @@ export default function CardDetailHeader({
                   })}
                 </div>
                 {overseasLatest.exchange_rate && (
-                  <p className="text-[10px] text-indigo-300 mt-2">$1 = ¥{overseasLatest.exchange_rate.toFixed(2)}</p>
+                  <p className="text-xs text-indigo-300 mt-2">$1 = ¥{overseasLatest.exchange_rate.toFixed(2)}</p>
                 )}
               </div>
             )

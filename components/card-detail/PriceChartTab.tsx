@@ -175,7 +175,7 @@ export default function PriceChartTab({
 
         {/* 買取 */}
         <div>
-          <p className="text-[11px] text-slate-400 font-medium mb-1.5">買取</p>
+          <p className="text-xs text-slate-400 font-medium mb-1.5">買取</p>
           <div className="flex flex-wrap gap-2">
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showPurchase ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
@@ -188,7 +188,7 @@ export default function PriceChartTab({
         {/* サイト別（スニダン以外） */}
         {nonSnkrdunkSites.length > 0 && (
           <div>
-            <p className="text-[11px] text-slate-400 font-medium mb-1.5">販売サイト</p>
+            <p className="text-xs text-slate-400 font-medium mb-1.5">販売サイト</p>
             <div className="flex flex-wrap gap-2">
               {nonSnkrdunkSites.map((site) => {
                 const colorIndex = siteList.findIndex(s => s.id === site.id)
@@ -216,7 +216,7 @@ export default function PriceChartTab({
         {/* スニーカーダンク（グレード別） */}
         {saleGrades.length > 0 && (
           <div>
-            <p className="text-[11px] text-slate-400 font-medium mb-1.5">スニーカーダンク</p>
+            <p className="text-xs text-slate-400 font-medium mb-1.5">スニーカーダンク</p>
             <div className="flex flex-wrap gap-2">
               {saleGrades.map((grade) => {
                 const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: grade }
@@ -244,7 +244,7 @@ export default function PriceChartTab({
         {/* 海外・その他 */}
         {(card.pricecharting_id || hasDailyTradeData) && (
           <div>
-            <p className="text-[11px] text-slate-400 font-medium mb-1.5">海外・その他</p>
+            <p className="text-xs text-slate-400 font-medium mb-1.5">海外・その他</p>
             <div className="flex flex-wrap gap-2 items-center">
               {card.pricecharting_id && (
                 <>
