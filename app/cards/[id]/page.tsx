@@ -426,7 +426,7 @@ export default function CardDetailPage({ params }: Props) {
   // ── Site visibility toggles ──
   const toggleSitePrice = (siteId: string) => setVisibleSites(prev => ({ ...prev, [siteId]: { ...prev[siteId], price: !prev[siteId]?.price } }))
   const toggleSiteStock = (siteId: string) => setVisibleSites(prev => ({ ...prev, [siteId]: { ...prev[siteId], stock: !prev[siteId]?.stock } }))
-  const toggleSiteAll = (siteId: string) => setVisibleSites(prev => { const c = prev[siteId] || { price: true, stock: true }; const allOn = c.price !== false && c.stock !== false; return { ...prev, [siteId]: { price: !allOn, stock: !allOn } } })
+  const toggleSiteAll = (siteId: string) => setVisibleSites(prev => { const c = prev[siteId] || { price: true, stock: true }; const allOn = c.price !== false || c.stock !== false; return { ...prev, [siteId]: { price: !allOn, stock: !allOn } } })
   const isSiteHidden = (siteId: string) => { const v = visibleSites[siteId]; return v?.price === false && v?.stock === false }
 
   // ── Loading state ──
