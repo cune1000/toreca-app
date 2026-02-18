@@ -15,8 +15,6 @@ interface PriceChartTabProps {
   chartData: any[]
   selectedPeriod: number | null
   onPeriodChange: (days: number | null) => void
-  showPurchase: boolean
-  onShowPurchaseChange: (show: boolean) => void
   siteList: any[]
   visibleSites: Record<string, { price: boolean; stock: boolean }>
   onToggleSitePrice: (siteId: string) => void
@@ -83,7 +81,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function PriceChartTab({
   card, chartData, selectedPeriod, onPeriodChange,
-  showPurchase, onShowPurchaseChange,
   siteList, visibleSites, onToggleSitePrice, onToggleSiteStock, onToggleSiteAll, isSiteHidden,
   purchaseConditions, saleGrades, hasGradeStockData,
   onRefreshOverseas,
@@ -102,12 +99,14 @@ export default function PriceChartTab({
   const [showDailyTrade, setShowDailyTrade] = useState(() => loadSetting('showDailyTrade', true))
   const [overseasUpdating, setOverseasUpdating] = useState(false)
   const [visibleGrades, setVisibleGrades] = useState<Record<string, { price: boolean; stock: boolean }>>(() => loadSetting('visibleGrades', {}))
+  const [visiblePurchase, setVisiblePurchase] = useState<Record<string, boolean>>(() => loadSetting('visiblePurchase', {}))
 
   // トグル変更時に保存
   useEffect(() => { saveSetting('showOverseasLoose', showOverseasLoose) }, [showOverseasLoose, saveSetting])
   useEffect(() => { saveSetting('showOverseasGraded', showOverseasGraded) }, [showOverseasGraded, saveSetting])
   useEffect(() => { saveSetting('showDailyTrade', showDailyTrade) }, [showDailyTrade, saveSetting])
   useEffect(() => { saveSetting('visibleGrades', visibleGrades) }, [visibleGrades, saveSetting])
+  useEffect(() => { saveSetting('visiblePurchase', visiblePurchase) }, [visiblePurchase, saveSetting])
 
   const hasOverseasData = chartData.some(d => d.overseas_loose || d.overseas_graded)
   const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
@@ -121,6 +120,9 @@ export default function PriceChartTab({
   const toggleGradePrice = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: !(prev[grade]?.price !== false), stock: prev[grade]?.stock ?? true } }))
   const toggleGradeStock = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: prev[grade]?.price ?? true, stock: !(prev[grade]?.stock !== false) } }))
   const toggleGradeAll = (grade: string) => setVisibleGrades(prev => { const c = prev[grade] || { price: true, stock: true }; const allOn = c.price !== false || c.stock !== false; return { ...prev, [grade]: { price: !allOn, stock: !allOn } } })
+
+  const isPurchaseVisible = (condition: string) => visiblePurchase[condition] !== false
+  const togglePurchase = (condition: string) => setVisiblePurchase(prev => ({ ...prev, [condition]: !(prev[condition] !== false) }))
 
   // 海外価格手動更新
   const handleOverseasUpdate = async () => {
@@ -173,17 +175,25 @@ export default function PriceChartTab({
       <div className="bg-slate-50 rounded-xl p-4 space-y-3">
         <p className="text-sm font-medium text-slate-700">グラフ表示設定</p>
 
-        {/* 買取 */}
-        <div>
-          <p className="text-xs text-slate-400 font-medium mb-1.5">買取</p>
-          <div className="flex flex-wrap gap-2">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showPurchase ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-              <span className="cursor-pointer select-none" onClick={() => onShowPurchaseChange(!showPurchase)}>買取価格</span>
-              <input type="checkbox" checked={showPurchase} onChange={() => onShowPurchaseChange(!showPurchase)} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
+        {/* 買取（condition別） */}
+        {purchaseConditions.length > 0 && (
+          <div>
+            <p className="text-xs text-slate-400 font-medium mb-1.5">買取</p>
+            <div className="flex flex-wrap gap-2">
+              {purchaseConditions.map((condition) => {
+                const config = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
+                const visible = isPurchaseVisible(condition)
+                return (
+                  <div key={condition} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${visible ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: config.color }}></span>
+                    <span className="cursor-pointer select-none" onClick={() => togglePurchase(condition)}>{config.label}</span>
+                    <input type="checkbox" checked={visible} onChange={() => togglePurchase(condition)} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
+                  </div>
+                )
+              })}
             </div>
           </div>
-        </div>
+        )}
 
         {/* サイト別（スニダン以外） */}
         {nonSnkrdunkSites.length > 0 && (
@@ -311,8 +321,8 @@ export default function PriceChartTab({
               )}
               <Tooltip content={<CustomTooltip />} />
 
-              {/* 買取価格線 */}
-              {showPurchase && purchaseConditions.map((condition) => {
+              {/* 買取価格線（condition別トグル） */}
+              {purchaseConditions.filter(c => isPurchaseVisible(c)).map((condition) => {
                 const config = PURCHASE_CONDITION_COLORS[condition] || { color: '#3b82f6', label: condition }
                 return (
                   <Line

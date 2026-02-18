@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
         for (const link of links) {
             try {
                 const itemId = link.external_key
-                const condition = link.condition || 'S'
+                const rawCondition = link.condition || '未開封'
                 const itemRow = itemMap.get(itemId)
 
                 if (!itemRow) {
@@ -70,18 +70,21 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
+                // condition正規化（英語→日本語）
+                const conditionNormalize: Record<string, string> = {
+                    'S': '未開封', 'sealed': '未開封', 'normal': '素体',
+                }
+                const condition = conditionNormalize[rawCondition] || rawCondition
+
                 // condition → price_* マッピング
                 const conditionToPriceMap: Record<string, number | null> = {
-                    'S': itemRow.price_s,
-                    'normal': itemRow.price_s,
+                    '未開封': itemRow.price_s,
                     '素体': itemRow.price_s,
                     'PSA10': itemRow.price_s,
                     'A': itemRow.price_a,
                     'A-': itemRow.price_am,
                     'B': itemRow.price_b,
                     'C': itemRow.price_c,
-                    'sealed': itemRow.price_s,
-                    '未開封': itemRow.price_s,
                 }
                 const priceYen = conditionToPriceMap[condition] ?? itemRow.price_s
 

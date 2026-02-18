@@ -10,6 +10,11 @@ export const SITE_COLORS = [
 
 // 買取価格の状態別カラー
 export const PURCHASE_CONDITION_COLORS: Record<string, { color: string; label: string }> = {
+  '素体': { color: '#3b82f6', label: '素体' },
+  'PSA10': { color: '#8b5cf6', label: 'PSA10' },
+  '未開封': { color: '#06b6d4', label: '未開封' },
+  '開封済み': { color: '#f97316', label: '開封済み' },
+  // レガシー英語キー（既存チャートデータ互換）
   normal: { color: '#3b82f6', label: '素体' },
   psa: { color: '#8b5cf6', label: 'PSA' },
   psa10: { color: '#8b5cf6', label: 'PSA10' },

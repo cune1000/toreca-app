@@ -39,12 +39,6 @@ export default function CardDetailPage({ params }: Props) {
   const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(30)
   const [cardImageUrl, setCardImageUrl] = useState<string | null>(null)
-  const [showPurchase, setShowPurchase] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); return s.showPurchase ?? true } catch { return true }
-    }
-    return true
-  })
   const [chartTab, setChartTab] = useState<'price' | 'snkrdunk' | 'settings'>('price')
   const [visibleSites, setVisibleSites] = useState<Record<string, { price: boolean; stock: boolean }>>({})
 
@@ -376,7 +370,11 @@ export default function CardDetailPage({ params }: Props) {
   }, [latestPurchaseByLabel])
 
   const hasGradeStockData = useMemo(() => salePrices.some((p: any) => p.stock != null && p.grade), [salePrices])
-  const purchaseConditions = useMemo(() => { const c = new Set<string>(); purchasePrices.forEach((p: any) => c.add(p.condition || (p.is_psa ? 'psa' : 'normal'))); return Array.from(c) }, [purchasePrices])
+  const purchaseConditions = useMemo(() => {
+    const order: Record<string, number> = { 'PSA10': 1, '素体': 2, '未開封': 3, '開封済み': 4 }
+    const c = new Set<string>(); purchasePrices.forEach((p: any) => c.add(p.condition || (p.is_psa ? 'psa' : '素体')))
+    return Array.from(c).sort((a, b) => (order[a] ?? 99) - (order[b] ?? 99))
+  }, [purchasePrices])
   const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade) g.add(p.grade) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices])
 
   const snkrdunkLatestByGrade = useMemo(() => {
@@ -392,34 +390,28 @@ export default function CardDetailPage({ params }: Props) {
     return Object.values(result).sort((a, b) => (GRADE_SORT_ORDER[a.grade] ?? 999) - (GRADE_SORT_ORDER[b.grade] ?? 999))
   }, [salePrices])
 
-  // ── Price diffs for header badge (海外で売る利益: overseas - domestic) ──
+  // ── Price diffs for header badge (海外で売る vs 国内買取 の差額) ──
   const priceDiffs = useMemo(() => {
     if (!overseasLatest) return []
     const diffs: { label: string; displayLabel: string; diffJpy: number; diffPercent: number }[] = []
-    const looseJpy = overseasLatest.loose_price_jpy
-    if (looseJpy) {
-      const saleA = snkrdunkLatestByGrade.find((g: any) => g.grade === 'A')
-      if (saleA) {
-        const profit = looseJpy - saleA.price
-        diffs.push({ label: 'A', displayLabel: '素体→海外', diffJpy: profit, diffPercent: Math.round((profit / saleA.price) * 1000) / 10 })
-      }
-    }
+    // PSA10: 海外graded vs 国内買取PSA10
     const gradedJpy = overseasLatest.graded_price_jpy
-    if (gradedJpy) {
-      const salePSA10 = snkrdunkLatestByGrade.find((g: any) => g.grade === 'PSA10')
-      if (salePSA10) {
-        const profit = gradedJpy - salePSA10.price
-        diffs.push({ label: 'psa10', displayLabel: 'PSA10→海外', diffJpy: profit, diffPercent: Math.round((profit / salePSA10.price) * 1000) / 10 })
-      }
+    const purchasePSA10 = latestPurchaseByLabel['psa10']
+    if (gradedJpy && purchasePSA10) {
+      const profit = gradedJpy - purchasePSA10.price
+      diffs.push({ label: 'psa10', displayLabel: 'PSA10→海外', diffJpy: profit, diffPercent: Math.round((profit / purchasePSA10.price) * 1000) / 10 })
+    }
+    // 素体: 海外loose vs 国内買取素体
+    const looseJpy = overseasLatest.loose_price_jpy
+    const purchaseNormal = latestPurchaseByLabel['normal']
+    if (looseJpy && purchaseNormal) {
+      const profit = looseJpy - purchaseNormal.price
+      diffs.push({ label: 'normal', displayLabel: '素体→海外', diffJpy: profit, diffPercent: Math.round((profit / purchaseNormal.price) * 1000) / 10 })
     }
     return diffs
-  }, [overseasLatest, snkrdunkLatestByGrade])
+  }, [overseasLatest, latestPurchaseByLabel])
 
   // ── Chart settings persistence ──
-  const saveChartSetting = (key: string, value: any) => {
-    try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); s[key] = value; localStorage.setItem('toreca-chart-settings', JSON.stringify(s)) } catch {}
-  }
-  const handleShowPurchaseChange = (v: boolean) => { setShowPurchase(v); saveChartSetting('showPurchase', v) }
 
   // ── Site visibility toggles ──
   const toggleSitePrice = (siteId: string) => setVisibleSites(prev => ({ ...prev, [siteId]: { ...prev[siteId], price: !prev[siteId]?.price } }))
@@ -525,8 +517,6 @@ export default function CardDetailPage({ params }: Props) {
                   chartData={chartData}
                   selectedPeriod={selectedPeriod}
                   onPeriodChange={setSelectedPeriod}
-                  showPurchase={showPurchase}
-                  onShowPurchaseChange={handleShowPurchaseChange}
                   siteList={siteList}
                   visibleSites={visibleSites}
                   onToggleSitePrice={toggleSitePrice}

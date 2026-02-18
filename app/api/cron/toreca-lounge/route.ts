@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
                     card_id: link.card_id,
                     shop_id: shop.id,
                     price: loungeCard.price,
-                    condition: link.condition || 'normal',
+                    condition: link.condition || '素体',
                     link_id: link.id,
                 })
                 updatedCount++

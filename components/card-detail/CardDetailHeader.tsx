@@ -323,15 +323,14 @@ export default function CardDetailHeader({
             const rows: { label: string; domestic: number; domesticLabel: string; overseasJpy: number; overseasUsd: number; profit: number; pct: number }[] = []
             const looseJpy = overseasLatest.loose_price_jpy
             const gradedJpy = overseasLatest.graded_price_jpy
-            if (looseJpy && overseasLatest.loose_price_usd) {
-              const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
-              if (saleA) rows.push({ label: '素体(A)→海外', domestic: saleA.price, domesticLabel: 'A', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleA.price, pct: ((looseJpy - saleA.price) / saleA.price) * 100 })
-              const saleB = snkrdunkLatestByGrade.find(g => g.grade === 'B')
-              if (saleB) rows.push({ label: '素体(B)→海外', domestic: saleB.price, domesticLabel: 'B', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleB.price, pct: ((looseJpy - saleB.price) / saleB.price) * 100 })
+            // 国内買取価格 vs 海外販売価格の比較（PSA10 → 素体 の順）
+            const purchasePSA10 = latestPurchaseByLabel['psa10']
+            if (gradedJpy && overseasLatest.graded_price_usd && purchasePSA10) {
+              rows.push({ label: 'PSA10→海外', domestic: purchasePSA10.price, domesticLabel: '買取PSA10', overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - purchasePSA10.price, pct: ((gradedJpy - purchasePSA10.price) / purchasePSA10.price) * 100 })
             }
-            if (gradedJpy && overseasLatest.graded_price_usd) {
-              const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
-              if (salePSA10) rows.push({ label: 'PSA10→海外', domestic: salePSA10.price, domesticLabel: 'PSA10', overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - salePSA10.price, pct: ((gradedJpy - salePSA10.price) / salePSA10.price) * 100 })
+            const purchaseNormal = latestPurchaseByLabel['normal']
+            if (looseJpy && overseasLatest.loose_price_usd && purchaseNormal) {
+              rows.push({ label: '素体→海外', domestic: purchaseNormal.price, domesticLabel: '買取素体', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - purchaseNormal.price, pct: ((looseJpy - purchaseNormal.price) / purchaseNormal.price) * 100 })
             }
             if (rows.length === 0) return null
             return (
