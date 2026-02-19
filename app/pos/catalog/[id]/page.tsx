@@ -6,6 +6,7 @@ import { use } from 'react'
 import PosLayout from '@/components/pos/PosLayout'
 import TransactionEditModal from '@/components/pos/TransactionEditModal'
 import TransactionDeleteDialog from '@/components/pos/TransactionDeleteDialog'
+import CatalogEditModal from '@/components/pos/CatalogEditModal'
 import { getCatalog, getInventory, getTransactions, refreshMarketPrices, updateInventoryPrice } from '@/lib/pos/api'
 import { formatPrice, getCondition } from '@/lib/pos/constants'
 import type { PosCatalog, PosInventory, PosTransaction } from '@/lib/pos/types'
@@ -23,6 +24,7 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
     const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
     const [priceInput, setPriceInput] = useState('')
     const [refreshing, setRefreshing] = useState(false)
+    const [showCatalogEdit, setShowCatalogEdit] = useState(false)
 
     const loadData = async () => {
         try {
@@ -106,12 +108,16 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                 <span>{catalog.rarity || '-'}</span>
                                 {catalog.card_number && <><span>·</span><span>{catalog.card_number}</span></>}
                             </div>
-                            <div className="mt-2 md:mt-0">
+                            <div className="flex items-center gap-2 mt-2 md:mt-0">
                                 {catalog.source_type === 'api' ? (
                                     <span className="text-xs px-2.5 py-1 bg-blue-50 text-blue-500 rounded-full">🔗 API連携</span>
                                 ) : (
                                     <span className="text-xs px-2.5 py-1 bg-gray-100 text-gray-400 rounded-full">独自登録</span>
                                 )}
+                                <button
+                                    onClick={() => setShowCatalogEdit(true)}
+                                    className="text-xs px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full hover:bg-gray-200 transition-colors"
+                                >✏️ 編集</button>
                             </div>
                         </div>
                     </div>
@@ -428,7 +434,16 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                 </div>
             )}
 
-            {/* 編集モーダル */}
+            {/* カタログ編集モーダル */}
+            {showCatalogEdit && catalog && (
+                <CatalogEditModal
+                    catalog={catalog}
+                    onClose={() => setShowCatalogEdit(false)}
+                    onSaved={(updated) => { setCatalog(updated); setShowCatalogEdit(false) }}
+                />
+            )}
+
+            {/* 取引編集モーダル */}
             {editingTx && (
                 <TransactionEditModal
                     transaction={editingTx}
