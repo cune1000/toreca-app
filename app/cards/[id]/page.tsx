@@ -219,10 +219,10 @@ export default function CardDetailPage({ params }: Props) {
       else if (siteName.includes('トレカキャンプ') || siteName.includes('torecacamp')) source = 'torecacamp'
       const res = await fetch('/api/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: saleUrl.product_url, source }) })
       const data = await res.json()
-      if (data.success && data.price === null && data.stock === 0) {
-        // 在庫切れ（出品0件）
-        await supabase.from('card_sale_urls').update({ last_stock: 0, last_checked_at: new Date().toISOString() }).eq('id', saleUrl.id)
-        alert('在庫切れ（出品0件）')
+      if (data.success && data.price === null && (data.stock === 0 || data.stock === null)) {
+        // 在庫切れ（出品0件）→ 正常系として処理
+        await supabase.from('card_sale_urls').update({ last_price: null, last_stock: 0, last_checked_at: new Date().toISOString() }).eq('id', saleUrl.id)
+        alert('出品0件（在庫なし）')
         fetchPrices()
       } else if (data.success && (data.price || data.price === 0)) {
         let stock = null

@@ -262,7 +262,9 @@ export async function getListings(
     const res = await snkrdunkFetch(url)
 
     if (!res.ok) {
-        throw new Error(`出品一覧の取得に失敗: HTTP ${res.status}`)
+        // 404等は出品0件として扱う
+        console.warn(`[SnkrdunkAPI] getListings HTTP ${res.status} for apparelId=${apparelId}, treating as empty`)
+        return []
     }
 
     const data = await res.json()
@@ -330,7 +332,8 @@ export async function getBoxSizes(apparelId: number): Promise<SnkrdunkBoxSize[]>
     const res = await snkrdunkFetch(url)
 
     if (!res.ok) {
-        throw new Error(`BOXサイズ情報の取得に失敗: HTTP ${res.status}`)
+        console.warn(`[SnkrdunkAPI] getBoxSizes HTTP ${res.status} for apparelId=${apparelId}, treating as empty`)
+        return []
     }
 
     const data = await res.json()
