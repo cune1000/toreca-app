@@ -86,6 +86,11 @@ export default function CardsPage({
   // Card monitoring statuses
   const [cardStatuses, setCardStatuses] = useState<Record<string, any>>({})
 
+  // Image hover zoom
+  const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null)
+  // Page jump input
+  const [pageJumpInput, setPageJumpInput] = useState('')
+
   // Checkbox & batch edit
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBatchModal, setShowBatchModal] = useState(false)
@@ -902,7 +907,16 @@ export default function CardsPage({
                     </td>
                     <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
                       {card.image_url ? (
-                        <img src={card.image_url} alt={card.name} className="w-12 h-16 object-cover rounded" />
+                        <img
+                          src={card.image_url}
+                          alt={card.name}
+                          className="w-12 h-auto max-h-20 object-contain rounded cursor-pointer"
+                          onMouseEnter={e => {
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            setHoveredImage({ url: card.image_url!, x: rect.right + 8, y: rect.top })
+                          }}
+                          onMouseLeave={() => setHoveredImage(null)}
+                        />
                       ) : (
                         <div className="w-12 h-16 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">No Image</div>
                       )}
@@ -999,11 +1013,19 @@ export default function CardsPage({
 
         {/* ページネーション */}
         {totalPages > 1 && (
-          <div className="p-4 border-t flex items-center justify-center gap-2">
+          <div className="p-4 border-t flex flex-wrap items-center justify-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
+              title="最初のページ"
+            >
+              ⏮ 最初
+            </button>
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50"
+              className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
             >
               ← 前
             </button>
@@ -1017,7 +1039,7 @@ export default function CardsPage({
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`px-3 py-1 rounded ${currentPage === page ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
+                  className={`px-3 py-1 rounded text-sm ${currentPage === page ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
                 >
                   {page}
                 </button>
@@ -1026,13 +1048,73 @@ export default function CardsPage({
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50"
+              className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
             >
               次 →
             </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
+              title="最後のページ"
+            >
+              最後 ⏭
+            </button>
+            <span className="text-xs text-gray-400 mx-1">|</span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageJumpInput}
+                onChange={e => setPageJumpInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const p = parseInt(pageJumpInput)
+                    if (!isNaN(p) && p >= 1 && p <= totalPages) {
+                      setCurrentPage(p)
+                      setPageJumpInput('')
+                    }
+                  }
+                }}
+                placeholder={`${currentPage}/${totalPages}`}
+                className="w-20 px-2 py-1 border rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              <button
+                onClick={() => {
+                  const p = parseInt(pageJumpInput)
+                  if (!isNaN(p) && p >= 1 && p <= totalPages) {
+                    setCurrentPage(p)
+                    setPageJumpInput('')
+                  }
+                }}
+                className="px-2 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+              >
+                移動
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* 画像ホバーズーム */}
+      {hoveredImage && (
+        <div
+          className="fixed z-[100] pointer-events-none"
+          style={{
+            left: Math.min(hoveredImage.x, window.innerWidth - 320),
+            top: Math.max(8, Math.min(hoveredImage.y, window.innerHeight - 440)),
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-2">
+            <img
+              src={hoveredImage.url}
+              alt=""
+              className="w-72 h-auto max-h-[420px] object-contain rounded-lg"
+            />
+          </div>
+        </div>
+      )}
 
       {/* ===================================================================== */}
       {/* 一括設定モーダル */}
