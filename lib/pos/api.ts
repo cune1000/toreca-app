@@ -60,10 +60,11 @@ export async function searchCatalogFromAPI(keyword: string) {
 // 在庫
 // =============================================================================
 
-export async function getInventory(params?: { category?: string; sort?: string }) {
+export async function getInventory(params?: { category?: string; sort?: string; catalog_id?: string }) {
     const sp = new URLSearchParams()
     if (params?.category) sp.set('category', params.category)
     if (params?.sort) sp.set('sort', params.sort)
+    if (params?.catalog_id) sp.set('catalog_id', params.catalog_id)
     const q = sp.toString()
     return request<{ success: true; data: PosInventory[] }>(`${BASE}/inventory${q ? `?${q}` : ''}`)
 }
@@ -99,10 +100,11 @@ export async function registerSale(data: {
     })
 }
 
-export async function getTransactions(params?: { type?: string; limit?: number }) {
+export async function getTransactions(params?: { type?: string; limit?: number; catalog_id?: string }) {
     const sp = new URLSearchParams()
     if (params?.type) sp.set('type', params.type)
     if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.catalog_id) sp.set('catalog_id', params.catalog_id)
     const q = sp.toString()
     return request<{ success: true; data: PosTransaction[] }>(`${BASE}/transactions${q ? `?${q}` : ''}`)
 }
@@ -137,15 +139,4 @@ export async function adjustInventory(data: {
 
 export async function getStats() {
     return request<{ success: true; data: PosStats }>(`${BASE}/stats`)
-}
-
-// =============================================================================
-// 相場
-// =============================================================================
-
-export async function getMarketPrice(cardId: string, days?: number) {
-    const sp = new URLSearchParams()
-    sp.set('card_id', cardId)
-    if (days) sp.set('days', String(days))
-    return request<{ success: true; data: any }>(`${BASE}/market-price?${sp.toString()}`)
 }

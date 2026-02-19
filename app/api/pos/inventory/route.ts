@@ -12,11 +12,16 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const category = searchParams.get('category')
         const sort = searchParams.get('sort') || 'updated_at'
+        const catalogId = searchParams.get('catalog_id')
 
         let query = supabase
             .from('pos_inventory')
             .select('*, catalog:pos_catalogs(*)')
             .gt('quantity', -1) // 0も含む
+
+        if (catalogId) {
+            query = query.eq('catalog_id', catalogId)
+        }
 
         if (category && category !== 'all') {
             query = query.eq('catalog.category', category)

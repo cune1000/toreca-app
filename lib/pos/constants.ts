@@ -3,12 +3,12 @@
 // =============================================================================
 
 export const CONDITIONS = [
-    { code: 'S', name: '未開封', color: '#8b5cf6' },
-    { code: 'A', name: '美品', color: '#22c55e' },
-    { code: 'B', name: '良品', color: '#3b82f6' },
-    { code: 'C', name: '並品', color: '#f59e0b' },
-    { code: 'D', name: '傷あり', color: '#ef4444' },
-    { code: 'J', name: 'ジャンク', color: '#6b7280' },
+    { code: 'PSA10', color: '#8b5cf6' },
+    { code: 'PSA9', color: '#a855f7' },
+    { code: 'A', color: '#22c55e' },
+    { code: 'B', color: '#3b82f6' },
+    { code: 'C', color: '#f59e0b' },
+    { code: 'D', color: '#ef4444' },
 ] as const
 
 export type ConditionCode = typeof CONDITIONS[number]['code']
