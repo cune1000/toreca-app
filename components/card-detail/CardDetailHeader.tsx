@@ -49,6 +49,7 @@ export default function CardDetailHeader({
 }: CardDetailHeaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
+  const [imageZoomed, setImageZoomed] = useState(false)
 
   const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -121,18 +122,7 @@ export default function CardDetailHeader({
   }
 
   const handleImageClick = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.onchange = (e: any) => {
-      const file = e.target.files[0]
-      if (file) {
-        const dt = new DataTransfer()
-        dt.items.add(file)
-        handleImageDrop({ preventDefault: () => { }, stopPropagation: () => { }, dataTransfer: dt } as any)
-      }
-    }
-    input.click()
+    if (cardImageUrl) setImageZoomed(true)
   }
 
   return (
@@ -161,12 +151,27 @@ export default function CardDetailHeader({
             <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-        {!isDragging && !imageUploading && (
+        {!isDragging && !imageUploading && cardImageUrl && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl flex items-center justify-center transition-colors">
-            <p className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 px-2 py-1 rounded">画像変更</p>
+            <p className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 px-2 py-1 rounded">クリックで拡大</p>
           </div>
         )}
       </div>
+
+      {/* 画像拡大モーダル */}
+      {imageZoomed && cardImageUrl && (
+        <div
+          className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center cursor-pointer"
+          onClick={() => setImageZoomed(false)}
+        >
+          <img
+            src={cardImageUrl}
+            alt={card.name}
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
 
       {/* カード情報 */}
       <div className="flex-1 min-w-0">
