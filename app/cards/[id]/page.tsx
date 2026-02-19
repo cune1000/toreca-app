@@ -193,6 +193,22 @@ export default function CardDetailPage({ params }: Props) {
     } catch (error: any) { alert('エラー: ' + error.message) }
   }
 
+  const editSaleUrl = async (saleUrlId: string, newUrl: string) => {
+    try {
+      const { error } = await supabase.from('card_sale_urls').update({ product_url: newUrl }).eq('id', saleUrlId)
+      if (error) throw error
+      fetchPrices()
+    } catch (error: any) { alert('URL変更エラー: ' + error.message) }
+  }
+
+  const deleteSaleUrl = async (saleUrlId: string) => {
+    try {
+      const { error } = await supabase.from('card_sale_urls').delete().eq('id', saleUrlId)
+      if (error) throw error
+      fetchPrices()
+    } catch (error: any) { alert('URL削除エラー: ' + error.message) }
+  }
+
   const updatePrice = async (saleUrl: any) => {
     setScraping(true)
     try {
@@ -572,6 +588,8 @@ export default function CardDetailPage({ params }: Props) {
                   onShowSaleUrlForm={() => setShowSaleUrlForm(true)}
                   onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); handleCardUpdated() }}
                   onUpdated={handleCardUpdated}
+                  onEditSaleUrl={editSaleUrl}
+                  onDeleteSaleUrl={deleteSaleUrl}
                 />
               )}
             </div>

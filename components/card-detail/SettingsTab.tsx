@@ -1,6 +1,7 @@
 'use client'
 
-import { ExternalLink, RefreshCw, Plus, Zap, Clock, AlertTriangle, Link2, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
+import { ExternalLink, RefreshCw, Plus, Zap, Clock, AlertTriangle, Link2, ChevronRight, Pencil, Trash2, Check, X } from 'lucide-react'
 import ShinsokuLink from '@/components/chart/ShinsokuLink'
 import LoungeLink from '@/components/chart/LoungeLink'
 import PriceChartingLink from '@/components/chart/PriceChartingLink'
@@ -21,6 +22,8 @@ interface SettingsTabProps {
   onShowSaleUrlForm: () => void
   onLinksChanged: () => void
   onUpdated?: () => void
+  onEditSaleUrl?: (saleUrlId: string, newUrl: string) => Promise<void>
+  onDeleteSaleUrl?: (saleUrlId: string) => Promise<void>
 }
 
 const STATUS_CONFIG: Record<string, { label: string; dotClass: string; bgClass: string }> = {
@@ -43,8 +46,11 @@ export default function SettingsTab({
   snkrdunkScraping, scraping,
   onScrapeSnkrdunk, onUpdateAutoScrapeMode, onUpdateScrapeInterval,
   onUpdateCheckInterval, onUpdatePrice, onShowSaleUrlForm,
-  onLinksChanged, onUpdated,
+  onLinksChanged, onUpdated, onEditSaleUrl, onDeleteSaleUrl,
 }: SettingsTabProps) {
+  const [editingUrlId, setEditingUrlId] = useState<string | null>(null)
+  const [editingUrlValue, setEditingUrlValue] = useState('')
+
   const snkrdunkUrl = saleUrls.find((url: any) =>
     isSnkrdunkSiteName(url.site?.name || '') || isSnkrdunkUrl(url.product_url || '')
   )
@@ -228,15 +234,67 @@ export default function SettingsTab({
                   {/* サイト情報 */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-700">{url.site?.name || 'Unknown'}</p>
-                    <a
-                      href={url.product_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-500 truncate flex items-center gap-1 mt-0.5 transition-colors"
-                    >
-                      <span className="truncate">{url.product_url.substring(0, 50)}...</span>
-                      <ExternalLink size={10} className="flex-shrink-0" />
-                    </a>
+                    {editingUrlId === url.id ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <input
+                          value={editingUrlValue}
+                          onChange={(e) => setEditingUrlValue(e.target.value)}
+                          className="flex-1 px-2 py-0.5 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          autoFocus
+                        />
+                        <button
+                          onClick={async () => {
+                            if (onEditSaleUrl && editingUrlValue.trim()) {
+                              await onEditSaleUrl(url.id, editingUrlValue.trim())
+                            }
+                            setEditingUrlId(null)
+                          }}
+                          className="p-0.5 text-green-600 hover:bg-green-50 rounded"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          onClick={() => setEditingUrlId(null)}
+                          className="p-0.5 text-slate-400 hover:bg-slate-50 rounded"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <a
+                          href={url.product_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-500 truncate flex items-center gap-1 transition-colors"
+                        >
+                          <span className="truncate">{url.product_url.substring(0, 50)}...</span>
+                          <ExternalLink size={10} className="flex-shrink-0" />
+                        </a>
+                        {onEditSaleUrl && (
+                          <button
+                            onClick={() => { setEditingUrlId(url.id); setEditingUrlValue(url.product_url) }}
+                            className="p-0.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                            title="URL変更"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        )}
+                        {onDeleteSaleUrl && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`${url.site?.name || ''}のURLを削除しますか？`)) {
+                                onDeleteSaleUrl(url.id)
+                              }
+                            }}
+                            className="p-0.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                            title="URL削除"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* 最新価格 */}
