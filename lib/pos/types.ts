@@ -83,7 +83,9 @@ export interface PosStats {
     totalCost: number
     estimatedValue: number
     estimatedProfit: number
+    totalExpenses: number
     todayPurchase: number
     todaySale: number
     todayProfit: number
+    todayExpenses: number
 }

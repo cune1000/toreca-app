@@ -46,7 +46,7 @@ export default function PosDashboard() {
             ) : (
                 <>
                     {/* 統計カード */}
-                    <div className="grid grid-cols-4 gap-4 mb-8">
+                    <div className="grid grid-cols-3 gap-4 mb-4">
                         <div className="bg-white border border-gray-200 rounded-xl p-6">
                             <p className="text-sm text-gray-400 mb-1">総在庫数</p>
                             <p className="text-3xl font-bold text-gray-900">{stats?.totalItems ?? 0}<span className="text-base text-gray-400 ml-1">点</span></p>
@@ -60,6 +60,15 @@ export default function PosDashboard() {
                             <p className={`text-3xl font-bold ${(stats?.estimatedProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                                 {formatPrice(stats?.estimatedProfit ?? 0)}
                             </p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                        <div className="bg-white border border-gray-200 rounded-xl p-6">
+                            <p className="text-sm text-gray-400 mb-1">仕入れ費用（累計）</p>
+                            <p className="text-2xl font-bold text-orange-600">{formatPrice(stats?.totalExpenses ?? 0)}</p>
+                            {(stats?.todayExpenses ?? 0) > 0 && (
+                                <p className="text-xs text-gray-400 mt-1">本日 +{formatPrice(stats?.todayExpenses ?? 0)}</p>
+                            )}
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-6">
                             <p className="text-sm text-gray-400 mb-1">本日の取引</p>
@@ -87,6 +96,7 @@ export default function PosDashboard() {
                                     <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">商品</th>
                                     <th className="text-center text-xs font-semibold text-gray-400 px-4 py-3">数量</th>
                                     <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">合計</th>
+                                    <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">費用</th>
                                     <th className="text-right text-xs font-semibold text-gray-400 px-6 py-3">利益</th>
                                 </tr>
                             </thead>
@@ -109,6 +119,11 @@ export default function PosDashboard() {
                                         </td>
                                         <td className="text-center text-sm text-gray-600 px-4">{tx.quantity}</td>
                                         <td className="text-right text-sm font-bold text-gray-900 px-4">{formatPrice(tx.total_price)}</td>
+                                        <td className="text-right px-4">
+                                            {tx.expenses > 0 ? (
+                                                <span className="text-sm font-bold text-orange-600">{formatPrice(tx.expenses)}</span>
+                                            ) : <span className="text-xs text-gray-300">-</span>}
+                                        </td>
                                         <td className="text-right px-6">
                                             {tx.type === 'sale' && tx.profit != null ? (
                                                 <span className={`text-sm font-bold ${tx.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
@@ -118,7 +133,7 @@ export default function PosDashboard() {
                                         </td>
                                     </tr>
                                 )) : (
-                                    <tr><td colSpan={6} className="text-center py-12 text-sm text-gray-400">取引がありません</td></tr>
+                                    <tr><td colSpan={7} className="text-center py-12 text-sm text-gray-400">取引がありません</td></tr>
                                 )}
                             </tbody>
                         </table>

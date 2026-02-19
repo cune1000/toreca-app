@@ -24,6 +24,7 @@ function PurchasePage() {
     const [quantity, setQuantity] = useState(1)
     const [priceMode, setPriceMode] = useState<'unit' | 'total'>('unit')
     const [priceInput, setPriceInput] = useState('')
+    const [expenseMode, setExpenseMode] = useState<'total' | 'unit'>('total')
     const [expensesInput, setExpensesInput] = useState('')
     const [notes, setNotes] = useState('')
     const [showResult, setShowResult] = useState(false)
@@ -52,8 +53,12 @@ function PurchasePage() {
     const total = priceMode === 'unit'
         ? quantity * (parseInt(priceInput) || 0)
         : (parseInt(priceInput) || 0)
-    const expenses = parseInt(expensesInput) || 0
-    const expensePerUnit = quantity > 0 ? Math.round(expenses / quantity) : 0
+    const totalExpenses = expenseMode === 'total'
+        ? (parseInt(expensesInput) || 0)
+        : quantity * (parseInt(expensesInput) || 0)
+    const expensePerUnit = expenseMode === 'unit'
+        ? (parseInt(expensesInput) || 0)
+        : quantity > 0 ? Math.round((parseInt(expensesInput) || 0) / quantity) : 0
 
     const handleSubmit = async () => {
         if (!selectedCatalog || total === 0 || !effectiveCondition) return
@@ -64,7 +69,7 @@ function PurchasePage() {
                 condition: effectiveCondition,
                 quantity,
                 unit_price: unitPrice,
-                expenses: expenses || undefined,
+                expenses: totalExpenses || undefined,
                 notes: notes || undefined,
             })
             setShowResult(true)
@@ -266,7 +271,20 @@ function PurchasePage() {
 
                         {/* 仕入れにかかった費用 */}
                         <div>
-                            <label className="text-sm font-bold text-gray-600 mb-1 block">仕入れにかかった費用（任意）</label>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-sm font-bold text-gray-600">
+                                    {expenseMode === 'total' ? '仕入れにかかった費用（合計）' : '仕入れにかかった費用（1個あたり）'}
+                                </label>
+                                <button
+                                    onClick={() => {
+                                        setExpenseMode(prev => prev === 'total' ? 'unit' : 'total')
+                                        setExpensesInput('')
+                                    }}
+                                    className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 font-bold"
+                                >
+                                    {expenseMode === 'total' ? '🔄 単価入力に切替' : '🔄 合計入力に切替'}
+                                </button>
+                            </div>
                             <p className="text-xs text-gray-400 mb-3">交通費・送料・消耗品費など。在庫原価には含めず、利益計算で別途差し引きます。</p>
                             <div className="relative">
                                 <span className="absolute left-4 top-3.5 text-gray-400 text-sm">¥</span>
@@ -278,9 +296,14 @@ function PurchasePage() {
                                     className="w-full px-4 py-3.5 pl-9 border border-gray-200 rounded-xl text-lg font-bold text-right focus:outline-none focus:border-gray-400"
                                 />
                             </div>
-                            {expenses > 0 && quantity > 1 && (
+                            {expenseMode === 'total' && totalExpenses > 0 && quantity > 1 && (
                                 <p className="text-sm text-gray-400 mt-1.5 text-right">
                                     → 1個あたり {formatPrice(expensePerUnit)}
+                                </p>
+                            )}
+                            {expenseMode === 'unit' && totalExpenses > 0 && quantity > 1 && (
+                                <p className="text-sm text-gray-400 mt-1.5 text-right">
+                                    → 合計 {formatPrice(totalExpenses)}
                                 </p>
                             )}
                         </div>
@@ -308,15 +331,15 @@ function PurchasePage() {
                                     {formatPrice(parseInt(priceInput) || 0)} × {quantity}個
                                 </p>
                             )}
-                            {expenses > 0 && (
+                            {totalExpenses > 0 && (
                                 <>
                                     <div className="flex items-center justify-between border-t border-gray-200 pt-2">
                                         <span className="text-sm text-gray-400">仕入れ費用</span>
-                                        <span className="text-sm text-orange-600 font-bold">{formatPrice(expenses)}</span>
+                                        <span className="text-sm text-orange-600 font-bold">{formatPrice(totalExpenses)}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-gray-500 font-bold">合計支出</span>
-                                        <span className="text-lg font-bold text-gray-900">{formatPrice(total + expenses)}</span>
+                                        <span className="text-lg font-bold text-gray-900">{formatPrice(total + totalExpenses)}</span>
                                     </div>
                                 </>
                             )}

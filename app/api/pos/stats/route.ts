@@ -25,10 +25,18 @@ export async function GET() {
             (s: number, i: any) => s + (i.catalog?.fixed_price || i.avg_purchase_price) * i.quantity, 0
         )
 
+        // 仕入れ費用合計（全取引の expenses を合算）
+        const { data: allPurchaseTx } = await supabase
+            .from('pos_transactions')
+            .select('expenses')
+            .eq('type', 'purchase')
+
+        const totalExpenses = (allPurchaseTx || []).reduce((s: number, t: any) => s + (t.expenses || 0), 0)
+
         // 本日の取引
         const { data: todayTx } = await supabase
             .from('pos_transactions')
-            .select('type, total_price, profit')
+            .select('type, total_price, profit, expenses')
             .eq('transaction_date', today)
 
         const todayPurchase = (todayTx || [])
@@ -40,6 +48,9 @@ export async function GET() {
         const todayProfit = (todayTx || [])
             .filter((t: any) => t.type === 'sale')
             .reduce((s: number, t: any) => s + (t.profit || 0), 0)
+        const todayExpenses = (todayTx || [])
+            .filter((t: any) => t.type === 'purchase')
+            .reduce((s: number, t: any) => s + (t.expenses || 0), 0)
 
         return NextResponse.json({
             success: true,
@@ -49,9 +60,11 @@ export async function GET() {
                 totalCost,
                 estimatedValue,
                 estimatedProfit: estimatedValue - totalCost,
+                totalExpenses,
                 todayPurchase,
                 todaySale,
                 todayProfit,
+                todayExpenses,
             },
         })
     } catch (error: any) {

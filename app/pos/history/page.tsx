@@ -21,6 +21,7 @@ export default function HistoryPage() {
     const totalPurchase = transactions.filter(t => t.type === 'purchase').reduce((s, t) => s + t.total_price, 0)
     const totalSale = transactions.filter(t => t.type === 'sale').reduce((s, t) => s + t.total_price, 0)
     const totalProfit = transactions.filter(t => t.type === 'sale').reduce((s, t) => s + (t.profit || 0), 0)
+    const totalExpenses = transactions.filter(t => t.type === 'purchase').reduce((s, t) => s + (t.expenses || 0), 0)
 
     return (
         <PosLayout>
@@ -46,10 +47,14 @@ export default function HistoryPage() {
             </div>
 
             {/* サマリー */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-4 gap-4 mb-6">
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                     <p className="text-sm text-gray-400 mb-1">仕入れ総額</p>
                     <p className="text-2xl font-bold text-blue-600">{formatPrice(totalPurchase)}</p>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <p className="text-sm text-gray-400 mb-1">仕入れ費用</p>
+                    <p className="text-2xl font-bold text-orange-600">{formatPrice(totalExpenses)}</p>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                     <p className="text-sm text-gray-400 mb-1">販売総額</p>
@@ -80,6 +85,7 @@ export default function HistoryPage() {
                                 <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">数量</th>
                                 <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">単価</th>
                                 <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">合計</th>
+                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">費用</th>
                                 <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">利益</th>
                                 <th className="text-left text-xs font-semibold text-gray-500 px-6 py-3.5">メモ</th>
                             </tr>
@@ -115,6 +121,11 @@ export default function HistoryPage() {
                                         <td className="text-right text-sm text-gray-700 px-4">{formatPrice(tx.unit_price)}</td>
                                         <td className="text-right text-sm font-bold text-gray-900 px-4">{formatPrice(tx.total_price)}</td>
                                         <td className="text-right px-4">
+                                            {tx.expenses > 0 ? (
+                                                <span className="text-sm font-bold text-orange-600">{formatPrice(tx.expenses)}</span>
+                                            ) : <span className="text-xs text-gray-300">-</span>}
+                                        </td>
+                                        <td className="text-right px-4">
                                             {tx.type === 'sale' && tx.profit != null ? (
                                                 <span className={`text-sm font-bold ${tx.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                                                     {tx.profit > 0 ? '+' : ''}{formatPrice(tx.profit)}
@@ -125,7 +136,7 @@ export default function HistoryPage() {
                                     </tr>
                                 )
                             }) : (
-                                <tr><td colSpan={9} className="text-center py-16 text-sm text-gray-400">取引がありません</td></tr>
+                                <tr><td colSpan={10} className="text-center py-16 text-sm text-gray-400">取引がありません</td></tr>
                             )}
                         </tbody>
                     </table>
