@@ -64,7 +64,7 @@ function SalePage() {
 
     const total = quantity * (parseInt(unitPrice) || 0)
     const profit = selectedInv
-        ? calculateProfit(parseInt(unitPrice) || 0, selectedInv.avg_purchase_price, quantity)
+        ? calculateProfit(parseInt(unitPrice) || 0, selectedInv.avg_purchase_price, quantity, selectedInv.avg_expense_per_unit || 0)
         : null
 
     const handleSubmit = async () => {
@@ -250,15 +250,25 @@ function SalePage() {
                             {profit && (
                                 <>
                                     <div className="flex items-center justify-between border-t border-gray-200 pt-3">
-                                        <span className="text-sm text-gray-500 font-bold">利益</span>
-                                        <span className={`text-xl font-bold ${profit.total >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        <span className="text-sm text-gray-500 font-bold">粗利益</span>
+                                        <span className={`text-lg font-bold ${profit.total >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                                             {profit.total >= 0 ? '+' : ''}{formatPrice(profit.total)}
+                                            <span className="text-xs text-gray-400 ml-1">({profit.rate > 0 ? '+' : ''}{profit.rate}%)</span>
                                         </span>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-400">利益率</span>
-                                        <span className={`text-base font-bold ${profit.rate >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                            {profit.rate > 0 ? '+' : ''}{profit.rate}%
+                                    {profit.expenseTotal > 0 && (
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm text-gray-400">仕入れ費用</span>
+                                            <span className="text-sm text-orange-600 font-bold">-{formatPrice(profit.expenseTotal)}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center justify-between border-t border-gray-200 pt-2">
+                                        <span className="text-sm text-gray-500 font-bold">
+                                            {profit.expenseTotal > 0 ? '実利益' : '利益'}
+                                        </span>
+                                        <span className={`text-xl font-bold ${profit.netTotal >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                            {profit.netTotal >= 0 ? '+' : ''}{formatPrice(profit.netTotal)}
+                                            <span className="text-xs text-gray-400 ml-1">({profit.netRate > 0 ? '+' : ''}{profit.netRate}%)</span>
                                         </span>
                                     </div>
                                 </>
@@ -274,7 +284,7 @@ function SalePage() {
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}
                         >
-                            {submitting ? '登録中...' : `🛒 販売登録（利益 ${profit ? formatPrice(profit.total) : '¥0'}）`}
+                            {submitting ? '登録中...' : `🛒 販売登録（利益 ${profit ? formatPrice(profit.netTotal) : '¥0'}）`}
                         </button>
                     </div>
                 </div>

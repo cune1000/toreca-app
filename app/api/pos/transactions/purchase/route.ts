@@ -9,11 +9,14 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { catalog_id, condition, quantity, unit_price, transaction_date, notes } = body
+        const { catalog_id, condition, quantity, unit_price, expenses, transaction_date, notes } = body
 
         if (!catalog_id || !condition || !quantity || !unit_price) {
             return NextResponse.json({ success: false, error: '必須項目が不足しています' }, { status: 400 })
         }
+
+        const totalExpenses = expenses || 0
+        const expensePerUnit = quantity > 0 ? Math.round(totalExpenses / quantity) : 0
 
         // 1. 在庫レコードを検索（なければ作成）
         let { data: inventory } = await supabase
@@ -33,6 +36,8 @@ export async function POST(request: NextRequest) {
                     avg_purchase_price: 0,
                     total_purchase_cost: 0,
                     total_purchased: 0,
+                    avg_expense_per_unit: 0,
+                    total_expenses: 0,
                 })
                 .select()
                 .single()
@@ -40,7 +45,7 @@ export async function POST(request: NextRequest) {
             inventory = newInv
         }
 
-        // 2. 移動平均を再計算
+        // 2. 移動平均を再計算（仕入れ単価）
         const newTotalPurchased = inventory.total_purchased + quantity
         const newAvg = Math.round(
             (inventory.avg_purchase_price * inventory.total_purchased + unit_price * quantity)
@@ -49,7 +54,13 @@ export async function POST(request: NextRequest) {
         const newTotalCost = inventory.total_purchase_cost + (unit_price * quantity)
         const newQuantity = inventory.quantity + quantity
 
-        // 3. 在庫を更新
+        // 3. 経費の移動平均を再計算（在庫原価には含めない）
+        const newTotalExpenses = (inventory.total_expenses || 0) + totalExpenses
+        const newAvgExpense = newTotalPurchased > 0
+            ? Math.round(newTotalExpenses / newTotalPurchased)
+            : 0
+
+        // 4. 在庫を更新
         const { error: updateError } = await supabase
             .from('pos_inventory')
             .update({
@@ -57,13 +68,15 @@ export async function POST(request: NextRequest) {
                 avg_purchase_price: newAvg,
                 total_purchase_cost: newTotalCost,
                 total_purchased: newTotalPurchased,
+                avg_expense_per_unit: newAvgExpense,
+                total_expenses: newTotalExpenses,
                 updated_at: new Date().toISOString(),
             })
             .eq('id', inventory.id)
 
         if (updateError) throw updateError
 
-        // 4. 取引レコード作成
+        // 5. 取引レコード作成
         const { data: transaction, error: txError } = await supabase
             .from('pos_transactions')
             .insert({
@@ -72,6 +85,7 @@ export async function POST(request: NextRequest) {
                 quantity,
                 unit_price,
                 total_price: unit_price * quantity,
+                expenses: totalExpenses,
                 transaction_date: transaction_date || new Date().toISOString().split('T')[0],
                 notes: notes || null,
             })
@@ -80,7 +94,7 @@ export async function POST(request: NextRequest) {
 
         if (txError) throw txError
 
-        // 5. 履歴レコード作成
+        // 6. 履歴レコード作成
         await supabase
             .from('pos_history')
             .insert({
@@ -99,6 +113,7 @@ export async function POST(request: NextRequest) {
                 id: inventory.id,
                 quantity: newQuantity,
                 avg_purchase_price: newAvg,
+                avg_expense_per_unit: newAvgExpense,
             },
         })
     } catch (error: any) {

@@ -30,11 +30,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: `在庫不足です（在庫: ${inventory.quantity}点）` }, { status: 400 })
         }
 
-        // 2. 利益計算
+        // 2. 利益計算（粗利 = 販売価格 - 仕入原価）
         const profit = (unit_price - inventory.avg_purchase_price) * quantity
         const profitRate = inventory.avg_purchase_price > 0
             ? Math.round((unit_price - inventory.avg_purchase_price) / inventory.avg_purchase_price * 10000) / 100
             : 0
+
+        // 経費を含めた実利益（expenses フィールドに経費合計を記録）
+        const avgExpense = inventory.avg_expense_per_unit || 0
+        const expenseTotal = avgExpense * quantity
 
         const newQuantity = inventory.quantity - quantity
 
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
 
         if (updateError) throw updateError
 
-        // 4. 取引レコード作成
+        // 4. 取引レコード作成（expensesに販売時の経費按分額を記録）
         const { data: transaction, error: txError } = await supabase
             .from('pos_transactions')
             .insert({
@@ -58,6 +62,7 @@ export async function POST(request: NextRequest) {
                 quantity,
                 unit_price,
                 total_price: unit_price * quantity,
+                expenses: expenseTotal,
                 profit,
                 profit_rate: profitRate,
                 transaction_date: transaction_date || new Date().toISOString().split('T')[0],

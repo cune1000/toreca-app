@@ -6,20 +6,32 @@ export interface ProfitResult {
     perUnit: number
     total: number
     rate: number // %
+    expenseTotal: number
+    netTotal: number
+    netRate: number // %
 }
 
-/** 利益計算 */
+/** 利益計算（経費別計算対応） */
 export function calculateProfit(
     sellPrice: number,
     avgPurchasePrice: number,
-    quantity: number
+    quantity: number,
+    avgExpensePerUnit: number = 0
 ): ProfitResult {
     const perUnit = sellPrice - avgPurchasePrice
+    const total = perUnit * quantity
+    const expenseTotal = avgExpensePerUnit * quantity
+    const netTotal = total - expenseTotal
     return {
         perUnit,
-        total: perUnit * quantity,
+        total,
         rate: avgPurchasePrice > 0
             ? Math.round((perUnit / avgPurchasePrice) * 10000) / 100
+            : 0,
+        expenseTotal,
+        netTotal,
+        netRate: avgPurchasePrice > 0
+            ? Math.round(((perUnit - avgExpensePerUnit) / avgPurchasePrice) * 10000) / 100
             : 0,
     }
 }

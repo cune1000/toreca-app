@@ -28,6 +28,8 @@ export interface PosInventory {
     avg_purchase_price: number
     total_purchase_cost: number
     total_purchased: number
+    avg_expense_per_unit: number
+    total_expenses: number
     created_at: string
     updated_at: string
     // JOIN時
@@ -41,6 +43,7 @@ export interface PosTransaction {
     quantity: number
     unit_price: number
     total_price: number
+    expenses: number
     profit: number | null
     profit_rate: number | null
     transaction_date: string

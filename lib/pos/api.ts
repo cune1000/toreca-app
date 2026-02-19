@@ -78,6 +78,7 @@ export async function registerPurchase(data: {
     condition: string
     quantity: number
     unit_price: number
+    expenses?: number
     transaction_date?: string
     notes?: string
 }) {
