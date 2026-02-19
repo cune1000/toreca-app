@@ -134,7 +134,7 @@ function SalePage() {
                                         <span className="text-xs text-gray-400">販売価格 {formatPrice(items[0].catalog.fixed_price)}</span>
                                     )}
                                 </div>
-                                <div className="grid grid-cols-1 gap-1.5 ml-11">
+                                <div className="flex flex-wrap gap-2 ml-11">
                                     {items.map(inv => (
                                         <button
                                             key={inv.id}
@@ -142,19 +142,18 @@ function SalePage() {
                                                 setSelectedInv(inv)
                                                 setUnitPrice(String(inv.catalog?.fixed_price || ''))
                                             }}
-                                            className="w-full bg-white border border-gray-100 rounded-lg px-4 py-3 flex items-center gap-3 hover:bg-gray-50 text-left transition-colors"
+                                            className="bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 hover:bg-gray-50 transition-colors text-left"
                                         >
-                                            <span
-                                                className="text-xs px-2.5 py-1 rounded-full text-white font-bold"
-                                                style={{ backgroundColor: inv.cond?.color || '#6b7280' }}
-                                            >
-                                                {inv.condition}
-                                            </span>
-                                            <span className="text-sm text-gray-600">在庫 <span className="font-bold text-gray-900">{inv.quantity}</span>点</span>
-                                            <span className="text-sm text-gray-400">仕入 {formatPrice(inv.avg_purchase_price)}</span>
-                                            <span className="ml-auto text-sm font-bold text-gray-700">
-                                                {formatPrice(inv.catalog?.fixed_price)}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="text-xs px-2 py-0.5 rounded text-white font-bold"
+                                                    style={{ backgroundColor: inv.cond?.color || '#6b7280' }}
+                                                >
+                                                    {inv.condition}
+                                                </span>
+                                                <span className="text-sm font-bold text-gray-900">× {inv.quantity}</span>
+                                            </div>
+                                            <p className="text-xs text-gray-400 mt-1">仕入 {formatPrice(inv.avg_purchase_price)}</p>
                                         </button>
                                     ))}
                                 </div>
