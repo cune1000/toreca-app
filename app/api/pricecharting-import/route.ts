@@ -11,6 +11,7 @@ interface ScrapeResult {
   pricechartingId: string | null
   pricechartingName: string
   imageUrl: string | null
+  imageBase64: string | null
   cardData: {
     name: string | null
     number: string | null
@@ -66,13 +67,14 @@ async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>):
       ? titleMatch[1].replace(/\s*\|.*$/, '').replace(/\s*Price.*$/i, '').trim()
       : ''
 
-    // 5. AI認識
+    // 5. 画像Base64取得 + AI認識
     let cardData = null
+    let imageBase64: string | null = null
     if (imageUrl) {
       try {
-        const base64 = await fetchImageAsBase64(imageUrl)
+        imageBase64 = await fetchImageAsBase64(imageUrl)
         const result = await model.generateContent([
-          { inlineData: { mimeType: 'image/jpeg', data: base64 } },
+          { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
           { text: CARD_RECOGNITION_PROMPT },
         ])
         const text = extractJsonFromResponse(result.response.text())
@@ -88,13 +90,14 @@ async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>):
       }
     }
 
-    return { url, pricechartingId, pricechartingName, imageUrl, cardData }
+    return { url, pricechartingId, pricechartingName, imageUrl, imageBase64, cardData }
   } catch (err: any) {
     return {
       url,
       pricechartingId: null,
       pricechartingName: '',
       imageUrl: null,
+      imageBase64: null,
       cardData: null,
       error: err.message || 'Unknown error',
     }

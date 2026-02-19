@@ -15,6 +15,7 @@ interface PCCard {
   pricechartingId: string | null
   pricechartingName: string
   imageUrl: string | null
+  imageBase64: string | null
   cardData: {
     name: string | null
     number: string | null
@@ -137,6 +138,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
             pricechartingId: r.pricechartingId,
             pricechartingName: r.pricechartingName,
             imageUrl: r.imageUrl,
+            imageBase64: r.imageBase64 || null,
             cardData: r.cardData,
             editName: r.cardData?.name || r.pricechartingName || '',
             editNumber: r.cardData?.number || '',
@@ -158,6 +160,38 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
       setLoading(false)
       setFetchProgress('')
     }
+  }
+
+  // 画像アップロード（サーバーから取得済みのbase64を使用、CORS回避）
+  const uploadImage = async (card: PCCard): Promise<string | null> => {
+    if (!card.imageBase64) return null
+    try {
+      const dataUri = `data:image/jpeg;base64,${card.imageBase64}`
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUri, fileName: `pc_${card.pricechartingId || Date.now()}.jpg` }),
+      })
+      const data = await res.json()
+      return data.success ? data.url : null
+    } catch (e) {
+      console.error('Image upload failed:', e)
+      return null
+    }
+  }
+
+  // PriceCharting紐付け（名前補完+価格取得）
+  const linkPriceCharting = async (cardId: string, pricechartingId: string) => {
+    await fetch('/api/overseas-prices/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ card_id: cardId, pricecharting_id: pricechartingId }),
+    }).catch(() => {})
+    await fetch('/api/overseas-prices/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ card_id: cardId, pricecharting_id: pricechartingId }),
+    }).catch(() => {})
   }
 
   // 一括登録
@@ -184,26 +218,10 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
           if (card.pricechartingId) {
             const updateFields: Record<string, any> = { pricecharting_id: card.pricechartingId }
 
-            // 既存カードに画像がなければPriceChartingの画像をアップロード
-            if (!card.existingImageUrl && card.imageUrl) {
-              try {
-                const imgRes = await fetch(card.imageUrl)
-                const blob = await imgRes.blob()
-                const reader = new FileReader()
-                const base64 = await new Promise<string>((resolve) => {
-                  reader.onload = () => resolve(reader.result as string)
-                  reader.readAsDataURL(blob)
-                })
-                const uploadRes = await fetch('/api/upload', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ image: base64, fileName: `pc_${card.pricechartingId}.jpg` }),
-                })
-                const uploadData = await uploadRes.json()
-                if (uploadData.success) updateFields.image_url = uploadData.url
-              } catch (e) {
-                console.error('Image upload for existing card failed:', e)
-              }
+            // 既存カードに画像がなければアップロード
+            if (!card.existingImageUrl && card.imageBase64) {
+              const uploadedUrl = await uploadImage(card)
+              if (uploadedUrl) updateFields.image_url = uploadedUrl
             }
 
             await supabase
@@ -211,20 +229,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
               .update(updateFields)
               .eq('id', card.existingId)
 
-            // 名前補完
-            await fetch('/api/overseas-prices/link', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ card_id: card.existingId, pricecharting_id: card.pricechartingId }),
-            }).catch(() => {})
-
-            // 価格取得
-            await fetch('/api/overseas-prices/update', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ card_id: card.existingId, pricecharting_id: card.pricechartingId }),
-            }).catch(() => {})
-
+            await linkPriceCharting(card.existingId, card.pricechartingId)
             linked++
           } else {
             skipped++
@@ -233,31 +238,8 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
         }
 
         // 新規カード → 画像アップロード + カード登録
-        // 1. 画像アップロード
-        let uploadedImageUrl = null
-        if (card.imageUrl) {
-          try {
-            const imgRes = await fetch(card.imageUrl)
-            const blob = await imgRes.blob()
-            const reader = new FileReader()
-            const base64 = await new Promise<string>((resolve) => {
-              reader.onload = () => resolve(reader.result as string)
-              reader.readAsDataURL(blob)
-            })
+        const uploadedImageUrl = await uploadImage(card)
 
-            const uploadRes = await fetch('/api/upload', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: base64, fileName: `pc_${card.pricechartingId || Date.now()}.jpg` }),
-            })
-            const uploadData = await uploadRes.json()
-            if (uploadData.success) uploadedImageUrl = uploadData.url
-          } catch (e) {
-            console.error('Image upload failed:', e)
-          }
-        }
-
-        // 2. カード登録
         const { data: insertedCard, error: insertError } = await supabase
           .from('cards')
           .insert({
@@ -272,21 +254,8 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
 
         if (insertError) throw insertError
 
-        // 3. PriceCharting紐付け（名前補完+価格取得）
         if (card.pricechartingId && insertedCard) {
-          // 名前補完
-          fetch('/api/overseas-prices/link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ card_id: insertedCard.id, pricecharting_id: card.pricechartingId }),
-          }).catch(() => {})
-
-          // 価格取得
-          fetch('/api/overseas-prices/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ card_id: insertedCard.id, pricecharting_id: card.pricechartingId }),
-          }).catch(() => {})
+          await linkPriceCharting(insertedCard.id, card.pricechartingId)
         }
 
         added++
@@ -388,7 +357,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
           )}
 
           {/* フェーズ2: プレビュー/選択 */}
-          {cards.length > 0 && !saveResult && (
+          {cards.length > 0 && !saveResult && !saving && (
             <div>
               {/* 統計バー */}
               <div className="flex items-center justify-between mb-4">
