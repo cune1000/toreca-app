@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const { catalog_id, condition, quantity, unit_price, expenses, transaction_date, notes } = body
 
-        if (!catalog_id || !condition || !quantity || !unit_price) {
+        if (!catalog_id || !condition || !quantity || unit_price === undefined || unit_price === null) {
             return NextResponse.json({ success: false, error: '必須項目が不足しています' }, { status: 400 })
         }
 

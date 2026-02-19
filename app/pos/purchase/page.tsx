@@ -61,7 +61,7 @@ function PurchasePage() {
         : quantity > 0 ? Math.round((parseInt(expensesInput) || 0) / quantity) : 0
 
     const handleSubmit = async () => {
-        if (!selectedCatalog || total === 0 || !effectiveCondition) return
+        if (!selectedCatalog || !effectiveCondition || priceInput === '') return
         setSubmitting(true)
         try {
             await registerPurchase({
@@ -348,8 +348,8 @@ function PurchasePage() {
                         {/* 登録ボタン */}
                         <button
                             onClick={handleSubmit}
-                            disabled={total === 0 || !effectiveCondition || submitting}
-                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${total > 0 && effectiveCondition && !submitting
+                            disabled={priceInput === '' || !effectiveCondition || submitting}
+                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${priceInput !== '' && effectiveCondition && !submitting
                                 ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]'
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}

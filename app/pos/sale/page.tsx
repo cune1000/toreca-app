@@ -57,10 +57,10 @@ function SalePage() {
     // カタログ名でグループ化
     const grouped = filtered.reduce((acc, inv) => {
         const name = inv.catalog?.name || '不明'
-        if (!acc[name]) acc[name] = []
-        acc[name].push(inv)
+        if (!acc[name]) acc[name] = { items: [], catalog: inv.catalog }
+        acc[name].items.push(inv)
         return acc
-    }, {} as Record<string, typeof filtered>)
+    }, {} as Record<string, { items: typeof filtered; catalog: any }>)
 
     const total = quantity * (parseInt(unitPrice) || 0)
     const profit = selectedInv
@@ -68,13 +68,13 @@ function SalePage() {
         : null
 
     const handleSubmit = async () => {
-        if (!selectedInv || !unitPrice || total === 0) return
+        if (!selectedInv || unitPrice === '') return
         setSubmitting(true)
         try {
             await registerSale({
                 inventory_id: selectedInv.id,
                 quantity,
-                unit_price: parseInt(unitPrice),
+                unit_price: parseInt(unitPrice) || 0,
                 notes: notes || undefined,
             })
             setShowResult(true)
@@ -120,21 +120,28 @@ function SalePage() {
                         <span className="absolute left-3.5 top-4 text-gray-400 text-sm">🔍</span>
                     </div>
 
-                    <div className="space-y-4">
-                        {Object.entries(grouped).map(([name, items]) => (
-                            <div key={name}>
-                                <div className="flex items-center gap-3 mb-2">
-                                    {items[0]?.catalog?.image_url ? (
-                                        <img src={items[0].catalog.image_url} alt="" className="w-8 h-11 object-cover rounded" />
+                    <div className="space-y-3">
+                        {Object.entries(grouped).map(([name, { items, catalog }]) => (
+                            <div key={name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                {/* 商品ヘッダー */}
+                                <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-50">
+                                    {catalog?.image_url ? (
+                                        <img src={catalog.image_url} alt="" className="w-10 h-14 object-cover rounded flex-shrink-0" />
                                     ) : (
-                                        <div className="w-8 h-11 bg-gray-100 rounded flex items-center justify-center text-sm">🎴</div>
+                                        <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-lg flex-shrink-0">🎴</div>
                                     )}
-                                    <p className="text-sm font-bold text-gray-700">{name}</p>
-                                    {items[0]?.catalog?.fixed_price && (
-                                        <span className="text-xs text-gray-400">販売価格 {formatPrice(items[0].catalog.fixed_price)}</span>
-                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-gray-800 truncate">{name}</p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-xs text-gray-400">{catalog?.category || '-'}</span>
+                                            {catalog?.fixed_price && (
+                                                <span className="text-xs text-blue-500 font-bold">販売 {formatPrice(catalog.fixed_price)}</span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2 ml-11">
+                                {/* 状態ごとの選択ボタン */}
+                                <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
                                     {items.map(inv => (
                                         <button
                                             key={inv.id}
@@ -142,18 +149,18 @@ function SalePage() {
                                                 setSelectedInv(inv)
                                                 setUnitPrice(String(inv.catalog?.fixed_price || ''))
                                             }}
-                                            className="bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                                            className="bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg px-3 py-3 transition-colors text-left"
                                         >
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 mb-1.5">
                                                 <span
                                                     className="text-xs px-2 py-0.5 rounded text-white font-bold"
                                                     style={{ backgroundColor: inv.cond?.color || '#6b7280' }}
                                                 >
                                                     {inv.condition}
                                                 </span>
-                                                <span className="text-sm font-bold text-gray-900">× {inv.quantity}</span>
+                                                <span className="text-base font-bold text-gray-900">× {inv.quantity}</span>
                                             </div>
-                                            <p className="text-xs text-gray-400 mt-1">仕入 {formatPrice(inv.avg_purchase_price)}</p>
+                                            <p className="text-xs text-gray-400">仕入 {formatPrice(inv.avg_purchase_price)}</p>
                                         </button>
                                     ))}
                                 </div>
@@ -223,6 +230,7 @@ function SalePage() {
                                     type="number"
                                     value={unitPrice}
                                     onChange={e => setUnitPrice(e.target.value)}
+                                    placeholder="0"
                                     className="w-full px-4 py-3.5 pl-9 border border-gray-200 rounded-xl text-lg font-bold text-right focus:outline-none focus:border-gray-400"
                                 />
                             </div>
@@ -277,8 +285,8 @@ function SalePage() {
                         {/* 登録ボタン */}
                         <button
                             onClick={handleSubmit}
-                            disabled={!unitPrice || total === 0 || quantity > selectedInv.quantity || submitting}
-                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${unitPrice && total > 0 && quantity <= selectedInv.quantity && !submitting
+                            disabled={unitPrice === '' || quantity > selectedInv.quantity || submitting}
+                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${unitPrice !== '' && quantity <= selectedInv.quantity && !submitting
                                 ? 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]'
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}
