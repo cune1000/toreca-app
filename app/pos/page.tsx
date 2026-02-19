@@ -65,28 +65,35 @@ export default function PosDashboard() {
             ) : (
                 <>
                     {/* 統計カード */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-3 md:mb-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-3 md:mb-4">
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
                             <p className="text-sm text-gray-400 mb-1">総在庫数</p>
                             <p className="text-2xl md:text-3xl font-bold text-gray-900">{stats?.totalItems ?? 0}<span className="text-base text-gray-400 ml-1">点</span></p>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
+                            <p className="text-sm text-gray-400 mb-1">仕入れ累計</p>
+                            <p className="text-xl md:text-2xl font-bold text-blue-600">{formatPrice(stats?.totalPurchaseAmount ?? 0)}</p>
+                            {(stats?.totalExpenses ?? 0) > 0 && (
+                                <p className="text-xs text-gray-400 mt-1">経費 {formatPrice(stats?.totalExpenses ?? 0)}</p>
+                            )}
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
                             <p className="text-sm text-gray-400 mb-1">予測販売総額</p>
-                            <p className="text-2xl md:text-3xl font-bold text-gray-900">{formatPrice(stats?.predictedSaleTotal ?? 0)}</p>
+                            <p className="text-xl md:text-2xl font-bold text-gray-900">{formatPrice(stats?.predictedSaleTotal ?? 0)}</p>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
                             <p className="text-sm text-gray-400 mb-1">予測利益</p>
-                            <p className={`text-2xl md:text-3xl font-bold ${(stats?.predictedProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            <p className={`text-xl md:text-2xl font-bold ${(stats?.predictedProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                                 {formatPrice(stats?.predictedProfit ?? 0)}
                             </p>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
-                            <p className="text-sm text-gray-400 mb-1">仕入れ費用（累計）</p>
-                            <p className="text-xl md:text-2xl font-bold text-orange-600">{formatPrice(stats?.totalExpenses ?? 0)}</p>
+                            <p className="text-sm text-gray-400 mb-1">本日の仕入れ</p>
+                            <p className="text-xl md:text-2xl font-bold text-blue-600">{formatPrice(stats?.todayPurchase ?? 0)}</p>
                             {(stats?.todayExpenses ?? 0) > 0 && (
-                                <p className="text-xs text-gray-400 mt-1">本日 +{formatPrice(stats?.todayExpenses ?? 0)}</p>
+                                <p className="text-xs text-gray-400 mt-1">経費 +{formatPrice(stats?.todayExpenses ?? 0)}</p>
                             )}
                         </div>
                         {checkoutStats && checkoutStats.pendingItems > 0 ? (
@@ -105,11 +112,13 @@ export default function PosDashboard() {
                             </div>
                         )}
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
-                            <p className="text-sm text-gray-400 mb-1">本日の取引</p>
-                            <div className="flex items-baseline gap-3 mt-1">
-                                <span className="text-base md:text-lg font-bold text-blue-600">仕入 {formatPrice(stats?.todayPurchase ?? 0)}</span>
-                                <span className="text-base md:text-lg font-bold text-green-600">販売 {formatPrice(stats?.todaySale ?? 0)}</span>
-                            </div>
+                            <p className="text-sm text-gray-400 mb-1">本日の販売</p>
+                            <p className="text-xl md:text-2xl font-bold text-green-600">{formatPrice(stats?.todaySale ?? 0)}</p>
+                            {(stats?.todayProfit ?? 0) !== 0 && (
+                                <p className={`text-xs mt-1 ${(stats?.todayProfit ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    利益 {(stats?.todayProfit ?? 0) > 0 ? '+' : ''}{formatPrice(stats?.todayProfit ?? 0)}
+                                </p>
+                            )}
                         </div>
                     </div>
 

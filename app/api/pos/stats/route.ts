@@ -33,12 +33,13 @@ export async function GET() {
             }, 0
         )
 
-        // 仕入れ費用合計（全取引の expenses を合算）
+        // 仕入れ取引の合計（total_price + expenses）
         const { data: allPurchaseTx } = await supabase
             .from('pos_transactions')
-            .select('expenses')
+            .select('total_price, expenses')
             .eq('type', 'purchase')
 
+        const totalPurchaseAmount = (allPurchaseTx || []).reduce((s: number, t: any) => s + (t.total_price || 0), 0)
         const totalExpenses = (allPurchaseTx || []).reduce((s: number, t: any) => s + (t.expenses || 0), 0)
 
         // 本日の取引
@@ -70,6 +71,7 @@ export async function GET() {
                 estimatedProfit: estimatedValue - totalCost,
                 predictedSaleTotal,
                 predictedProfit: predictedSaleTotal - totalCost,
+                totalPurchaseAmount,
                 totalExpenses,
                 todayPurchase,
                 todaySale,
