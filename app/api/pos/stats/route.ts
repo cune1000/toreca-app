@@ -11,10 +11,10 @@ export async function GET() {
     try {
         const today = new Date().toISOString().split('T')[0]
 
-        // 在庫データ
+        // 在庫データ（market_price, predicted_price含む）
         const { data: inventory } = await supabase
             .from('pos_inventory')
-            .select('quantity, avg_purchase_price, catalog:pos_catalogs(fixed_price)')
+            .select('quantity, avg_purchase_price, market_price, predicted_price, catalog:pos_catalogs(fixed_price)')
 
         const totalItems = (inventory || []).reduce((s: number, i: any) => s + i.quantity, 0)
         const totalKinds = (inventory || []).length
@@ -23,6 +23,14 @@ export async function GET() {
         )
         const estimatedValue = (inventory || []).reduce(
             (s: number, i: any) => s + (i.catalog?.fixed_price || i.avg_purchase_price) * i.quantity, 0
+        )
+
+        // 予測販売総額（predicted_price >> market_price >> fixed_price >> avg_purchase_price）
+        const predictedSaleTotal = (inventory || []).reduce(
+            (s: number, i: any) => {
+                const price = i.predicted_price ?? i.market_price ?? i.catalog?.fixed_price ?? i.avg_purchase_price
+                return s + price * i.quantity
+            }, 0
         )
 
         // 仕入れ費用合計（全取引の expenses を合算）
@@ -60,6 +68,8 @@ export async function GET() {
                 totalCost,
                 estimatedValue,
                 estimatedProfit: estimatedValue - totalCost,
+                predictedSaleTotal,
+                predictedProfit: predictedSaleTotal - totalCost,
                 totalExpenses,
                 todayPurchase,
                 todaySale,

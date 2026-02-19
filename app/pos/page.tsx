@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
-import { getStats, getTransactions } from '@/lib/pos/api'
+import { getStats, getTransactions, refreshMarketPrices } from '@/lib/pos/api'
 import { formatPrice, getCondition } from '@/lib/pos/constants'
 import type { PosStats, PosTransaction } from '@/lib/pos/types'
 
@@ -12,13 +12,25 @@ export default function PosDashboard() {
     const [stats, setStats] = useState<PosStats | null>(null)
     const [recent, setRecent] = useState<PosTransaction[]>([])
     const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
 
-    useEffect(() => {
+    const loadData = () => {
         Promise.all([
             getStats().then(r => setStats(r.data)),
             getTransactions({ limit: 10 }).then(r => setRecent(r.data)),
         ]).catch(console.error).finally(() => setLoading(false))
-    }, [])
+    }
+
+    useEffect(() => { loadData() }, [])
+
+    const handleRefresh = async () => {
+        setRefreshing(true)
+        try {
+            await refreshMarketPrices()
+            loadData()
+        } catch (err) { console.error(err) }
+        finally { setRefreshing(false) }
+    }
 
     return (
         <PosLayout>
@@ -28,6 +40,11 @@ export default function PosDashboard() {
                     <p className="text-sm text-gray-500 mt-1">POS在庫管理の概要</p>
                 </div>
                 <div className="flex gap-2 sm:gap-3">
+                    <button
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="px-3 sm:px-4 py-3 bg-purple-50 text-purple-700 rounded-lg text-sm font-bold hover:bg-purple-100 transition-colors disabled:opacity-50"
+                    >{refreshing ? '更新中...' : '📈 相場更新'}</button>
                     <button
                         onClick={() => router.push('/pos/purchase')}
                         className="flex-1 sm:flex-none px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
@@ -52,13 +69,13 @@ export default function PosDashboard() {
                             <p className="text-2xl md:text-3xl font-bold text-gray-900">{stats?.totalItems ?? 0}<span className="text-base text-gray-400 ml-1">点</span></p>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
-                            <p className="text-sm text-gray-400 mb-1">在庫総額</p>
-                            <p className="text-2xl md:text-3xl font-bold text-gray-900">{formatPrice(stats?.estimatedValue ?? 0)}</p>
+                            <p className="text-sm text-gray-400 mb-1">予測販売総額</p>
+                            <p className="text-2xl md:text-3xl font-bold text-gray-900">{formatPrice(stats?.predictedSaleTotal ?? 0)}</p>
                         </div>
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
-                            <p className="text-sm text-gray-400 mb-1">想定利益</p>
-                            <p className={`text-2xl md:text-3xl font-bold ${(stats?.estimatedProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                {formatPrice(stats?.estimatedProfit ?? 0)}
+                            <p className="text-sm text-gray-400 mb-1">予測利益</p>
+                            <p className={`text-2xl md:text-3xl font-bold ${(stats?.predictedProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {formatPrice(stats?.predictedProfit ?? 0)}
                             </p>
                         </div>
                     </div>

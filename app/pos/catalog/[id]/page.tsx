@@ -6,7 +6,7 @@ import { use } from 'react'
 import PosLayout from '@/components/pos/PosLayout'
 import TransactionEditModal from '@/components/pos/TransactionEditModal'
 import TransactionDeleteDialog from '@/components/pos/TransactionDeleteDialog'
-import { getCatalog, getInventory, getTransactions } from '@/lib/pos/api'
+import { getCatalog, getInventory, getTransactions, refreshMarketPrices, updateInventoryPrice } from '@/lib/pos/api'
 import { formatPrice, getCondition } from '@/lib/pos/constants'
 import type { PosCatalog, PosInventory, PosTransaction } from '@/lib/pos/types'
 
@@ -20,6 +20,9 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
     const [activeTab, setActiveTab] = useState<'inventory' | 'transactions'>('inventory')
     const [editingTx, setEditingTx] = useState<PosTransaction | null>(null)
     const [deletingTx, setDeletingTx] = useState<PosTransaction | null>(null)
+    const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
+    const [priceInput, setPriceInput] = useState('')
+    const [refreshing, setRefreshing] = useState(false)
 
     const loadData = async () => {
         try {
@@ -37,8 +40,25 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
 
     useEffect(() => { loadData() }, [id])
 
-    const reload = () => {
-        loadData()
+    const reload = () => { loadData() }
+
+    const handleRefreshMarket = async () => {
+        setRefreshing(true)
+        try {
+            await refreshMarketPrices()
+            await loadData()
+        } catch (err) { console.error(err) }
+        finally { setRefreshing(false) }
+    }
+
+    const handleSavePredictedPrice = async (invId: string) => {
+        try {
+            const val = priceInput.trim() === '' ? null : parseInt(priceInput) || 0
+            await updateInventoryPrice(invId, val)
+            setInventoryItems(prev => prev.map(i => i.id === invId ? { ...i, predicted_price: val } : i))
+        } catch (err) { console.error(err) }
+        setEditingPriceId(null)
+        setPriceInput('')
     }
 
     if (loading) {
@@ -95,17 +115,26 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                             </div>
                         </div>
                     </div>
-                    <div className="mt-4 md:mt-5 pt-4 md:pt-5 border-t border-gray-100 flex md:flex-col gap-2 md:space-y-2.5">
-                        <button
-                            onClick={() => router.push(`/pos/purchase?catalog_id=${catalog.id}`)}
-                            className="flex-1 md:w-full py-2.5 md:py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
-                        >💰 仕入れ</button>
-                        {totalQty > 0 && (
+                    <div className="mt-4 md:mt-5 pt-4 md:pt-5 border-t border-gray-100 space-y-2.5">
+                        {catalog.api_card_id && (
                             <button
-                                onClick={() => router.push(`/pos/sale?catalog_id=${catalog.id}`)}
-                                className="flex-1 md:w-full py-2.5 md:py-3 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
-                            >🛒 販売</button>
+                                onClick={handleRefreshMarket}
+                                disabled={refreshing}
+                                className="w-full py-2.5 bg-purple-50 text-purple-700 rounded-lg text-sm font-bold hover:bg-purple-100 transition-colors disabled:opacity-50"
+                            >{refreshing ? '更新中...' : '📈 相場更新'}</button>
                         )}
+                        <div className="flex md:flex-col gap-2 md:space-y-2.5">
+                            <button
+                                onClick={() => router.push(`/pos/purchase?catalog_id=${catalog.id}`)}
+                                className="flex-1 md:w-full py-2.5 md:py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
+                            >💰 仕入れ</button>
+                            {totalQty > 0 && (
+                                <button
+                                    onClick={() => router.push(`/pos/sale?catalog_id=${catalog.id}`)}
+                                    className="flex-1 md:w-full py-2.5 md:py-3 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+                                >🛒 販売</button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -180,8 +209,9 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                             <tr className="border-b border-gray-100 bg-gray-50/50">
                                 <th className="text-left text-xs font-semibold text-gray-500 px-6 py-3.5">状態</th>
                                 <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">数量</th>
-                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">平均仕入単価</th>
-                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">在庫原価</th>
+                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">仕入単価</th>
+                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">相場</th>
+                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">予測価格</th>
                                 <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3.5">想定利益</th>
                             </tr>
                         </thead>
@@ -189,18 +219,51 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                             {inventoryItems.length > 0 ? inventoryItems.map(inv => {
                                 const cond = getCondition(inv.condition)
                                 const invCost = inv.avg_purchase_price * inv.quantity
-                                const estProfit = catalog.fixed_price ? (catalog.fixed_price * inv.quantity) - invCost : 0
+                                const effectivePrice = inv.predicted_price ?? inv.market_price ?? catalog.fixed_price
+                                const estProfit = effectivePrice ? (effectivePrice * inv.quantity) - invCost : 0
                                 return (
                                     <tr key={inv.id} className="hover:bg-gray-50/50">
                                         <td className="px-6 py-4"><span className="text-xs px-3 py-1.5 rounded-full text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>{inv.condition}</span></td>
                                         <td className="text-center text-base font-bold text-gray-900 px-4">{inv.quantity}</td>
                                         <td className="text-right text-sm text-gray-700 px-4">{formatPrice(inv.avg_purchase_price)}</td>
-                                        <td className="text-right text-sm text-gray-700 px-4">{formatPrice(invCost)}</td>
-                                        <td className="text-right px-6">{catalog.fixed_price ? <span className={`text-sm font-bold ${estProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{estProfit > 0 ? '+' : ''}{formatPrice(estProfit)}</span> : <span className="text-xs text-gray-300">-</span>}</td>
+                                        <td className="text-right px-4">
+                                            {inv.market_price ? (
+                                                <span className="text-sm font-bold text-purple-600">{formatPrice(inv.market_price)}</span>
+                                            ) : <span className="text-xs text-gray-300">-</span>}
+                                        </td>
+                                        <td className="text-right px-4">
+                                            {editingPriceId === inv.id ? (
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <input
+                                                        type="number"
+                                                        value={priceInput}
+                                                        onChange={e => setPriceInput(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter') handleSavePredictedPrice(inv.id); if (e.key === 'Escape') { setEditingPriceId(null); setPriceInput('') } }}
+                                                        className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:outline-none focus:border-blue-400"
+                                                        placeholder="0"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={() => handleSavePredictedPrice(inv.id)} className="p-1 text-blue-600 hover:bg-blue-50 rounded text-xs font-bold">OK</button>
+                                                    <button onClick={() => { setEditingPriceId(null); setPriceInput('') }} className="p-1 text-gray-400 hover:bg-gray-50 rounded text-xs">✕</button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => { setEditingPriceId(inv.id); setPriceInput(inv.predicted_price != null ? String(inv.predicted_price) : '') }}
+                                                    className="text-sm hover:bg-gray-50 rounded px-2 py-1 transition-colors"
+                                                >
+                                                    {inv.predicted_price != null ? (
+                                                        <span className="font-bold text-blue-600">{formatPrice(inv.predicted_price)}</span>
+                                                    ) : (
+                                                        <span className="text-gray-300 text-xs">設定</span>
+                                                    )}
+                                                </button>
+                                            )}
+                                        </td>
+                                        <td className="text-right px-6">{effectivePrice ? <span className={`text-sm font-bold ${estProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{estProfit > 0 ? '+' : ''}{formatPrice(estProfit)}</span> : <span className="text-xs text-gray-300">-</span>}</td>
                                     </tr>
                                 )
                             }) : (
-                                <tr><td colSpan={5} className="text-center py-12 text-sm text-gray-400">在庫がありません</td></tr>
+                                <tr><td colSpan={6} className="text-center py-12 text-sm text-gray-400">在庫がありません</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -210,17 +273,53 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                         {inventoryItems.length > 0 ? inventoryItems.map(inv => {
                             const cond = getCondition(inv.condition)
                             const invCost = inv.avg_purchase_price * inv.quantity
-                            const estProfit = catalog.fixed_price ? (catalog.fixed_price * inv.quantity) - invCost : 0
+                            const effectivePrice = inv.predicted_price ?? inv.market_price ?? catalog.fixed_price
+                            const estProfit = effectivePrice ? (effectivePrice * inv.quantity) - invCost : 0
                             return (
                                 <div key={inv.id} className="px-4 py-3.5">
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs px-2.5 py-1 rounded-full text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>{inv.condition}</span>
                                         <span className="text-lg font-bold text-gray-900">{inv.quantity}個</span>
                                     </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-500">仕入 {formatPrice(inv.avg_purchase_price)}</span>
-                                        {catalog.fixed_price && <span className={`font-bold ${estProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{estProfit > 0 ? '+' : ''}{formatPrice(estProfit)}</span>}
+                                    <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                                        <div>
+                                            <span className="text-gray-400">仕入</span>
+                                            <p className="text-sm font-bold text-gray-700">{formatPrice(inv.avg_purchase_price)}</p>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-400">相場</span>
+                                            <p className="text-sm font-bold text-purple-600">{inv.market_price ? formatPrice(inv.market_price) : '-'}</p>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-400">予測</span>
+                                            {editingPriceId === inv.id ? (
+                                                <div className="flex items-center gap-1 mt-0.5">
+                                                    <input
+                                                        type="number"
+                                                        value={priceInput}
+                                                        onChange={e => setPriceInput(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter') handleSavePredictedPrice(inv.id); if (e.key === 'Escape') { setEditingPriceId(null); setPriceInput('') } }}
+                                                        className="w-16 px-1.5 py-0.5 border border-gray-300 rounded text-xs text-right focus:outline-none"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={() => handleSavePredictedPrice(inv.id)} className="text-blue-600 text-xs font-bold">OK</button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => { setEditingPriceId(inv.id); setPriceInput(inv.predicted_price != null ? String(inv.predicted_price) : '') }}
+                                                    className="text-sm font-bold text-blue-600"
+                                                >
+                                                    {inv.predicted_price != null ? formatPrice(inv.predicted_price) : <span className="text-gray-300 text-xs">設定</span>}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
+                                    {effectivePrice && (
+                                        <div className="flex items-center justify-between text-sm pt-1 border-t border-gray-50">
+                                            <span className="text-gray-400 text-xs">想定利益</span>
+                                            <span className={`font-bold ${estProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{estProfit > 0 ? '+' : ''}{formatPrice(estProfit)}</span>
+                                        </div>
+                                    )}
                                 </div>
                             )
                         }) : (

@@ -30,6 +30,8 @@ export interface PosInventory {
     total_purchased: number
     avg_expense_per_unit: number
     total_expenses: number
+    market_price: number | null
+    predicted_price: number | null
     created_at: string
     updated_at: string
     // JOIN時
@@ -83,6 +85,8 @@ export interface PosStats {
     totalCost: number
     estimatedValue: number
     estimatedProfit: number
+    predictedSaleTotal: number
+    predictedProfit: number
     totalExpenses: number
     todayPurchase: number
     todaySale: number

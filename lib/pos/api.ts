@@ -160,6 +160,23 @@ export async function adjustInventory(data: {
 }
 
 // =============================================================================
+// 相場・予測価格
+// =============================================================================
+
+export async function refreshMarketPrices() {
+    return request<PosApiResponse<{ updated: number; skipped: number }>>(`${BASE}/market-prices/refresh`, {
+        method: 'POST',
+    })
+}
+
+export async function updateInventoryPrice(inventoryId: string, predictedPrice: number | null) {
+    return request<{ success: true; data: PosInventory }>(`${BASE}/inventory/${inventoryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ predicted_price: predictedPrice }),
+    })
+}
+
+// =============================================================================
 // 統計
 // =============================================================================
 
