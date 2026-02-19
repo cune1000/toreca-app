@@ -29,6 +29,7 @@ interface PCCard {
   exists: boolean
   existsReason?: string
   existingId?: string
+  existingImageUrl?: string | null
   selected: boolean
   error?: string
 }
@@ -99,24 +100,26 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
           let exists = false
           let existsReason = ''
           let existingId = ''
+          let existingImageUrl: string | null = null
 
           if (r.pricechartingId) {
             const { data: pcMatch } = await supabase
               .from('cards')
-              .select('id, name')
+              .select('id, name, image_url')
               .eq('pricecharting_id', r.pricechartingId)
               .limit(1)
             if (pcMatch?.length) {
               exists = true
               existsReason = `PC ID一致: ${pcMatch[0].name}`
               existingId = pcMatch[0].id
+              existingImageUrl = pcMatch[0].image_url
             }
           }
 
           if (!exists && r.cardData?.name && r.cardData?.number) {
             const { data: nameMatch } = await supabase
               .from('cards')
-              .select('id, name')
+              .select('id, name, image_url')
               .eq('name', r.cardData.name)
               .eq('card_number', r.cardData.number)
               .limit(1)
@@ -124,6 +127,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
               exists = true
               existsReason = `名前+型番一致`
               existingId = nameMatch[0].id
+              existingImageUrl = nameMatch[0].image_url
             }
           }
 
@@ -140,6 +144,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
             exists,
             existsReason,
             existingId,
+            existingImageUrl,
             selected: !exists && !r.error,
             error: r.error,
           }
@@ -174,13 +179,36 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
       setSaveProgress(`${i + 1}/${selected.length} ${card.exists ? '紐付け中' : '登録中'}: ${card.editName}`)
 
       try {
-        // 登録済みカード → PriceCharting ID紐付けのみ
+        // 登録済みカード → PriceCharting ID紐付け + 画像補完
         if (card.exists && card.existingId) {
           if (card.pricechartingId) {
-            // 既存カードにpricecharting_idをセット
+            const updateFields: Record<string, any> = { pricecharting_id: card.pricechartingId }
+
+            // 既存カードに画像がなければPriceChartingの画像をアップロード
+            if (!card.existingImageUrl && card.imageUrl) {
+              try {
+                const imgRes = await fetch(card.imageUrl)
+                const blob = await imgRes.blob()
+                const reader = new FileReader()
+                const base64 = await new Promise<string>((resolve) => {
+                  reader.onload = () => resolve(reader.result as string)
+                  reader.readAsDataURL(blob)
+                })
+                const uploadRes = await fetch('/api/upload', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ image: base64, fileName: `pc_${card.pricechartingId}.jpg` }),
+                })
+                const uploadData = await uploadRes.json()
+                if (uploadData.success) updateFields.image_url = uploadData.url
+              } catch (e) {
+                console.error('Image upload for existing card failed:', e)
+              }
+            }
+
             await supabase
               .from('cards')
-              .update({ pricecharting_id: card.pricechartingId })
+              .update(updateFields)
               .eq('id', card.existingId)
 
             // 名前補完
