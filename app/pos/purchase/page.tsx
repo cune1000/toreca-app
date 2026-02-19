@@ -224,8 +224,9 @@ function PurchasePage() {
                                 >-</button>
                                 <input
                                     type="number"
-                                    value={quantity}
-                                    onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                    value={quantity || ''}
+                                    onChange={e => setQuantity(parseInt(e.target.value) || 0)}
+                                    onBlur={() => { if (quantity < 1) setQuantity(1) }}
                                     className="w-20 text-center text-2xl font-bold text-gray-900 border border-gray-200 rounded-lg py-2 focus:outline-none focus:border-gray-400"
                                     min={1}
                                 />
