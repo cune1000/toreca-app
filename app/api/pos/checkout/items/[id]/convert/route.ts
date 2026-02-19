@@ -1,0 +1,191 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+// アイテム変換（状態変更 + 新conditionに入庫）
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const { id } = await params
+        const body = await request.json()
+        const { new_condition, expenses, notes, resolve_quantity } = body
+
+        if (!new_condition?.trim()) {
+            return NextResponse.json({ success: false, error: '変換先の状態を選択してください' }, { status: 400 })
+        }
+        if (expenses !== undefined && expenses !== null && expenses < 0) {
+            return NextResponse.json({ success: false, error: '経費は0以上を入力してください' }, { status: 400 })
+        }
+
+        // アイテム取得
+        const { data: item, error: itemError } = await supabase
+            .from('pos_checkout_items')
+            .select('*, folder:pos_checkout_folders(name), inventory:pos_inventory(*, catalog:pos_catalogs(*))')
+            .eq('id', id)
+            .single()
+
+        if (itemError || !item) {
+            return NextResponse.json({ success: false, error: 'アイテムが見つかりません' }, { status: 404 })
+        }
+        if (item.status !== 'pending') {
+            return NextResponse.json({ success: false, error: '既に処理済みです' }, { status: 400 })
+        }
+
+        const catalogId = item.inventory?.catalog_id
+        if (!catalogId) {
+            return NextResponse.json({ success: false, error: 'カタログ情報が見つかりません' }, { status: 400 })
+        }
+
+        const totalExpenses = expenses || 0
+        const unitCost = item.unit_cost
+        const requestedQty = resolve_quantity && Number.isInteger(resolve_quantity) && resolve_quantity > 0
+            ? Math.min(resolve_quantity, item.quantity)
+            : item.quantity
+        const quantity = requestedQty
+        const isPartial = quantity < item.quantity
+
+        // 変換先の在庫を検索・作成（registerPurchaseと同じパターン）
+        let { data: targetInv } = await supabase
+            .from('pos_inventory')
+            .select('*')
+            .eq('catalog_id', catalogId)
+            .eq('condition', new_condition.trim())
+            .maybeSingle()
+
+        if (!targetInv) {
+            const { data: newInv, error: insertError } = await supabase
+                .from('pos_inventory')
+                .insert({
+                    catalog_id: catalogId,
+                    condition: new_condition.trim(),
+                    quantity: 0,
+                    avg_purchase_price: 0,
+                    total_purchase_cost: 0,
+                    total_purchased: 0,
+                    avg_expense_per_unit: 0,
+                    total_expenses: 0,
+                })
+                .select()
+                .single()
+
+            if (insertError) {
+                const { data: existing } = await supabase
+                    .from('pos_inventory')
+                    .select('*')
+                    .eq('catalog_id', catalogId)
+                    .eq('condition', new_condition.trim())
+                    .maybeSingle()
+                if (!existing) throw insertError
+                targetInv = existing
+            } else {
+                targetInv = newInv
+            }
+        }
+
+        // 移動平均再計算（元の仕入原価を引き継ぎ + 変換経費を経費に加算）
+        const newTotalPurchased = targetInv.total_purchased + quantity
+        const newAvg = Math.round(
+            (targetInv.avg_purchase_price * targetInv.total_purchased + unitCost * quantity) / newTotalPurchased
+        )
+        const newTotalCost = targetInv.total_purchase_cost + (unitCost * quantity)
+        const newQuantity = targetInv.quantity + quantity
+
+        // 経費: 元の経費 + 変換経費
+        const originalExpenses = item.unit_expense * quantity
+        const newTotalExpenses = (targetInv.total_expenses || 0) + originalExpenses + totalExpenses
+        const newAvgExpense = newTotalPurchased > 0 ? Math.round(newTotalExpenses / newTotalPurchased) : 0
+
+        // 変換先在庫を更新
+        await supabase
+            .from('pos_inventory')
+            .update({
+                quantity: newQuantity,
+                avg_purchase_price: newAvg,
+                total_purchase_cost: newTotalCost,
+                total_purchased: newTotalPurchased,
+                avg_expense_per_unit: newAvgExpense,
+                total_expenses: newTotalExpenses,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', targetInv.id)
+
+        // 取引レコード（purchaseとして記録）
+        const { data: transaction, error: txError } = await supabase
+            .from('pos_transactions')
+            .insert({
+                inventory_id: targetInv.id,
+                type: 'purchase',
+                quantity,
+                unit_price: unitCost,
+                total_price: unitCost * quantity,
+                expenses: originalExpenses + totalExpenses,
+                transaction_date: new Date().toISOString().split('T')[0],
+                notes: notes
+                    ? `持ち出し変換: ${item.inventory?.condition} → ${new_condition.trim()} (${notes})`
+                    : `持ち出し変換: ${item.inventory?.condition} → ${new_condition.trim()} (${item.folder?.name || ''})`,
+            })
+            .select()
+            .single()
+
+        if (txError) throw txError
+
+        // 履歴記録
+        await supabase
+            .from('pos_history')
+            .insert({
+                inventory_id: targetInv.id,
+                action_type: 'purchase',
+                quantity_change: quantity,
+                quantity_before: targetInv.quantity,
+                quantity_after: newQuantity,
+                transaction_id: transaction?.id,
+                reason: `持ち出し変換: ${item.inventory?.condition} → ${new_condition.trim()}`,
+                notes: notes || null,
+            })
+
+        if (isPartial) {
+            // 部分変換: 元アイテムの数量を減らし、解決分を新しいアイテムとして作成
+            await supabase
+                .from('pos_checkout_items')
+                .update({ quantity: item.quantity - quantity, updated_at: new Date().toISOString() })
+                .eq('id', id)
+
+            await supabase
+                .from('pos_checkout_items')
+                .insert({
+                    folder_id: item.folder_id,
+                    inventory_id: item.inventory_id,
+                    quantity,
+                    unit_cost: item.unit_cost,
+                    unit_expense: item.unit_expense,
+                    status: 'converted',
+                    converted_condition: new_condition.trim(),
+                    converted_expenses: totalExpenses,
+                    transaction_id: transaction?.id || null,
+                    resolved_at: new Date().toISOString(),
+                    resolution_notes: notes || null,
+                })
+        } else {
+            // 全量変換
+            await supabase
+                .from('pos_checkout_items')
+                .update({
+                    status: 'converted',
+                    converted_condition: new_condition.trim(),
+                    converted_expenses: totalExpenses,
+                    transaction_id: transaction?.id || null,
+                    resolved_at: new Date().toISOString(),
+                    resolution_notes: notes || null,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', id)
+        }
+
+        return NextResponse.json({ success: true, data: { transaction, new_condition: new_condition.trim() } })
+    } catch (error: any) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+}

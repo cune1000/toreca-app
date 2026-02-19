@@ -170,7 +170,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     try {
-        const body = await request.json()
+        const body = await request.json().catch(() => ({}))
 
         // 対象取引を取得
         const { data: tx, error: txError } = await supabase
@@ -183,7 +183,19 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
             return NextResponse.json({ success: false, error: '取引が見つかりません' }, { status: 404 })
         }
 
-        // 現在の在庫を取得
+        // 削除前プレチェック: 仕入れ削除の場合は在庫がマイナスにならないか確認
+        if (tx.type === 'purchase') {
+            const { data: inv } = await supabase
+                .from('pos_inventory')
+                .select('quantity')
+                .eq('id', tx.inventory_id)
+                .single()
+            if ((inv?.quantity ?? 0) - tx.quantity < 0) {
+                return NextResponse.json({ success: false, error: '在庫がマイナスになるため削除できません' }, { status: 400 })
+            }
+        }
+
+        // 現在の在庫を取得（履歴記録用）
         const { data: invBefore } = await supabase
             .from('pos_inventory')
             .select('quantity')
@@ -201,37 +213,18 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         // 在庫を再計算
         const result = await recalculateInventory(tx.inventory_id)
 
-        // 在庫がマイナスになっていないかチェック
-        if (result.quantity < 0) {
-            // ロールバック: 取引を復元
-            await supabase.from('pos_transactions').insert({
-                id: tx.id,
-                inventory_id: tx.inventory_id,
-                type: tx.type,
-                quantity: tx.quantity,
-                unit_price: tx.unit_price,
-                total_price: tx.total_price,
-                expenses: tx.expenses,
-                profit: tx.profit,
-                profit_rate: tx.profit_rate,
-                transaction_date: tx.transaction_date,
-                notes: tx.notes,
-            })
-            await recalculateInventory(tx.inventory_id)
-            return NextResponse.json({ success: false, error: '在庫がマイナスになるため削除できません' }, { status: 400 })
-        }
-
         // 削除履歴を記録
+        const reason = (body as any).reason || '取引削除'
         await supabase.from('pos_history').insert({
             inventory_id: tx.inventory_id,
             action_type: 'adjustment',
             quantity_change: tx.type === 'purchase' ? -tx.quantity : tx.quantity,
             quantity_before: invBefore?.quantity || 0,
             quantity_after: result.quantity,
-            reason: body.reason || '取引削除',
+            reason,
             is_modified: true,
             modified_at: new Date().toISOString(),
-            modified_reason: body.reason || '取引削除による修正',
+            modified_reason: reason,
         })
 
         return NextResponse.json({ success: true })

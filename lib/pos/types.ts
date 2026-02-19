@@ -93,3 +93,54 @@ export interface PosStats {
     todayProfit: number
     todayExpenses: number
 }
+
+// =============================================================================
+// 持ち出し（チェックアウト）
+// =============================================================================
+
+export interface PosCheckoutFolder {
+    id: string
+    name: string
+    description: string | null
+    status: 'open' | 'closed'
+    created_at: string
+    updated_at: string
+    closed_at: string | null
+    // 集計（API側で付与）
+    item_count?: number
+    pending_count?: number
+    locked_amount?: number
+}
+
+export interface PosCheckoutItem {
+    id: string
+    folder_id: string
+    inventory_id: string
+    quantity: number
+    unit_cost: number
+    unit_expense: number
+    status: 'pending' | 'returned' | 'sold' | 'converted'
+    resolved_at: string | null
+    resolution_notes: string | null
+    sale_unit_price: number | null
+    sale_expenses: number | null
+    sale_profit: number | null
+    converted_condition: string | null
+    converted_expenses: number | null
+    created_at: string
+    updated_at: string
+    // JOIN時
+    inventory?: PosInventory & { catalog?: PosCatalog }
+}
+
+export interface PosCheckoutFolderDetail extends PosCheckoutFolder {
+    items: PosCheckoutItem[]
+}
+
+export interface PosCheckoutStats {
+    lockedAmount: number
+    lockedExpenses: number
+    totalLockedValue: number
+    pendingItems: number
+    openFolders: number
+}

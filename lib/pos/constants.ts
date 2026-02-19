@@ -5,6 +5,7 @@
 export const CONDITIONS = [
     { code: 'PSA10', color: '#8b5cf6' },
     { code: 'PSA9', color: '#a855f7' },
+    { code: '未開封', color: '#0ea5e9' },
     { code: 'A', color: '#22c55e' },
     { code: 'B', color: '#3b82f6' },
     { code: 'C', color: '#f59e0b' },
@@ -13,8 +14,10 @@ export const CONDITIONS = [
 
 export type ConditionCode = typeof CONDITIONS[number]['code']
 
+const DEFAULT_CONDITION = { code: '', color: '#6b7280' } as const
+
 export function getCondition(code: string) {
-    return CONDITIONS.find(c => c.code === code)
+    return CONDITIONS.find(c => c.code === code) ?? { ...DEFAULT_CONDITION, code }
 }
 
 export function formatPrice(n: number | null | undefined): string {

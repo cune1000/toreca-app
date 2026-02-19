@@ -3,14 +3,17 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
-import { getStats, getTransactions, refreshMarketPrices } from '@/lib/pos/api'
+import PosSpinner from '@/components/pos/PosSpinner'
+import TransactionTypeBadge from '@/components/pos/TransactionTypeBadge'
+import { getStats, getTransactions, refreshMarketPrices, getCheckoutStats } from '@/lib/pos/api'
 import { formatPrice, getCondition } from '@/lib/pos/constants'
-import type { PosStats, PosTransaction } from '@/lib/pos/types'
+import type { PosStats, PosTransaction, PosCheckoutStats } from '@/lib/pos/types'
 
 export default function PosDashboard() {
     const router = useRouter()
     const [stats, setStats] = useState<PosStats | null>(null)
     const [recent, setRecent] = useState<PosTransaction[]>([])
+    const [checkoutStats, setCheckoutStats] = useState<PosCheckoutStats | null>(null)
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
 
@@ -18,6 +21,7 @@ export default function PosDashboard() {
         Promise.all([
             getStats().then(r => setStats(r.data)),
             getTransactions({ limit: 10 }).then(r => setRecent(r.data)),
+            getCheckoutStats().then(r => setCheckoutStats(r.data)).catch(() => {}),
         ]).catch(console.error).finally(() => setLoading(false))
     }
 
@@ -57,9 +61,7 @@ export default function PosDashboard() {
             </div>
 
             {loading ? (
-                <div className="py-16 text-center">
-                    <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-                </div>
+                <PosSpinner />
             ) : (
                 <>
                     {/* 統計カード */}
@@ -79,7 +81,7 @@ export default function PosDashboard() {
                             </p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
                             <p className="text-sm text-gray-400 mb-1">仕入れ費用（累計）</p>
                             <p className="text-xl md:text-2xl font-bold text-orange-600">{formatPrice(stats?.totalExpenses ?? 0)}</p>
@@ -87,6 +89,21 @@ export default function PosDashboard() {
                                 <p className="text-xs text-gray-400 mt-1">本日 +{formatPrice(stats?.todayExpenses ?? 0)}</p>
                             )}
                         </div>
+                        {checkoutStats && checkoutStats.pendingItems > 0 ? (
+                            <button
+                                onClick={() => router.push('/pos/checkout')}
+                                className="bg-amber-50 border border-amber-200 rounded-xl p-4 md:p-6 text-left hover:border-amber-300 transition-colors"
+                            >
+                                <p className="text-sm text-amber-600 mb-1">持ち出し中</p>
+                                <p className="text-xl md:text-2xl font-bold text-amber-700">{formatPrice(checkoutStats.lockedAmount)}</p>
+                                <p className="text-xs text-amber-500 mt-1">{checkoutStats.pendingItems}点 保留中</p>
+                            </button>
+                        ) : (
+                            <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
+                                <p className="text-sm text-gray-400 mb-1">持ち出し中</p>
+                                <p className="text-xl md:text-2xl font-bold text-gray-300">-</p>
+                            </div>
+                        )}
                         <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-6">
                             <p className="text-sm text-gray-400 mb-1">本日の取引</p>
                             <div className="flex items-baseline gap-3 mt-1">
@@ -126,9 +143,7 @@ export default function PosDashboard() {
                                             {new Date(tx.transaction_date).toLocaleDateString('ja-JP')}
                                         </td>
                                         <td className="text-center px-4">
-                                            <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${tx.type === 'purchase' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>
-                                                {tx.type === 'purchase' ? '仕入れ' : '販売'}
-                                            </span>
+                                            <TransactionTypeBadge type={tx.type} />
                                         </td>
                                         <td className="px-4">
                                             <p className="text-sm text-gray-800 truncate max-w-[250px]">
@@ -161,9 +176,7 @@ export default function PosDashboard() {
                             {recent.length > 0 ? recent.map(tx => (
                                 <div key={tx.id} className="px-4 py-3">
                                     <div className="flex items-center justify-between mb-1">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${tx.type === 'purchase' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>
-                                            {tx.type === 'purchase' ? '仕入れ' : '販売'}
-                                        </span>
+                                        <TransactionTypeBadge type={tx.type} size="sm" />
                                         <span className="text-xs text-gray-400">{new Date(tx.transaction_date).toLocaleDateString('ja-JP')}</span>
                                     </div>
                                     <p className="text-sm font-bold text-gray-800 truncate">{tx.inventory?.catalog?.name || '-'}</p>

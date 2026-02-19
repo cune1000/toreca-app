@@ -11,8 +11,8 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const { inventory_id, quantity, unit_price, transaction_date, notes } = body
 
-        if (!inventory_id || !quantity || (unit_price === undefined || unit_price === null)) {
-            return NextResponse.json({ success: false, error: '必須項目が不足しています' }, { status: 400 })
+        if (!inventory_id || !quantity || quantity <= 0 || !Number.isInteger(quantity) || unit_price === undefined || unit_price === null || unit_price < 0) {
+            return NextResponse.json({ success: false, error: '入力値が不正です' }, { status: 400 })
         }
 
         // 1. 在庫を取得

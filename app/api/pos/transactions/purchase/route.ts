@@ -11,23 +11,26 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const { catalog_id, condition, quantity, unit_price, expenses, transaction_date, notes } = body
 
-        if (!catalog_id || !condition || !quantity || unit_price === undefined || unit_price === null) {
-            return NextResponse.json({ success: false, error: '必須項目が不足しています' }, { status: 400 })
+        if (!catalog_id || !condition || !quantity || quantity <= 0 || !Number.isInteger(quantity) || unit_price === undefined || unit_price === null || unit_price < 0) {
+            return NextResponse.json({ success: false, error: '入力値が不正です' }, { status: 400 })
         }
 
         const totalExpenses = expenses || 0
         const expensePerUnit = quantity > 0 ? Math.round(totalExpenses / quantity) : 0
 
         // 1. 在庫レコードを検索（なければ作成）
-        let { data: inventory } = await supabase
+        let { data: inventory, error: selectError } = await supabase
             .from('pos_inventory')
             .select('*')
             .eq('catalog_id', catalog_id)
             .eq('condition', condition)
-            .single()
+            .maybeSingle()
+
+        if (selectError) throw selectError
 
         if (!inventory) {
-            const { data: newInv, error } = await supabase
+            // upsert的に挿入（重複時はselect fallback）
+            const { data: newInv, error: insertError } = await supabase
                 .from('pos_inventory')
                 .insert({
                     catalog_id,
@@ -41,8 +44,20 @@ export async function POST(request: NextRequest) {
                 })
                 .select()
                 .single()
-            if (error) throw error
-            inventory = newInv
+
+            if (insertError) {
+                // 競合で挿入失敗した場合は再取得
+                const { data: existing } = await supabase
+                    .from('pos_inventory')
+                    .select('*')
+                    .eq('catalog_id', catalog_id)
+                    .eq('condition', condition)
+                    .maybeSingle()
+                if (!existing) throw insertError
+                inventory = existing
+            } else {
+                inventory = newInv
+            }
         }
 
         // 2. 移動平均を再計算（仕入れ単価）

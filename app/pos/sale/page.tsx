@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
+import PosSpinner from '@/components/pos/PosSpinner'
+import CardThumbnail from '@/components/pos/CardThumbnail'
 import { getInventory, registerSale } from '@/lib/pos/api'
 import { formatPrice, getCondition } from '@/lib/pos/constants'
+import { getErrorMessage } from '@/lib/pos/utils'
 import { calculateProfit } from '@/lib/pos/calculations'
 import type { PosInventory } from '@/lib/pos/types'
 
@@ -33,16 +36,6 @@ function SalePage() {
             .then(res => {
                 const inStock = res.data.filter((i: PosInventory) => i.quantity > 0)
                 setInventory(inStock)
-
-                // catalog_id パラメータが指定されている場合、該当する在庫を自動選択
-                if (catalogIdParam && inStock.length > 0) {
-                    const match = inStock.find((i: PosInventory) => i.catalog_id === catalogIdParam)
-                    if (match) {
-                        const cond = getCondition(match.condition)
-                        setSelectedInv({ ...match, cond })
-                        setUnitPrice(String(match.catalog?.fixed_price || ''))
-                    }
-                }
             })
             .catch(console.error)
             .finally(() => setLoading(false))
@@ -50,9 +43,10 @@ function SalePage() {
 
     useEffect(() => { loadInventory() }, [])
 
-    const filtered = inventory
+    const filtered = useMemo(() => inventory
         .map(inv => ({ ...inv, cond: getCondition(inv.condition) }))
-        .filter(inv => !search || inv.catalog?.name?.toLowerCase().includes(search.toLowerCase()))
+        .filter(inv => !search || inv.catalog?.name?.toLowerCase().includes(search.toLowerCase())),
+        [inventory, search])
 
     // カタログ名でグループ化
     const grouped = filtered.reduce((acc, inv) => {
@@ -78,15 +72,17 @@ function SalePage() {
                 notes: notes || undefined,
             })
             setShowResult(true)
-            setTimeout(() => setShowResult(false), 3000)
-            setSelectedInv(null)
             setUnitPrice('')
             setQuantity(1)
             setNotes('')
-            setSearch('')
             loadInventory()
-        } catch (err: any) {
-            alert(err.message)
+            setTimeout(() => {
+                setShowResult(false)
+                setSelectedInv(null)
+                setSearch('')
+            }, 2000)
+        } catch (err) {
+            alert(getErrorMessage(err))
         } finally {
             setSubmitting(false)
         }
@@ -104,9 +100,7 @@ function SalePage() {
             )}
 
             {loading ? (
-                <div className="py-12 text-center">
-                    <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-                </div>
+                <PosSpinner />
             ) : !selectedInv ? (
                 <div>
                     <div className="relative mb-4">
@@ -125,11 +119,7 @@ function SalePage() {
                             <div key={name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                                 {/* 商品ヘッダー */}
                                 <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-50">
-                                    {catalog?.image_url ? (
-                                        <img src={catalog.image_url} alt="" className="w-10 h-14 object-cover rounded flex-shrink-0" />
-                                    ) : (
-                                        <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-lg flex-shrink-0">🎴</div>
-                                    )}
+                                    <CardThumbnail url={catalog?.image_url} size="sm" name={catalog?.name} />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-gray-800 truncate">{name}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
@@ -175,11 +165,7 @@ function SalePage() {
                 <div>
                     <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
                         <div className="flex items-center gap-3">
-                            {selectedInv.catalog?.image_url ? (
-                                <img src={selectedInv.catalog.image_url} alt="" className="w-14 h-20 object-cover rounded" />
-                            ) : (
-                                <div className="w-14 h-20 bg-gray-100 rounded flex items-center justify-center text-2xl">🎴</div>
-                            )}
+                            <CardThumbnail url={selectedInv.catalog?.image_url} size="lg" name={selectedInv.catalog?.name} />
                             <div className="flex-1">
                                 <p className="text-base font-bold text-gray-800">{selectedInv.catalog?.name || '-'}</p>
                                 <div className="flex items-center gap-2 text-sm text-gray-400 mt-1">

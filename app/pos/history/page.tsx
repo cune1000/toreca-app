@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import PosLayout from '@/components/pos/PosLayout'
+import PosSpinner from '@/components/pos/PosSpinner'
+import TransactionTypeBadge from '@/components/pos/TransactionTypeBadge'
 import TransactionEditModal from '@/components/pos/TransactionEditModal'
 import TransactionDeleteDialog from '@/components/pos/TransactionDeleteDialog'
 import { getTransactions } from '@/lib/pos/api'
@@ -25,10 +27,16 @@ export default function HistoryPage() {
 
     useEffect(() => { reload() }, [typeFilter])
 
-    const totalPurchase = transactions.filter(t => t.type === 'purchase').reduce((s, t) => s + t.total_price, 0)
-    const totalSale = transactions.filter(t => t.type === 'sale').reduce((s, t) => s + t.total_price, 0)
-    const totalProfit = transactions.filter(t => t.type === 'sale').reduce((s, t) => s + (t.profit || 0), 0)
-    const totalExpenses = transactions.filter(t => t.type === 'purchase').reduce((s, t) => s + (t.expenses || 0), 0)
+    const { totalPurchase, totalSale, totalProfit, totalExpenses } = useMemo(() => {
+        const purchases = transactions.filter(t => t.type === 'purchase')
+        const sales = transactions.filter(t => t.type === 'sale')
+        return {
+            totalPurchase: purchases.reduce((s, t) => s + t.total_price, 0),
+            totalExpenses: purchases.reduce((s, t) => s + (t.expenses || 0), 0),
+            totalSale: sales.reduce((s, t) => s + t.total_price, 0),
+            totalProfit: sales.reduce((s, t) => s + (t.profit || 0), 0),
+        }
+    }, [transactions])
 
     return (
         <PosLayout>
@@ -54,19 +62,19 @@ export default function HistoryPage() {
 
             {/* サマリー */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-5 md:mb-6">
-                <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-5">
+                <div className={`bg-white border border-gray-200 rounded-xl p-4 md:p-5 ${typeFilter === 'sale' ? 'opacity-40' : ''}`}>
                     <p className="text-xs md:text-sm text-gray-400 mb-1">仕入れ総額</p>
                     <p className="text-lg md:text-2xl font-bold text-blue-600">{formatPrice(totalPurchase)}</p>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-5">
+                <div className={`bg-white border border-gray-200 rounded-xl p-4 md:p-5 ${typeFilter === 'sale' ? 'opacity-40' : ''}`}>
                     <p className="text-xs md:text-sm text-gray-400 mb-1">仕入れ費用</p>
                     <p className="text-lg md:text-2xl font-bold text-orange-600">{formatPrice(totalExpenses)}</p>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-5">
+                <div className={`bg-white border border-gray-200 rounded-xl p-4 md:p-5 ${typeFilter === 'purchase' ? 'opacity-40' : ''}`}>
                     <p className="text-xs md:text-sm text-gray-400 mb-1">販売総額</p>
                     <p className="text-lg md:text-2xl font-bold text-green-600">{formatPrice(totalSale)}</p>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-5">
+                <div className={`bg-white border border-gray-200 rounded-xl p-4 md:p-5 ${typeFilter === 'purchase' ? 'opacity-40' : ''}`}>
                     <p className="text-xs md:text-sm text-gray-400 mb-1">累計利益</p>
                     <p className={`text-lg md:text-2xl font-bold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                         {totalProfit > 0 ? '+' : ''}{formatPrice(totalProfit)}
@@ -75,9 +83,7 @@ export default function HistoryPage() {
             </div>
 
             {loading ? (
-                <div className="py-16 text-center">
-                    <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-                </div>
+                <PosSpinner />
             ) : (
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                     {/* デスクトップ: テーブル */}
@@ -105,9 +111,7 @@ export default function HistoryPage() {
                                             {new Date(tx.transaction_date).toLocaleDateString('ja-JP')}
                                         </td>
                                         <td className="text-center px-4">
-                                            <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${tx.type === 'purchase' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>
-                                                {tx.type === 'purchase' ? '仕入れ' : '販売'}
-                                            </span>
+                                            <TransactionTypeBadge type={tx.type} />
                                         </td>
                                         <td className="px-4">
                                             <p className="text-sm text-gray-800 truncate max-w-[200px]">{tx.inventory?.catalog?.name || '-'}</p>
@@ -166,26 +170,24 @@ export default function HistoryPage() {
                                 <div key={tx.id} className="px-4 py-3.5">
                                     <div className="flex items-center justify-between mb-1.5">
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${tx.type === 'purchase' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>
-                                                {tx.type === 'purchase' ? '仕入れ' : '販売'}
-                                            </span>
+                                            <TransactionTypeBadge type={tx.type} size="sm" />
                                             <span className="text-xs px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>
                                                 {tx.inventory?.condition || '-'}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-2">
                                             <span className="text-xs text-gray-400">{new Date(tx.transaction_date).toLocaleDateString('ja-JP')}</span>
                                             <button
                                                 onClick={() => setEditingTx(tx)}
-                                                className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                                             >
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                             </button>
                                             <button
                                                 onClick={() => setDeletingTx(tx)}
-                                                className="p-1 text-gray-400 hover:text-red-600 rounded"
+                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                                             >
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             </button>
                                         </div>
                                     </div>

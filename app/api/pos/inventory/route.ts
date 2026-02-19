@@ -49,6 +49,27 @@ export async function GET(request: NextRequest) {
             filtered = filtered.filter((inv: any) => inv.catalog?.category === category)
         }
 
+        // 持ち出し中の数量を付加
+        const invIds = filtered.map((inv: any) => inv.id)
+        if (invIds.length > 0) {
+            const { data: checkoutData } = await supabase
+                .from('pos_checkout_items')
+                .select('inventory_id, quantity')
+                .in('inventory_id', invIds)
+                .eq('status', 'pending')
+
+            if (checkoutData && checkoutData.length > 0) {
+                const checkoutMap: Record<string, number> = {}
+                for (const ci of checkoutData) {
+                    checkoutMap[ci.inventory_id] = (checkoutMap[ci.inventory_id] || 0) + ci.quantity
+                }
+                filtered = filtered.map((inv: any) => ({
+                    ...inv,
+                    checkout_pending_qty: checkoutMap[inv.id] || 0,
+                }))
+            }
+        }
+
         return NextResponse.json({ success: true, data: filtered })
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })

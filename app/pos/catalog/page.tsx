@@ -1,31 +1,45 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
+import PosSpinner from '@/components/pos/PosSpinner'
+import CardThumbnail from '@/components/pos/CardThumbnail'
 import { getCatalogs, createCatalog, deleteCatalog, searchCatalogFromAPI, getInventory } from '@/lib/pos/api'
+import { getErrorMessage } from '@/lib/pos/utils'
 import { formatPrice, getCondition } from '@/lib/pos/constants'
 import type { PosCatalog, PosInventory } from '@/lib/pos/types'
 
-export default function CatalogPage() {
+export default function CatalogPageWrapper() {
+    return <Suspense fallback={<PosLayout><div className="py-16 text-center"><div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" /></div></PosLayout>}><CatalogPage /></Suspense>
+}
+
+function CatalogPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const filterParam = searchParams.get('filter')
     const [catalogs, setCatalogs] = useState<PosCatalog[]>([])
     const [inventory, setInventory] = useState<PosInventory[]>([])
     const [inventoryLoaded, setInventoryLoaded] = useState(false)
     const [search, setSearch] = useState('')
-    const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'nostock'>('all')
+    const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'nostock'>(filterParam === 'instock' ? 'instock' : filterParam === 'nostock' ? 'nostock' : 'all')
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [showApiSearch, setShowApiSearch] = useState(false)
     const [apiQuery, setApiQuery] = useState('')
     const [apiResults, setApiResults] = useState<any[]>([])
     const [apiSearching, setApiSearching] = useState(false)
+    const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
     const [form, setForm] = useState({
         name: '', category: '', subcategory: '', card_number: '', rarity: '', fixed_price: '',
     })
 
+    const [loadError, setLoadError] = useState('')
+
     const load = async () => {
+        setLoadError('')
         try {
             const catRes = await getCatalogs({ search })
             setCatalogs(catRes.data)
@@ -34,16 +48,18 @@ export default function CatalogPage() {
                 setInventory(invRes.data)
                 setInventoryLoaded(true)
             }
-        } catch (err) { console.error(err) }
+        } catch (err) { setLoadError(getErrorMessage(err)) }
         finally { setLoading(false) }
     }
 
     useEffect(() => {
-        const timer = setTimeout(() => { load() }, 300)
-        return () => clearTimeout(timer)
+        if (search === '') {
+            load()
+        } else {
+            const timer = setTimeout(() => { load() }, 300)
+            return () => clearTimeout(timer)
+        }
     }, [search])
-
-    useEffect(() => { load() }, [])
 
     const catalogWithStock = useMemo(() => {
         const invByCatalog: Record<string, PosInventory[]> = {}
@@ -84,7 +100,7 @@ export default function CatalogPage() {
             setShowCreate(false)
             setInventoryLoaded(false)
             load()
-        } catch (err: any) { alert(err.message) }
+        } catch (err) { alert(getErrorMessage(err)) }
     }
 
     const handleApiSearch = async () => {
@@ -93,7 +109,7 @@ export default function CatalogPage() {
         try {
             const res = await searchCatalogFromAPI(apiQuery)
             setApiResults(res.data)
-        } catch (err: any) { alert(err.message) }
+        } catch (err) { alert(getErrorMessage(err)) }
         finally { setApiSearching(false) }
     }
 
@@ -110,17 +126,20 @@ export default function CatalogPage() {
             setApiResults(prev => prev.filter(r => r.api_card_id !== item.api_card_id))
             setInventoryLoaded(false)
             load()
-        } catch (err: any) { alert(err.message) }
+        } catch (err) { alert(getErrorMessage(err)) }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('このカタログを削除しますか？')) return
+    const handleDelete = async () => {
+        if (!deletingId) return
+        setDeleteSubmitting(true)
         try {
-            await deleteCatalog(id)
+            await deleteCatalog(deletingId)
+            setDeletingId(null)
             setInventoryLoaded(false)
             load()
         }
-        catch (err: any) { alert(err.message) }
+        catch (err) { alert(getErrorMessage(err)) }
+        finally { setDeleteSubmitting(false) }
     }
 
     return (
@@ -192,15 +211,15 @@ export default function CatalogPage() {
                         <input placeholder="商品名 *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                             className="sm:col-span-3 px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
                         <input placeholder="カテゴリ" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm" />
+                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
                         <input placeholder="サブカテ" value={form.subcategory} onChange={e => setForm({ ...form, subcategory: e.target.value })}
-                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm" />
+                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
                         <input placeholder="カード番号" value={form.card_number} onChange={e => setForm({ ...form, card_number: e.target.value })}
-                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm" />
+                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
                         <input placeholder="レアリティ" value={form.rarity} onChange={e => setForm({ ...form, rarity: e.target.value })}
-                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm" />
+                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
                         <input placeholder="販売価格" type="number" value={form.fixed_price} onChange={e => setForm({ ...form, fixed_price: e.target.value })}
-                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm" />
+                            className="px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
                     </div>
                     <button onClick={handleCreate} className="w-full sm:w-auto px-8 py-3 bg-gray-900 text-white rounded-lg text-sm font-bold">登録</button>
                 </div>
@@ -233,10 +252,15 @@ export default function CatalogPage() {
                 </div>
             </div>
 
-            {loading ? (
-                <div className="py-16 text-center">
-                    <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
+            {loadError && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center justify-between">
+                    <p className="text-sm text-red-600 font-bold">{loadError}</p>
+                    <button onClick={() => { setLoading(true); load() }} className="text-sm text-red-500 hover:text-red-700 font-bold">再読み込み</button>
                 </div>
+            )}
+
+            {loading ? (
+                <PosSpinner />
             ) : (
                 <>
                     {/* デスクトップ: テーブル */}
@@ -257,11 +281,7 @@ export default function CatalogPage() {
                                     <tr key={cat.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => router.push(`/pos/catalog/${cat.id}`)}>
                                         <td className="px-5 py-3.5">
                                             <div className="flex items-center gap-3">
-                                                {cat.image_url ? (
-                                                    <img src={cat.image_url} alt="" className="w-10 h-14 object-cover rounded flex-shrink-0" />
-                                                ) : (
-                                                    <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-lg flex-shrink-0">🎴</div>
-                                                )}
+                                                <CardThumbnail url={cat.image_url} size="sm" name={cat.name} />
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-bold text-gray-900 truncate max-w-[300px]">{cat.name}</p>
                                                     <div className="flex items-center gap-2 mt-0.5">
@@ -292,7 +312,7 @@ export default function CatalogPage() {
                                             <div className="flex items-center gap-1.5 justify-center">
                                                 <button onClick={() => router.push(`/pos/purchase?catalog_id=${cat.id}`)} className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">💰 仕入</button>
                                                 {cat.totalQty > 0 && <button onClick={() => router.push(`/pos/sale?catalog_id=${cat.id}`)} className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors">🛒 販売</button>}
-                                                <button onClick={() => handleDelete(cat.id)} className="px-2 py-1.5 bg-gray-50 text-gray-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
+                                                <button onClick={() => setDeletingId(cat.id)} className="px-2 py-1.5 bg-gray-50 text-gray-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -312,11 +332,7 @@ export default function CatalogPage() {
                                 onClick={() => router.push(`/pos/catalog/${cat.id}`)}
                             >
                                 <div className="flex items-center gap-3">
-                                    {cat.image_url ? (
-                                        <img src={cat.image_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
-                                    ) : (
-                                        <div className="w-12 h-16 bg-gray-100 rounded flex items-center justify-center text-lg flex-shrink-0">🎴</div>
-                                    )}
+                                    <CardThumbnail url={cat.image_url} size="md" name={cat.name} />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-gray-900 truncate">{cat.name}</p>
                                         <p className="text-xs text-gray-400 mt-0.5">{cat.category || '-'} / {cat.rarity || '-'}</p>
@@ -344,6 +360,31 @@ export default function CatalogPage() {
                         )}
                     </div>
                 </>
+            )}
+            {/* 削除確認ダイアログ */}
+            {deletingId && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-end md:items-center justify-center" onClick={() => !deleteSubmitting && setDeletingId(null)}>
+                    <div className="bg-white w-full md:max-w-sm md:rounded-xl rounded-t-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 space-y-4">
+                            <div className="text-center">
+                                <p className="text-base font-bold text-gray-900">カタログを削除しますか？</p>
+                                <p className="text-sm text-gray-500 mt-2">この操作は取り消せません。関連する在庫・取引データも影響を受ける可能性があります。</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setDeletingId(null)}
+                                    disabled={deleteSubmitting}
+                                    className="flex-1 py-3.5 rounded-xl text-sm font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                                >キャンセル</button>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={deleteSubmitting}
+                                    className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-colors ${deleteSubmitting ? 'bg-gray-200 text-gray-400' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                                >{deleteSubmitting ? '削除中...' : '削除する'}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </PosLayout>
     )

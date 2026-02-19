@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { updateCatalog } from '@/lib/pos/api'
-import { formatPrice } from '@/lib/pos/constants'
+import { getErrorMessage } from '@/lib/pos/utils'
 import type { PosCatalog } from '@/lib/pos/types'
 
 interface Props {
@@ -21,6 +21,11 @@ export default function CatalogEditModal({ catalog, onClose, onSaved }: Props) {
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState('')
 
+    useEffect(() => {
+        document.body.style.overflow = 'hidden'
+        return () => { document.body.style.overflow = '' }
+    }, [])
+
     const handleSave = async () => {
         if (!name.trim()) { setError('商品名を入力してください'); return }
         setSubmitting(true)
@@ -33,27 +38,27 @@ export default function CatalogEditModal({ catalog, onClose, onSaved }: Props) {
                 card_number: cardNumber.trim() || null,
                 fixed_price: fixedPrice.trim() !== '' ? parseInt(fixedPrice) || 0 : null,
                 image_url: imageUrl.trim() || null,
-            } as any)
+            })
             onSaved(res.data)
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err) {
+            setError(getErrorMessage(err))
         } finally {
             setSubmitting(false)
         }
     }
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end md:items-center justify-center" onClick={onClose}>
             <div
-                className="bg-white w-full md:max-w-lg md:rounded-xl rounded-t-2xl max-h-[90vh] overflow-y-auto"
+                className="bg-white w-full md:max-w-lg md:rounded-xl rounded-t-2xl max-h-[90vh] flex flex-col"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between z-10">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                     <h3 className="text-base font-bold text-gray-900">カタログ編集</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg p-1">✕</button>
                 </div>
 
-                <div className="p-5 space-y-4">
+                <div className="p-5 space-y-4 overflow-y-auto flex-1">
                     {/* 商品名 */}
                     <div>
                         <label className="text-sm font-bold text-gray-600 mb-2 block">商品名 <span className="text-red-500">*</span></label>
@@ -143,7 +148,9 @@ export default function CatalogEditModal({ catalog, onClose, onSaved }: Props) {
                     )}
 
                     {error && <p className="text-sm text-red-500 font-bold">{error}</p>}
+                </div>
 
+                <div className="px-5 pb-8 pt-3 border-t border-gray-100 flex-shrink-0 safe-area-pb">
                     <button
                         onClick={handleSave}
                         disabled={submitting}

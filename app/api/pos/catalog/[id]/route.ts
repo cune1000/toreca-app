@@ -38,9 +38,18 @@ export async function PUT(
     try {
         const { id } = await params
         const body = await request.json()
+
+        // 許可フィールドのみ抽出
+        const allowedFields = ['name', 'image_url', 'category', 'subcategory', 'card_number', 'rarity', 'jan_code', 'fixed_price'] as const
+        const updates: Record<string, any> = {}
+        for (const key of allowedFields) {
+            if (body[key] !== undefined) updates[key] = body[key]
+        }
+        updates.updated_at = new Date().toISOString()
+
         const { data, error } = await supabase
             .from('pos_catalogs')
-            .update(body)
+            .update(updates)
             .eq('id', id)
             .select()
             .single()

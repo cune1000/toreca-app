@@ -3,8 +3,11 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
+import PosSpinner from '@/components/pos/PosSpinner'
+import CardThumbnail from '@/components/pos/CardThumbnail'
 import { getCatalogs, getCatalog, registerPurchase } from '@/lib/pos/api'
 import { CONDITIONS, formatPrice } from '@/lib/pos/constants'
+import { getErrorMessage } from '@/lib/pos/utils'
 import type { PosCatalog } from '@/lib/pos/types'
 
 export default function PurchasePageWrapper() {
@@ -73,17 +76,19 @@ function PurchasePage() {
                 notes: notes || undefined,
             })
             setShowResult(true)
-            setTimeout(() => setShowResult(false), 3000)
-            setSelectedCatalog(null)
             setPriceInput('')
             setQuantity(1)
             setNotes('')
             setExpensesInput('')
-            setSearch('')
             setCustomCondition('')
             setUseCustomCondition(false)
-        } catch (err: any) {
-            alert(err.message)
+            setTimeout(() => {
+                setShowResult(false)
+                setSelectedCatalog(null)
+                setSearch('')
+            }, 2000)
+        } catch (err) {
+            alert(getErrorMessage(err))
         } finally {
             setSubmitting(false)
         }
@@ -120,11 +125,7 @@ function PurchasePage() {
                                 onClick={() => setSelectedCatalog(cat)}
                                 className="w-full bg-white border border-gray-100 rounded-lg px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 text-left transition-colors"
                             >
-                                {cat.image_url ? (
-                                    <img src={cat.image_url} alt="" className="w-10 h-14 object-cover rounded" />
-                                ) : (
-                                    <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-lg">🎴</div>
-                                )}
+                                <CardThumbnail url={cat.image_url} size="sm" name={cat.name} />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-bold text-gray-800 truncate">{cat.name}</p>
                                     <p className="text-xs text-gray-400">{cat.category || '-'} / {cat.rarity || '-'}</p>
@@ -142,11 +143,7 @@ function PurchasePage() {
                     {/* 選択中の商品 */}
                     <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
                         <div className="flex items-center gap-3 mb-3">
-                            {selectedCatalog.image_url ? (
-                                <img src={selectedCatalog.image_url} alt="" className="w-14 h-20 object-cover rounded" />
-                            ) : (
-                                <div className="w-14 h-20 bg-gray-100 rounded flex items-center justify-center text-2xl">🎴</div>
-                            )}
+                            <CardThumbnail url={selectedCatalog.image_url} size="lg" name={selectedCatalog.name} />
                             <div className="flex-1">
                                 <p className="text-base font-bold text-gray-800">{selectedCatalog.name}</p>
                                 <p className="text-sm text-gray-400">

@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { deleteTransaction } from '@/lib/pos/api'
 import { formatPrice } from '@/lib/pos/constants'
+import { getErrorMessage } from '@/lib/pos/utils'
+import TransactionTypeBadge from '@/components/pos/TransactionTypeBadge'
 import type { PosTransaction } from '@/lib/pos/types'
 
 interface Props {
@@ -16,6 +18,11 @@ export default function TransactionDeleteDialog({ transaction: tx, onClose, onDe
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState('')
 
+    useEffect(() => {
+        document.body.style.overflow = 'hidden'
+        return () => { document.body.style.overflow = '' }
+    }, [])
+
     const handleDelete = async () => {
         if (!reason.trim()) { setError('削除理由を入力してください'); return }
         setSubmitting(true)
@@ -23,17 +30,17 @@ export default function TransactionDeleteDialog({ transaction: tx, onClose, onDe
         try {
             await deleteTransaction(tx.id, reason)
             onDeleted()
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err) {
+            setError(getErrorMessage(err))
         } finally {
             setSubmitting(false)
         }
     }
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end md:items-center justify-center" onClick={onClose}>
             <div
-                className="bg-white w-full md:max-w-md md:rounded-xl rounded-t-2xl"
+                className="bg-white w-full md:max-w-md md:rounded-xl rounded-t-2xl max-h-[90vh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -41,14 +48,12 @@ export default function TransactionDeleteDialog({ transaction: tx, onClose, onDe
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg p-1">✕</button>
                 </div>
 
-                <div className="p-5 space-y-4">
+                <div className="p-5 pb-8 space-y-4 safe-area-pb">
                     {/* 対象取引の情報 */}
                     <div className="bg-red-50 rounded-lg px-4 py-3">
                         <p className="text-sm font-bold text-gray-800 truncate">{tx.inventory?.catalog?.name || '-'}</p>
                         <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                            <span className={`px-2 py-0.5 rounded-full font-bold ${tx.type === 'purchase' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>
-                                {tx.type === 'purchase' ? '仕入れ' : '販売'}
-                            </span>
+                            <TransactionTypeBadge type={tx.type} size="sm" />
                             <span>{tx.quantity}個 × {formatPrice(tx.unit_price)}</span>
                             <span className="font-bold text-gray-700">{formatPrice(tx.total_price)}</span>
                         </div>

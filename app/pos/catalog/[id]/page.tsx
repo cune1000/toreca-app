@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { use } from 'react'
 import PosLayout from '@/components/pos/PosLayout'
+import PosSpinner from '@/components/pos/PosSpinner'
+import TransactionTypeBadge from '@/components/pos/TransactionTypeBadge'
 import TransactionEditModal from '@/components/pos/TransactionEditModal'
 import TransactionDeleteDialog from '@/components/pos/TransactionDeleteDialog'
 import CatalogEditModal from '@/components/pos/CatalogEditModal'
@@ -64,7 +66,7 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
     }
 
     if (loading) {
-        return <PosLayout><div className="py-20 text-center"><div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" /></div></PosLayout>
+        return <PosLayout><PosSpinner /></PosLayout>
     }
 
     if (!catalog) {
@@ -230,7 +232,12 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                 return (
                                     <tr key={inv.id} className="hover:bg-gray-50/50">
                                         <td className="px-6 py-4"><span className="text-xs px-3 py-1.5 rounded-full text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>{inv.condition}</span></td>
-                                        <td className="text-center text-base font-bold text-gray-900 px-4">{inv.quantity}</td>
+                                        <td className="text-center px-4">
+                                            <span className="text-base font-bold text-gray-900">{inv.quantity}</span>
+                                            {(inv as any).checkout_pending_qty > 0 && (
+                                                <span className="ml-1 text-xs text-amber-600 font-bold">+{(inv as any).checkout_pending_qty}持出</span>
+                                            )}
+                                        </td>
                                         <td className="text-right text-sm text-gray-700 px-4">{formatPrice(inv.avg_purchase_price)}</td>
                                         <td className="text-right px-4">
                                             {inv.market_price ? (
@@ -285,7 +292,12 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                 <div key={inv.id} className="px-4 py-3.5">
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs px-2.5 py-1 rounded-full text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>{inv.condition}</span>
-                                        <span className="text-lg font-bold text-gray-900">{inv.quantity}個</span>
+                                        <span className="text-lg font-bold text-gray-900">
+                                            {inv.quantity}個
+                                            {(inv as any).checkout_pending_qty > 0 && (
+                                                <span className="ml-1 text-xs text-amber-600">+{(inv as any).checkout_pending_qty}持出</span>
+                                            )}
+                                        </span>
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 text-xs mb-2">
                                         <div>
@@ -305,7 +317,7 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                                         value={priceInput}
                                                         onChange={e => setPriceInput(e.target.value)}
                                                         onKeyDown={e => { if (e.key === 'Enter') handleSavePredictedPrice(inv.id); if (e.key === 'Escape') { setEditingPriceId(null); setPriceInput('') } }}
-                                                        className="w-16 px-1.5 py-0.5 border border-gray-300 rounded text-xs text-right focus:outline-none"
+                                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:outline-none focus:border-blue-400"
                                                         autoFocus
                                                     />
                                                     <button onClick={() => handleSavePredictedPrice(inv.id)} className="text-blue-600 text-xs font-bold">OK</button>
@@ -358,7 +370,7 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                 return (
                                     <tr key={tx.id} className="hover:bg-gray-50/50">
                                         <td className="px-6 py-3.5 text-sm text-gray-500">{new Date(tx.transaction_date).toLocaleDateString('ja-JP')}</td>
-                                        <td className="text-center px-4"><span className={`text-xs px-2.5 py-1 rounded-full font-bold ${tx.type === 'purchase' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>{tx.type === 'purchase' ? '仕入れ' : '販売'}</span></td>
+                                        <td className="text-center px-4"><TransactionTypeBadge type={tx.type} /></td>
                                         <td className="text-center px-4"><span className="text-xs px-2.5 py-1 rounded-full text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>{tx.inventory?.condition || '-'}</span></td>
                                         <td className="text-center text-sm text-gray-700 px-4">{tx.quantity}</td>
                                         <td className="text-right text-sm text-gray-700 px-4">{formatPrice(tx.unit_price)}</td>
@@ -398,22 +410,22 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                 <div key={tx.id} className="px-4 py-3.5">
                                     <div className="flex items-center justify-between mb-1.5">
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${tx.type === 'purchase' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>{tx.type === 'purchase' ? '仕入れ' : '販売'}</span>
+                                            <TransactionTypeBadge type={tx.type} size="sm" />
                                             <span className="text-xs px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>{tx.inventory?.condition || '-'}</span>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-2">
                                             <span className="text-xs text-gray-400">{new Date(tx.transaction_date).toLocaleDateString('ja-JP')}</span>
                                             <button
                                                 onClick={() => setEditingTx(tx)}
-                                                className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                                             >
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                             </button>
                                             <button
                                                 onClick={() => setDeletingTx(tx)}
-                                                className="p-1 text-gray-400 hover:text-red-600 rounded"
+                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                                             >
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             </button>
                                         </div>
                                     </div>

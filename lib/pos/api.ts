@@ -2,7 +2,7 @@
 // POS API クライアント
 // =============================================================================
 
-import type { PosCatalog, PosInventory, PosTransaction, PosHistory, PosApiResponse, PosStats } from './types'
+import type { PosCatalog, PosInventory, PosTransaction, PosHistory, PosApiResponse, PosStats, PosCheckoutFolder, PosCheckoutFolderDetail, PosCheckoutStats } from './types'
 
 const BASE = '/api/pos'
 
@@ -182,4 +182,82 @@ export async function updateInventoryPrice(inventoryId: string, predictedPrice: 
 
 export async function getStats() {
     return request<{ success: true; data: PosStats }>(`${BASE}/stats`)
+}
+
+// =============================================================================
+// 持ち出し（チェックアウト）
+// =============================================================================
+
+export async function getCheckoutFolders(params?: { status?: string }) {
+    const sp = new URLSearchParams()
+    if (params?.status) sp.set('status', params.status)
+    const q = sp.toString()
+    return request<{ success: true; data: PosCheckoutFolder[] }>(`${BASE}/checkout/folders${q ? `?${q}` : ''}`)
+}
+
+export async function getCheckoutFolder(id: string) {
+    return request<{ success: true; data: PosCheckoutFolderDetail }>(`${BASE}/checkout/folders/${id}`)
+}
+
+export async function createCheckoutFolder(data: { name: string; description?: string }) {
+    return request<{ success: true; data: PosCheckoutFolder }>(`${BASE}/checkout/folders`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function updateCheckoutFolder(id: string, data: { name?: string; description?: string; status?: string }) {
+    return request<{ success: true; data: PosCheckoutFolder }>(`${BASE}/checkout/folders/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function deleteCheckoutFolder(id: string) {
+    return request<{ success: true }>(`${BASE}/checkout/folders/${id}`, { method: 'DELETE' })
+}
+
+export async function checkoutItem(data: { folder_id: string; inventory_id: string; quantity: number }) {
+    return request<PosApiResponse>(`${BASE}/checkout/items`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function returnCheckoutItem(itemId: string, data?: { notes?: string; resolve_quantity?: number }) {
+    return request<PosApiResponse>(`${BASE}/checkout/items/${itemId}/return`, {
+        method: 'POST',
+        body: JSON.stringify(data || {}),
+    })
+}
+
+export async function sellCheckoutItem(itemId: string, data: { unit_price: number; sale_expenses?: number; notes?: string; resolve_quantity?: number }) {
+    return request<PosApiResponse>(`${BASE}/checkout/items/${itemId}/sell`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function convertCheckoutItem(itemId: string, data: { new_condition: string; expenses?: number; notes?: string; resolve_quantity?: number }) {
+    return request<PosApiResponse>(`${BASE}/checkout/items/${itemId}/convert`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function cancelCheckoutItem(itemId: string) {
+    return request<PosApiResponse>(`${BASE}/checkout/items/${itemId}`, {
+        method: 'DELETE',
+    })
+}
+
+export async function undoCheckoutItem(itemId: string) {
+    return request<PosApiResponse>(`${BASE}/checkout/items/${itemId}/undo`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+    })
+}
+
+export async function getCheckoutStats() {
+    return request<{ success: true; data: PosCheckoutStats }>(`${BASE}/checkout/stats`)
 }
