@@ -12,6 +12,7 @@ interface ScrapeResult {
   pricechartingName: string
   imageUrl: string | null
   imageBase64: string | null
+  setCode: string | null
   cardData: {
     name: string | null
     number: string | null
@@ -19,6 +20,33 @@ interface ScrapeResult {
     confidence: number
   } | null
   error?: string
+}
+
+// セットslug → set_code のキャッシュ
+const setCodeCache = new Map<string, string | null>()
+
+function extractSetSlug(url: string): string | null {
+  const match = url.match(/\/game\/([^/]+)\//)
+  return match ? match[1] : null
+}
+
+async function fetchSetCode(slug: string): Promise<string | null> {
+  if (setCodeCache.has(slug)) return setCodeCache.get(slug)!
+  try {
+    const res = await fetch(`https://www.pricecharting.com/console/${slug}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) { setCodeCache.set(slug, null); return null }
+    const html = await res.text()
+    const match = html.match(/Set Code:\s*([^<]+)/)
+    const code = match ? match[1].trim() : null
+    setCodeCache.set(slug, code)
+    return code
+  } catch {
+    setCodeCache.set(slug, null)
+    return null
+  }
 }
 
 const CARD_RECOGNITION_PROMPT = `このポケモンカードの画像から以下の情報を正確に抽出してください：
@@ -41,6 +69,10 @@ const CARD_RECOGNITION_PROMPT = `このポケモンカードの画像から以�
 
 async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>): Promise<ScrapeResult> {
   try {
+    // 0. セットコード取得（キャッシュ済みなら即返却）
+    const setSlug = extractSetSlug(url)
+    const setCode = setSlug ? await fetchSetCode(setSlug) : null
+
     // 1. HTML取得
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -90,7 +122,7 @@ async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>):
       }
     }
 
-    return { url, pricechartingId, pricechartingName, imageUrl, imageBase64, cardData }
+    return { url, pricechartingId, pricechartingName, imageUrl, imageBase64, setCode, cardData }
   } catch (err: any) {
     return {
       url,
@@ -98,6 +130,7 @@ async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>):
       pricechartingName: '',
       imageUrl: null,
       imageBase64: null,
+      setCode: null,
       cardData: null,
       error: err.message || 'Unknown error',
     }

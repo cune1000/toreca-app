@@ -21,6 +21,7 @@ export interface Card {
   shinsoku_linked_at?: string | null
   pricecharting_id?: string | null
   pricecharting_name?: string | null
+  set_code?: string | null
   created_at?: string
   updated_at?: string
 }

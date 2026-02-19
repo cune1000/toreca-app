@@ -16,6 +16,7 @@ interface PCCard {
   pricechartingName: string
   imageUrl: string | null
   imageBase64: string | null
+  setCode: string | null
   cardData: {
     name: string | null
     number: string | null
@@ -139,6 +140,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
             pricechartingName: r.pricechartingName,
             imageUrl: r.imageUrl,
             imageBase64: r.imageBase64 || null,
+            setCode: r.setCode || null,
             cardData: r.cardData,
             editName: r.cardData?.name || r.pricechartingName || '',
             editNumber: r.cardData?.number || '',
@@ -216,7 +218,10 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
         // 登録済みカード → PriceCharting ID紐付け + 画像補完
         if (card.exists && card.existingId) {
           if (card.pricechartingId) {
-            const updateFields: Record<string, any> = { pricecharting_id: card.pricechartingId }
+            const updateFields: Record<string, any> = {
+              pricecharting_id: card.pricechartingId,
+              ...(card.setCode ? { set_code: card.setCode } : {}),
+            }
 
             // 既存カードに画像がなければアップロード
             if (!card.existingImageUrl && card.imageBase64) {
@@ -247,6 +252,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
             card_number: card.editNumber || null,
             image_url: uploadedImageUrl,
             pricecharting_id: card.pricechartingId,
+            set_code: card.setCode || null,
             category_large_id: categoryLargeId || null,
           })
           .select('id')
@@ -441,11 +447,18 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                                 placeholder="レアリティ"
                               />
                             </div>
-                            {card.cardData && (
-                              <p className="text-[10px] text-gray-400">
-                                AI信頼度: {Math.round(card.cardData.confidence * 100)}%
-                              </p>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {card.cardData && (
+                                <span className="text-[10px] text-gray-400">
+                                  AI信頼度: {Math.round(card.cardData.confidence * 100)}%
+                                </span>
+                              )}
+                              {card.setCode && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded font-mono font-medium">
+                                  {card.setCode}
+                                </span>
+                              )}
+                            </div>
                             {card.exists && (
                               <p className="text-[10px] text-orange-600 font-medium">
                                 {card.existsReason?.startsWith('PC ID一致')
