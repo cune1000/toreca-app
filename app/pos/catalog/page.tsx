@@ -29,7 +29,6 @@ export default function CatalogPage() {
         try {
             const catRes = await getCatalogs({ search })
             setCatalogs(catRes.data)
-            // 在庫は初回のみ取得
             if (!inventoryLoaded) {
                 const invRes = await getInventory()
                 setInventory(invRes.data)
@@ -39,13 +38,11 @@ export default function CatalogPage() {
         finally { setLoading(false) }
     }
 
-    // 検索デバウンス（300ms）
     useEffect(() => {
         const timer = setTimeout(() => { load() }, 300)
         return () => clearTimeout(timer)
     }, [search])
 
-    // 初回ロード
     useEffect(() => { load() }, [])
 
     const catalogWithStock = useMemo(() => {
@@ -129,7 +126,7 @@ export default function CatalogPage() {
     return (
         <PosLayout>
             {/* ヘッダー */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 md:mb-6">
                 <div>
                     <h1 className="text-xl font-bold text-gray-900">カタログ・在庫管理</h1>
                     <p className="text-sm text-gray-500 mt-1">{filtered.length}件のカタログ</p>
@@ -137,18 +134,18 @@ export default function CatalogPage() {
                 <div className="flex gap-2">
                     <button
                         onClick={() => { setShowApiSearch(!showApiSearch); setShowCreate(false) }}
-                        className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 transition-colors"
+                        className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 transition-colors"
                     >🔗 API検索</button>
                     <button
                         onClick={() => { setShowCreate(!showCreate); setShowApiSearch(false) }}
-                        className="px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-gray-800 transition-colors"
+                        className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-gray-800 transition-colors"
                     >+ 新規作成</button>
                 </div>
             </div>
 
             {/* API検索パネル */}
             {showApiSearch && (
-                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-6">
+                <div className="mb-5 md:mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4 md:p-6">
                     <h3 className="text-sm font-bold text-blue-800 mb-3">🔗 APIからカード検索</h3>
                     <div className="flex gap-2 mb-3">
                         <input
@@ -162,13 +159,13 @@ export default function CatalogPage() {
                         <button
                             onClick={handleApiSearch}
                             disabled={apiSearching}
-                            className="px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700"
-                        >{apiSearching ? '検索中...' : '検索'}</button>
+                            className="px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700"
+                        >{apiSearching ? '...' : '検索'}</button>
                     </div>
                     {apiResults.length > 0 && (
                         <div className="bg-white rounded-lg border border-blue-100 divide-y divide-blue-50 max-h-72 overflow-y-auto">
                             {apiResults.map((item: any) => (
-                                <div key={item.api_card_id} className="px-4 py-3 flex items-center gap-4 hover:bg-blue-50/50">
+                                <div key={item.api_card_id} className="px-4 py-3 flex items-center gap-3 md:gap-4 hover:bg-blue-50/50">
                                     {item.image_url && (
                                         <img src={item.image_url} alt="" className="w-10 h-14 object-cover rounded" />
                                     )}
@@ -178,7 +175,7 @@ export default function CatalogPage() {
                                     </div>
                                     <button
                                         onClick={() => handleImportFromApi(item)}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
+                                        className="px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
                                     >追加</button>
                                 </div>
                             ))}
@@ -189,11 +186,11 @@ export default function CatalogPage() {
 
             {/* 手動新規作成 */}
             {showCreate && (
-                <div className="mb-6 bg-white border border-gray-200 rounded-xl p-6">
+                <div className="mb-5 md:mb-6 bg-white border border-gray-200 rounded-xl p-4 md:p-6">
                     <h3 className="text-sm font-bold text-gray-700 mb-4">✏️ 手動登録</h3>
-                    <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                         <input placeholder="商品名 *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                            className="col-span-3 px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
+                            className="sm:col-span-3 px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
                         <input placeholder="カテゴリ" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
                             className="px-4 py-3 border border-gray-200 rounded-lg text-sm" />
                         <input placeholder="サブカテ" value={form.subcategory} onChange={e => setForm({ ...form, subcategory: e.target.value })}
@@ -205,13 +202,13 @@ export default function CatalogPage() {
                         <input placeholder="販売価格" type="number" value={form.fixed_price} onChange={e => setForm({ ...form, fixed_price: e.target.value })}
                             className="px-4 py-3 border border-gray-200 rounded-lg text-sm" />
                     </div>
-                    <button onClick={handleCreate} className="px-8 py-3 bg-gray-900 text-white rounded-lg text-sm font-bold">登録</button>
+                    <button onClick={handleCreate} className="w-full sm:w-auto px-8 py-3 bg-gray-900 text-white rounded-lg text-sm font-bold">登録</button>
                 </div>
             )}
 
             {/* 検索 + フィルタ */}
-            <div className="flex items-center gap-4 mb-5">
-                <div className="relative flex-1 max-w-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4 md:mb-5">
+                <div className="relative flex-1 sm:max-w-lg">
                     <input
                         type="text"
                         value={search}
@@ -221,7 +218,7 @@ export default function CatalogPage() {
                     />
                     <span className="absolute left-3.5 top-3.5 text-gray-400 text-sm">🔍</span>
                 </div>
-                <div className="flex gap-1.5 bg-white border border-gray-200 rounded-lg p-1">
+                <div className="flex gap-1.5 bg-white border border-gray-200 rounded-lg p-1 self-start">
                     {[
                         { key: 'all' as const, label: 'すべて' },
                         { key: 'instock' as const, label: '在庫あり' },
@@ -230,124 +227,123 @@ export default function CatalogPage() {
                         <button
                             key={f.key}
                             onClick={() => setStockFilter(f.key)}
-                            className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${stockFilter === f.key ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700'
-                                }`}
+                            className={`px-3 md:px-4 py-2 rounded-md text-sm font-bold transition-colors ${stockFilter === f.key ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700'}`}
                         >{f.label}</button>
                     ))}
                 </div>
             </div>
 
-            {/* テーブル */}
             {loading ? (
                 <div className="py-16 text-center">
                     <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
                 </div>
             ) : (
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-gray-100 bg-gray-50/50">
-                                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3.5">商品</th>
-                                <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">在庫数</th>
-                                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3.5">状態別在庫</th>
-                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">平均仕入</th>
-                                <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">販売価格</th>
-                                <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filtered.length > 0 ? filtered.map(cat => (
-                                <tr
-                                    key={cat.id}
-                                    className="hover:bg-gray-50/50 transition-colors cursor-pointer"
-                                    onClick={() => router.push(`/pos/catalog/${cat.id}`)}
-                                >
-                                    <td className="px-5 py-3.5">
-                                        <div className="flex items-center gap-3">
-                                            {cat.image_url ? (
-                                                <img src={cat.image_url} alt="" className="w-10 h-14 object-cover rounded flex-shrink-0" />
-                                            ) : (
-                                                <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-lg flex-shrink-0">🎴</div>
-                                            )}
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-bold text-gray-900 truncate max-w-[300px]">{cat.name}</p>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-xs text-gray-400">{cat.category || '-'}</span>
-                                                    <span className="text-xs text-gray-300">·</span>
-                                                    <span className="text-xs text-gray-400">{cat.rarity || '-'}</span>
-                                                    {cat.source_type === 'api' && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-500 rounded-full">API</span>
-                                                    )}
+                <>
+                    {/* デスクトップ: テーブル */}
+                    <div className="hidden md:block bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-gray-100 bg-gray-50/50">
+                                    <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3.5">商品</th>
+                                    <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">在庫数</th>
+                                    <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3.5">状態別在庫</th>
+                                    <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">平均仕入</th>
+                                    <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">販売価格</th>
+                                    <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {filtered.length > 0 ? filtered.map(cat => (
+                                    <tr key={cat.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => router.push(`/pos/catalog/${cat.id}`)}>
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex items-center gap-3">
+                                                {cat.image_url ? (
+                                                    <img src={cat.image_url} alt="" className="w-10 h-14 object-cover rounded flex-shrink-0" />
+                                                ) : (
+                                                    <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-lg flex-shrink-0">🎴</div>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold text-gray-900 truncate max-w-[300px]">{cat.name}</p>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <span className="text-xs text-gray-400">{cat.category || '-'}</span>
+                                                        <span className="text-xs text-gray-300">·</span>
+                                                        <span className="text-xs text-gray-400">{cat.rarity || '-'}</span>
+                                                        {cat.source_type === 'api' && <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-500 rounded-full">API</span>}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="text-center px-4">
-                                        {cat.totalQty > 0 ? (
-                                            <span className="text-base font-bold text-gray-900">{cat.totalQty}</span>
-                                        ) : (
-                                            <span className="text-sm text-gray-300">-</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4">
-                                        {cat.totalQty > 0 ? (
-                                            <div className="flex gap-1.5 flex-wrap">
+                                        </td>
+                                        <td className="text-center px-4">
+                                            {cat.totalQty > 0 ? <span className="text-base font-bold text-gray-900">{cat.totalQty}</span> : <span className="text-sm text-gray-300">-</span>}
+                                        </td>
+                                        <td className="px-4">
+                                            {cat.totalQty > 0 ? (
+                                                <div className="flex gap-1.5 flex-wrap">
+                                                    {cat.inventoryItems.filter(i => i.quantity > 0).map(inv => {
+                                                        const cond = getCondition(inv.condition)
+                                                        return <span key={inv.id} className="text-xs px-2 py-1 rounded-full text-white font-bold whitespace-nowrap" style={{ backgroundColor: cond?.color || '#6b7280' }}>{inv.condition}:{inv.quantity}</span>
+                                                    })}
+                                                </div>
+                                            ) : <span className="text-sm text-gray-300">-</span>}
+                                        </td>
+                                        <td className="text-right text-sm font-medium text-gray-700 px-4">{cat.totalQty > 0 ? formatPrice(cat.avgCost) : <span className="text-gray-300">-</span>}</td>
+                                        <td className="text-right text-sm font-medium text-gray-700 px-4">{cat.fixed_price ? formatPrice(cat.fixed_price) : <span className="text-gray-300">-</span>}</td>
+                                        <td className="px-4 text-center" onClick={e => e.stopPropagation()}>
+                                            <div className="flex items-center gap-1.5 justify-center">
+                                                <button onClick={() => router.push(`/pos/purchase?catalog_id=${cat.id}`)} className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">💰 仕入</button>
+                                                {cat.totalQty > 0 && <button onClick={() => router.push(`/pos/sale?catalog_id=${cat.id}`)} className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors">🛒 販売</button>}
+                                                <button onClick={() => handleDelete(cat.id)} className="px-2 py-1.5 bg-gray-50 text-gray-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={6} className="text-center py-16 text-sm text-gray-400">カタログがありません</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* モバイル: カードリスト */}
+                    <div className="md:hidden space-y-2">
+                        {filtered.length > 0 ? filtered.map(cat => (
+                            <div
+                                key={cat.id}
+                                className="bg-white border border-gray-200 rounded-xl p-4 active:bg-gray-50 transition-colors"
+                                onClick={() => router.push(`/pos/catalog/${cat.id}`)}
+                            >
+                                <div className="flex items-center gap-3">
+                                    {cat.image_url ? (
+                                        <img src={cat.image_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
+                                    ) : (
+                                        <div className="w-12 h-16 bg-gray-100 rounded flex items-center justify-center text-lg flex-shrink-0">🎴</div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-gray-900 truncate">{cat.name}</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">{cat.category || '-'} / {cat.rarity || '-'}</p>
+                                        {cat.totalQty > 0 && (
+                                            <div className="flex gap-1 mt-1.5 flex-wrap">
                                                 {cat.inventoryItems.filter(i => i.quantity > 0).map(inv => {
                                                     const cond = getCondition(inv.condition)
-                                                    return (
-                                                        <span
-                                                            key={inv.id}
-                                                            className="text-xs px-2 py-1 rounded-full text-white font-bold whitespace-nowrap"
-                                                            style={{ backgroundColor: cond?.color || '#6b7280' }}
-                                                            title={`${inv.condition}: ${inv.quantity}個 / 平均仕入 ${formatPrice(inv.avg_purchase_price)}`}
-                                                        >
-                                                            {inv.condition}:{inv.quantity}
-                                                        </span>
-                                                    )
+                                                    return <span key={inv.id} className="text-[10px] px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: cond?.color || '#6b7280' }}>{inv.condition}×{inv.quantity}</span>
                                                 })}
                                             </div>
-                                        ) : (
-                                            <span className="text-sm text-gray-300">-</span>
                                         )}
-                                    </td>
-                                    <td className="text-right text-sm font-medium text-gray-700 px-4">
-                                        {cat.totalQty > 0 ? formatPrice(cat.avgCost) : <span className="text-gray-300">-</span>}
-                                    </td>
-                                    <td className="text-right text-sm font-medium text-gray-700 px-4">
-                                        {cat.fixed_price ? formatPrice(cat.fixed_price) : <span className="text-gray-300">-</span>}
-                                    </td>
-                                    <td className="px-4 text-center" onClick={e => e.stopPropagation()}>
-                                        <div className="flex items-center gap-1.5 justify-center">
-                                            <button
-                                                onClick={() => router.push(`/pos/purchase?catalog_id=${cat.id}`)}
-                                                className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
-                                                title="仕入れ"
-                                            >💰 仕入</button>
-                                            {cat.totalQty > 0 && (
-                                                <button
-                                                    onClick={() => router.push(`/pos/sale?catalog_id=${cat.id}`)}
-                                                    className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors"
-                                                    title="販売"
-                                                >🛒 販売</button>
-                                            )}
-                                            <button
-                                                onClick={() => handleDelete(cat.id)}
-                                                className="px-2 py-1.5 bg-gray-50 text-gray-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500 transition-colors"
-                                                title="削除"
-                                            >✕</button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )) : (
-                                <tr>
-                                    <td colSpan={6} className="text-center py-16 text-sm text-gray-400">
-                                        カタログがありません
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                        <p className="text-lg font-bold text-gray-900">{cat.totalQty > 0 ? cat.totalQty : '-'}</p>
+                                        {cat.totalQty > 0 && <p className="text-xs text-gray-400">{formatPrice(cat.avgCost)}</p>}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => router.push(`/pos/purchase?catalog_id=${cat.id}`)} className="flex-1 py-2.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold active:bg-blue-100">💰 仕入れ</button>
+                                    {cat.totalQty > 0 && <button onClick={() => router.push(`/pos/sale?catalog_id=${cat.id}`)} className="flex-1 py-2.5 bg-green-50 text-green-700 rounded-lg text-xs font-bold active:bg-green-100">🛒 販売</button>}
+                                </div>
+                            </div>
+                        )) : (
+                            <p className="text-center py-16 text-sm text-gray-400">カタログがありません</p>
+                        )}
+                    </div>
+                </>
             )}
         </PosLayout>
     )

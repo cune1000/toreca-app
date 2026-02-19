@@ -101,6 +101,31 @@ export async function registerSale(data: {
     })
 }
 
+export async function getTransaction(id: string) {
+    return request<{ success: true; data: PosTransaction }>(`${BASE}/transactions/${id}`)
+}
+
+export async function updateTransaction(id: string, data: {
+    quantity?: number
+    unit_price?: number
+    expenses?: number
+    notes?: string
+    transaction_date?: string
+    reason?: string
+}) {
+    return request<PosApiResponse>(`${BASE}/transactions/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function deleteTransaction(id: string, reason?: string) {
+    return request<PosApiResponse>(`${BASE}/transactions/${id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reason }),
+    })
+}
+
 export async function getTransactions(params?: { type?: string; limit?: number; catalog_id?: string }) {
     const sp = new URLSearchParams()
     if (params?.type) sp.set('type', params.type)

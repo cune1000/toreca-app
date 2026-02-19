@@ -170,7 +170,7 @@ function PurchasePage() {
                             <label className="text-sm font-bold text-gray-600 mb-3 block">状態</label>
                             {!useCustomCondition ? (
                                 <div className="space-y-2">
-                                    <div className="grid grid-cols-4 gap-2">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                         {CONDITIONS.map(c => (
                                             <button
                                                 key={c.code}

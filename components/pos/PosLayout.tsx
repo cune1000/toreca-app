@@ -4,11 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
-    { key: 'dashboard', icon: '📊', label: 'ダッシュボード', href: '/pos' },
-    { key: 'catalog', icon: '📋', label: 'カタログ・在庫', href: '/pos/catalog' },
-    { key: 'purchase', icon: '💰', label: '仕入れ登録', href: '/pos/purchase' },
-    { key: 'sale', icon: '🛒', label: '販売登録', href: '/pos/sale' },
-    { key: 'history', icon: '📜', label: '取引履歴', href: '/pos/history' },
+    { key: 'dashboard', icon: '📊', label: 'ダッシュボード', shortLabel: 'ホーム', href: '/pos' },
+    { key: 'catalog', icon: '📋', label: 'カタログ・在庫', shortLabel: '在庫', href: '/pos/catalog' },
+    { key: 'purchase', icon: '💰', label: '仕入れ登録', shortLabel: '仕入れ', href: '/pos/purchase' },
+    { key: 'sale', icon: '🛒', label: '販売登録', shortLabel: '販売', href: '/pos/sale' },
+    { key: 'history', icon: '📜', label: '取引履歴', shortLabel: '履歴', href: '/pos/history' },
 ]
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +17,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="min-h-screen bg-[#f8f9fb] flex">
             {/* PC サイドバー */}
-            <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 sticky top-0 h-screen overflow-y-auto">
+            <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-shrink-0 sticky top-0 h-screen overflow-y-auto flex-col">
                 <div className="px-5 py-5 border-b border-gray-100">
                     <Link href="/pos" className="flex items-center gap-2.5">
                         <span className="text-2xl">🏪</span>
@@ -45,11 +45,33 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* メインコンテンツ */}
-            <main className="flex-1 min-w-0">
-                <div className="max-w-6xl mx-auto px-10 py-8">
+            <main className="flex-1 min-w-0 pb-20 md:pb-0">
+                <div className="max-w-6xl mx-auto px-4 py-4 md:px-10 md:py-8">
                     {children}
                 </div>
             </main>
+
+            {/* モバイル ボトムナビ */}
+            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 safe-area-pb">
+                <div className="flex justify-around items-center h-14">
+                    {NAV_ITEMS.map(item => {
+                        const active = pathname === item.href || (item.href !== '/pos' && pathname.startsWith(item.href))
+                        return (
+                            <Link
+                                key={item.key}
+                                href={item.href}
+                                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[56px] transition-colors ${active
+                                    ? 'text-gray-900'
+                                    : 'text-gray-400'
+                                }`}
+                            >
+                                <span className="text-xl leading-none">{item.icon}</span>
+                                <span className={`text-[10px] leading-tight ${active ? 'font-bold' : 'font-medium'}`}>{item.shortLabel}</span>
+                            </Link>
+                        )
+                    })}
+                </div>
+            </nav>
         </div>
     )
 }
