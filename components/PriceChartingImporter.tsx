@@ -341,7 +341,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                   className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-sm"
                 />
                 <p className="text-xs text-gray-400 mt-2">
-                  {urlCount > 0 ? `${urlCount}件のURL検出（最大20件）` : 'URLをまとめて貼り付け可能（スペース・カンマ区切りも対応）'}
+                  {urlCount > 0 ? `${urlCount}件のURL検出（最大40件）` : 'URLをまとめて貼り付け可能（スペース・カンマ区切りも対応）'}
                 </p>
               </div>
 

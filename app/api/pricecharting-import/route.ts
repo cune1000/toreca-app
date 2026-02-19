@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGeminiModel, fetchImageAsBase64, extractJsonFromResponse } from '@/lib/ai/gemini'
 
-export const maxDuration = 60
+export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
 const CONCURRENCY = 3
@@ -145,8 +145,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'URLが必要です' }, { status: 400 })
     }
 
-    if (urls.length > 20) {
-      return NextResponse.json({ success: false, error: '一度に20件までです' }, { status: 400 })
+    if (urls.length > 40) {
+      return NextResponse.json({ success: false, error: '一度に40件までです' }, { status: 400 })
     }
 
     const model = getGeminiModel()
