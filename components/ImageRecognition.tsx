@@ -233,6 +233,23 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
     setError(null);
 
     try {
+      // 重複チェック（名前+型番が一致するカードが既にあるか）
+      if (formData.name && formData.cardNumber) {
+        const { data: existing } = await supabase
+          .from('cards')
+          .select('id, name, card_number')
+          .eq('name', formData.name)
+          .eq('card_number', formData.cardNumber)
+          .limit(1);
+        if (existing && existing.length > 0) {
+          const proceed = confirm(`同じカードが既に登録されています:\n「${existing[0].name}」(${existing[0].card_number})\n\nそれでも登録しますか？`);
+          if (!proceed) {
+            setIsRegistering(false);
+            return;
+          }
+        }
+      }
+
       // 画像をアップロード
       let imageUrl = null;
       if (image) {

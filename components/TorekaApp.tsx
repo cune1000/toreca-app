@@ -15,6 +15,7 @@ import ImageRecognition from './ImageRecognition'
 import TwitterFeed from './TwitterFeed'
 import CategoryManager from './CategoryManager'
 import CardImporter from './CardImporter'
+import PriceChartingImporter from './PriceChartingImporter'
 import BulkRecognition from './BulkRecognition'
 import CronDashboard from './CronDashboard'
 
@@ -42,6 +43,7 @@ const TorekaApp = () => {
   const [showImageRecognition, setShowImageRecognition] = useState(false)
   const [showTwitterFeed, setShowTwitterFeed] = useState(false)
   const [showCardImporter, setShowCardImporter] = useState(false)
+  const [showPriceChartingImporter, setShowPriceChartingImporter] = useState(false)
   const [showBulkRecognition, setShowBulkRecognition] = useState(false)
 
   // 選択状態
@@ -285,9 +287,11 @@ const TorekaApp = () => {
           <>
             <Header title="カード管理" />
             <CardsPage
+              key={refresh}
               onAddCard={() => setShowCardForm(true)}
               onImportCards={() => setShowCardImporter(true)}
               onAIRecognition={() => setShowImageRecognition(true)}
+              onPriceChartingImport={() => setShowPriceChartingImporter(true)}
             />
           </>
         )
@@ -434,6 +438,13 @@ const TorekaApp = () => {
         <CardImporter
           onClose={() => setShowCardImporter(false)}
           onCompleted={() => { setShowCardImporter(false); handleRefresh(); }}
+        />
+      )}
+
+      {showPriceChartingImporter && (
+        <PriceChartingImporter
+          onClose={() => setShowPriceChartingImporter(false)}
+          onCompleted={() => { setShowPriceChartingImporter(false); handleRefresh(); }}
         />
       )}
 

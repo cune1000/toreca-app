@@ -318,48 +318,84 @@ export default function CardDetailHeader({
               ))
           )}
 
-          {/* 海外転売シミュレーション — コンパクトカード */}
-          {overseasLatest && (overseasLatest.loose_price_jpy || overseasLatest.graded_price_jpy) && snkrdunkLatestByGrade && snkrdunkLatestByGrade.length > 0 && (() => {
-            const rows: { label: string; domestic: number; domesticLabel: string; overseasJpy: number; overseasUsd: number; profit: number; pct: number }[] = []
+          {/* 海外相場 & 転売シミュレーション */}
+          {overseasLatest && (overseasLatest.loose_price_jpy || overseasLatest.graded_price_jpy) && (() => {
             const looseJpy = overseasLatest.loose_price_jpy
             const gradedJpy = overseasLatest.graded_price_jpy
-            // スニダン販売価格 vs 海外販売価格の比較（PSA10 → A → B の順）
-            const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
-            if (gradedJpy && overseasLatest.graded_price_usd && salePSA10 && salePSA10.price > 0) {
-              rows.push({ label: 'PSA10→海外', domestic: salePSA10.price, domesticLabel: 'PSA10', overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - salePSA10.price, pct: ((gradedJpy - salePSA10.price) / salePSA10.price) * 100 })
+            // スニダンデータがあれば比較行を作成
+            const rows: { label: string; domestic: number; overseasJpy: number; overseasUsd: number; profit: number; pct: number }[] = []
+            if (snkrdunkLatestByGrade && snkrdunkLatestByGrade.length > 0) {
+              const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
+              if (gradedJpy && overseasLatest.graded_price_usd && salePSA10 && salePSA10.price > 0) {
+                rows.push({ label: 'PSA10→海外', domestic: salePSA10.price, overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - salePSA10.price, pct: ((gradedJpy - salePSA10.price) / salePSA10.price) * 100 })
+              }
+              const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
+              if (looseJpy && overseasLatest.loose_price_usd && saleA && saleA.price > 0) {
+                rows.push({ label: '素体(A)→海外', domestic: saleA.price, overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleA.price, pct: ((looseJpy - saleA.price) / saleA.price) * 100 })
+              }
+              const saleB = snkrdunkLatestByGrade.find(g => g.grade === 'B')
+              if (looseJpy && overseasLatest.loose_price_usd && saleB && saleB.price > 0) {
+                rows.push({ label: '素体(B)→海外', domestic: saleB.price, overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleB.price, pct: ((looseJpy - saleB.price) / saleB.price) * 100 })
+              }
             }
-            const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
-            if (looseJpy && overseasLatest.loose_price_usd && saleA && saleA.price > 0) {
-              rows.push({ label: '素体(A)→海外', domestic: saleA.price, domesticLabel: 'A', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleA.price, pct: ((looseJpy - saleA.price) / saleA.price) * 100 })
-            }
-            const saleB = snkrdunkLatestByGrade.find(g => g.grade === 'B')
-            if (looseJpy && overseasLatest.loose_price_usd && saleB && saleB.price > 0) {
-              rows.push({ label: '素体(B)→海外', domestic: saleB.price, domesticLabel: 'B', overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleB.price, pct: ((looseJpy - saleB.price) / saleB.price) * 100 })
-            }
-            if (rows.length === 0) return null
             return (
               <div className="bg-indigo-50 rounded-xl p-4 flex-1 min-w-[240px]">
                 <div className="flex items-center gap-2 text-indigo-600 text-sm mb-2">
                   <Globe size={16} />
-                  海外転売シミュレーション
+                  海外相場
                 </div>
                 <div className="space-y-1.5">
-                  {rows.map((r) => {
-                    const isPositive = r.profit > 0
-                    return (
-                      <div key={r.label} className="flex items-baseline gap-2 flex-wrap">
-                        <span className="text-xs text-indigo-400 w-[90px] shrink-0">{r.label}</span>
-                        <span className="text-xs text-slate-500 tabular-nums">¥{r.domestic.toLocaleString()}</span>
-                        <span className="text-xs text-slate-300">→</span>
-                        <span className="text-xs text-indigo-600 tabular-nums font-medium">¥{r.overseasJpy.toLocaleString()}</span>
-                        <span className={`text-xs font-bold tabular-nums flex items-center gap-0.5 ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                          {isPositive ? '+' : '-'}¥{Math.abs(r.profit).toLocaleString()}
-                          <span className="font-medium opacity-70">({isPositive ? '+' : '-'}{Math.abs(r.pct).toFixed(1)}%)</span>
-                        </span>
+                  {/* 海外相場の値段表示（PSA10を上、素体を下） */}
+                  {gradedJpy && (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs text-indigo-400 w-[90px] shrink-0">PSA10 相場</span>
+                        <span className="text-sm text-indigo-700 tabular-nums font-semibold">¥{gradedJpy.toLocaleString()}</span>
+                        {overseasLatest.graded_price_usd && <span className="text-xs text-indigo-400 tabular-nums">(${(overseasLatest.graded_price_usd / 100).toFixed(2)})</span>}
                       </div>
-                    )
-                  })}
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs text-indigo-400 w-[90px] shrink-0">PSA10 買取目安</span>
+                        <span className="text-sm text-amber-700 tabular-nums font-semibold">¥{Math.round(gradedJpy * 0.8).toLocaleString()}</span>
+                        <span className="text-[10px] text-indigo-300">(80%)</span>
+                      </div>
+                    </>
+                  )}
+                  {looseJpy && (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs text-indigo-400 w-[90px] shrink-0">素体 相場</span>
+                        <span className="text-sm text-indigo-700 tabular-nums font-semibold">¥{looseJpy.toLocaleString()}</span>
+                        {overseasLatest.loose_price_usd && <span className="text-xs text-indigo-400 tabular-nums">(${(overseasLatest.loose_price_usd / 100).toFixed(2)})</span>}
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs text-indigo-400 w-[90px] shrink-0">素体 買取目安</span>
+                        <span className="text-sm text-amber-700 tabular-nums font-semibold">¥{Math.round(looseJpy * 0.8).toLocaleString()}</span>
+                        <span className="text-[10px] text-indigo-300">(80%)</span>
+                      </div>
+                    </>
+                  )}
+                  {/* スニダンとの比較がある場合 */}
+                  {rows.length > 0 && (
+                    <>
+                      <div className="border-t border-indigo-200 my-2" />
+                      {rows.map((r) => {
+                        const isPositive = r.profit > 0
+                        return (
+                          <div key={r.label} className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-xs text-indigo-400 w-[90px] shrink-0">{r.label}</span>
+                            <span className="text-xs text-slate-500 tabular-nums">¥{r.domestic.toLocaleString()}</span>
+                            <span className="text-xs text-slate-300">→</span>
+                            <span className="text-xs text-indigo-600 tabular-nums font-medium">¥{r.overseasJpy.toLocaleString()}</span>
+                            <span className={`text-xs font-bold tabular-nums flex items-center gap-0.5 ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                              {isPositive ? '+' : '-'}¥{Math.abs(r.profit).toLocaleString()}
+                              <span className="font-medium opacity-70">({isPositive ? '+' : '-'}{Math.abs(r.pct).toFixed(1)}%)</span>
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </>
+                  )}
                 </div>
                 {overseasLatest.exchange_rate && (
                   <p className="text-xs text-indigo-300 mt-2">$1 = ¥{overseasLatest.exchange_rate.toFixed(2)}</p>

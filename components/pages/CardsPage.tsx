@@ -14,6 +14,7 @@ interface Props {
   onAddCard: () => void
   onImportCards: () => void
   onAIRecognition: () => void
+  onPriceChartingImport: () => void
 }
 
 const UNSET = '__UNSET__'
@@ -26,6 +27,7 @@ export default function CardsPage({
   onAddCard,
   onImportCards,
   onAIRecognition,
+  onPriceChartingImport,
 }: Props) {
   // sessionStorage永続化ヘルパー（保存のみ、復元は一括で行う）
   const useSessionState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
@@ -189,32 +191,35 @@ export default function CardsPage({
     // PriceCharting URLの場合は専用フロー
     if (url.toLowerCase().includes('pricecharting.com')) {
       const pcId = extractPricechartingId(url)
-      if (!pcId) {
-        setInlineUrlError(prev => ({ ...prev, [cardId]: 'PriceCharting URLからIDを抽出できません' }))
-        setTimeout(() => setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n }), 3000)
-        return
-      }
 
       setInlineUrlSaving(prev => ({ ...prev, [cardId]: true }))
       setInlineUrlError(prev => { const n = { ...prev }; delete n[cardId]; return n })
 
       try {
-        // PriceCharting紐付け
+        // PriceCharting紐付け（IDがあればID、なければURLを送信）
+        const linkBody = pcId
+          ? { card_id: cardId, pricecharting_id: pcId }
+          : { card_id: cardId, pricecharting_url: url }
         const linkRes = await fetch('/api/overseas-prices/link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ card_id: cardId, pricecharting_id: pcId }),
+          body: JSON.stringify(linkBody),
         })
         const linkJson = await linkRes.json()
         if (!linkJson.success) throw new Error(linkJson.error)
 
         // 即時価格取得（バックグラウンド）
-        fetch('/api/overseas-prices/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ card_id: cardId, pricecharting_id: pcId }),
-        }).catch(() => { })
+        const resolvedId = linkJson.pricecharting_id || pcId
+        if (resolvedId) {
+          fetch('/api/overseas-prices/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ card_id: cardId, pricecharting_id: resolvedId }),
+          }).catch(() => { })
+        }
 
+        // PCチェックを即座に反映
+        setFilteredCards(prev => prev.map(c => c.id === cardId ? { ...c, pricecharting_id: resolvedId } : c))
         setInlineUrlInputs(prev => ({ ...prev, [cardId]: '' }))
         setInlineUrlSuccess(prev => ({ ...prev, [cardId]: true }))
         setTimeout(() => setInlineUrlSuccess(prev => { const n = { ...prev }; delete n[cardId]; return n }), 2000)
@@ -709,6 +714,12 @@ export default function CardsPage({
                 <Globe size={18} /> 公式からインポート
               </button>
               <button
+                onClick={onPriceChartingImport}
+                className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 flex items-center gap-2"
+              >
+                <Globe size={18} /> PC Import
+              </button>
+              <button
                 onClick={onAIRecognition}
                 className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
               >
@@ -904,7 +915,10 @@ export default function CardsPage({
                             {u.site?.icon || '🔗'}
                           </span>
                         ))}
-                        {!(cardSaleUrls[card.id]?.length) && <span className="text-gray-300 text-xs">−</span>}
+                        {card.pricecharting_id && (
+                          <span title="PriceCharting" className="cursor-default text-xs font-bold text-blue-600">PC</span>
+                        )}
+                        {!(cardSaleUrls[card.id]?.length) && !card.pricecharting_id && <span className="text-gray-300 text-xs">−</span>}
                       </div>
                     </td>
                     <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
