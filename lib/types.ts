@@ -120,6 +120,7 @@ export interface PriceChartingProduct {
   'new-price'?: number
   'graded-price'?: number
   'bgs-10-price'?: number
+  'manual-only-price'?: number
   'release-date'?: string
   'sales-volume'?: string
 }

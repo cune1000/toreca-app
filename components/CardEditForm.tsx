@@ -40,6 +40,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     rarity_id: card?.rarity_id || '',
     rarity: getRarityString(card?.rarity),
     expansion: card?.expansion || '',
+    set_code: card?.set_code || '',
     image_url: card?.image_url || ''
   })
 
@@ -237,6 +238,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         rarity_id: form.rarity_id || null,
         rarity: form.rarity || null,
         expansion: form.expansion || null,
+        set_code: form.set_code || null,
         image_url: form.image_url || null
       })
       .eq('id', card.id)
@@ -406,6 +408,20 @@ export default function CardEditForm({ card, onClose, onSaved }) {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* セットコード */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              セットコード
+            </label>
+            <input
+              type="text"
+              value={form.set_code}
+              onChange={(e) => setForm({ ...form, set_code: e.target.value })}
+              placeholder="例: m2, SV4a"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+            />
           </div>
 
           {/* レアリティ（テキスト入力） */}

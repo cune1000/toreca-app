@@ -212,7 +212,7 @@ export default function CardDetailHeader({
               最新買取価格
             </div>
             <p className="text-2xl font-bold text-blue-700 tabular-nums">
-              {latestPurchase ? `¥${latestPurchase.toLocaleString()}` : '-'}
+              {latestPurchase != null ? `¥${latestPurchase.toLocaleString()}` : '-'}
             </p>
             {Object.keys(latestPurchaseByLabel).length > 0 && (
               <div className="mt-2 space-y-1">

@@ -233,16 +233,20 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
     setError(null);
 
     try {
-      // 重複チェック（名前+型番が一致するカードが既にあるか）
-      if (formData.name && formData.cardNumber) {
-        const { data: existing } = await supabase
+      // 重複チェック（名前+型番 or 名前のみで一致するカードがあるか）
+      if (formData.name) {
+        let query = supabase
           .from('cards')
           .select('id, name, card_number')
           .eq('name', formData.name)
-          .eq('card_number', formData.cardNumber)
-          .limit(1);
+        if (formData.cardNumber) {
+          query = query.eq('card_number', formData.cardNumber)
+        } else {
+          query = query.is('card_number', null)
+        }
+        const { data: existing } = await query.limit(1);
         if (existing && existing.length > 0) {
-          const proceed = confirm(`同じカードが既に登録されています:\n「${existing[0].name}」(${existing[0].card_number})\n\nそれでも登録しますか？`);
+          const proceed = confirm(`同じカードが既に登録されています:\n「${existing[0].name}」${existing[0].card_number ? `(${existing[0].card_number})` : ''}\n\nそれでも登録しますか？`);
           if (!proceed) {
             setIsRegistering(false);
             return;
@@ -273,6 +277,8 @@ export default function ImageRecognition({ onClose, onRecognized }: Props) {
         .insert({
           name: formData.name,
           card_number: formData.cardNumber || null,
+          category_large_id: formData.categoryLargeId || null,
+          category_medium_id: formData.categoryMediumId || null,
           category_small_id: formData.categorySmallId || null,
           rarity_id: formData.rarityId || null,
           image_url: imageUrl
