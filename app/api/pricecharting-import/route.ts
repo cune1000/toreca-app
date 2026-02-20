@@ -22,6 +22,24 @@ interface ScrapeResult {
   error?: string
 }
 
+// 型番正規化: セットコードを除去して数字/数字のみにする
+function normalizeCardNumber(num: string | null): string | null {
+  if (!num) return null
+  const match = num.match(/(\d+)\s*\/\s*(\d+)/)
+  return match ? `${match[1]}/${match[2]}` : num.trim()
+}
+
+// カード名正規化: EX→ex, スペース除去
+function normalizeCardName(name: string | null): string | null {
+  if (!name) return null
+  let n = name
+  // 「EX」「Ex」→「ex」（ただし「VMAX」「GX」等はそのまま）
+  n = n.replace(/\s*EX\b/gi, 'ex')
+  // 「ex」の前の不要なスペース除去
+  n = n.replace(/\s+ex\b/g, 'ex')
+  return n.trim()
+}
+
 // セットslug → set_code のキャッシュ
 const setCodeCache = new Map<string, string | null>()
 
@@ -52,8 +70,15 @@ async function fetchSetCode(slug: string): Promise<string | null> {
 const CARD_RECOGNITION_PROMPT = `このポケモンカードの画像から以下の情報を正確に抽出してください：
 
 1. **カード名**: カードに大きく書かれているポケモンの名前（日本語名）
-2. **カード番号**: カード下部に記載されている番号（例: 025/187, SV4a 025/190 など）
+2. **カード番号**: カード下部に記載されている番号
 3. **レアリティ**: カードのレアリティマーク（◆, ◆◆, ★, RR, RRR, SR, UR, SAR など）
+
+**重要なルール**:
+- カード番号は「数字/数字」のみ出力してください（例: "240/193", "025/187"）。セットコード（M2a, SV8, SV4a等）は含めないでください。
+- カード名の「ex」「EX」は必ず小文字の「ex」で統一してください（例: ピカチュウex、メガカイリューex）。
+- カード名の「V」「VSTAR」「VMAX」「GX」はそのまま大文字で出力してください。
+- カード名にスペースが含まれる場合、「ex」の前のスペースは不要です（例: ×「メガカイリュー ex」→ ○「メガカイリューex」）。
+- 英語名のカードの場合も日本語名がわかればそちらを優先してください。
 
 **必須**: 以下のJSON形式で返してください。他のテキストは一切含めないでください：
 {
@@ -64,8 +89,7 @@ const CARD_RECOGNITION_PROMPT = `このポケモンカードの画像から以�
 }
 
 カード番号が見つからない場合は "number": null としてください。
-レアリティが不明な場合は "rarity": null としてください。
-英語名のカードの場合も日本語名がわかればそちらを優先してください。`
+レアリティが不明な場合は "rarity": null としてください。`
 
 async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>): Promise<ScrapeResult> {
   try {
@@ -112,8 +136,8 @@ async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>):
         const text = extractJsonFromResponse(result.response.text())
         const parsed = JSON.parse(text)
         cardData = {
-          name: parsed.name || null,
-          number: parsed.number || null,
+          name: normalizeCardName(parsed.name || null),
+          number: normalizeCardNumber(parsed.number || null),
           rarity: parsed.rarity || null,
           confidence: parsed.confidence || 0.8,
         }

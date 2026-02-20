@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { X, RefreshCw, Globe, Check, Square, CheckSquare, Save, AlertTriangle, ExternalLink } from 'lucide-react'
 
@@ -52,6 +52,37 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
   const [saveResult, setSaveResult] = useState<{ added: number; linked: number; skipped: number; errors: number } | null>(null)
   const [categoryLargeId, setCategoryLargeId] = useState<string>('')
   const [categories, setCategories] = useState<{ id: string; name: string; icon: string }[]>([])
+  // 手動編集時の重複チェック結果
+  const [editDupCheck, setEditDupCheck] = useState<Record<number, { checking: boolean; match?: string; matchId?: string }>>({})
+  const dupCheckTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+
+  // 手動編集時に重複チェック（デバウンス付き）
+  const checkDuplicate = useCallback((cardId: number, name: string, number: string) => {
+    if (dupCheckTimers.current[cardId]) clearTimeout(dupCheckTimers.current[cardId])
+    if (!name.trim() || !number.trim()) {
+      setEditDupCheck(prev => { const n = { ...prev }; delete n[cardId]; return n })
+      return
+    }
+    setEditDupCheck(prev => ({ ...prev, [cardId]: { checking: true } }))
+    dupCheckTimers.current[cardId] = setTimeout(async () => {
+      try {
+        // 大文字小文字を無視して検索（ilike）
+        const { data } = await supabase
+          .from('cards')
+          .select('id, name, card_number')
+          .ilike('name', name.trim())
+          .eq('card_number', number.trim())
+          .limit(1)
+        if (data?.length) {
+          setEditDupCheck(prev => ({ ...prev, [cardId]: { checking: false, match: `${data[0].name} (${data[0].card_number})`, matchId: data[0].id } }))
+        } else {
+          setEditDupCheck(prev => ({ ...prev, [cardId]: { checking: false } }))
+        }
+      } catch {
+        setEditDupCheck(prev => ({ ...prev, [cardId]: { checking: false } }))
+      }
+    }, 500)
+  }, [])
 
   // URL抽出
   const getUrls = (): string[] => {
@@ -429,14 +460,22 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                           <>
                             <input
                               value={card.editName}
-                              onChange={(e) => setCards(prev => prev.map(c => c.id === card.id ? { ...c, editName: e.target.value } : c))}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                setCards(prev => prev.map(c => c.id === card.id ? { ...c, editName: val } : c))
+                                checkDuplicate(card.id, val, card.editNumber)
+                              }}
                               className="w-full px-2 py-1 border border-gray-200 rounded text-sm font-medium"
                               placeholder="カード名"
                             />
                             <div className="flex gap-1.5">
                               <input
                                 value={card.editNumber}
-                                onChange={(e) => setCards(prev => prev.map(c => c.id === card.id ? { ...c, editNumber: e.target.value } : c))}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  setCards(prev => prev.map(c => c.id === card.id ? { ...c, editNumber: val } : c))
+                                  checkDuplicate(card.id, card.editName, val)
+                                }}
                                 className="w-24 px-2 py-0.5 border border-gray-200 rounded text-xs"
                                 placeholder="型番"
                               />
@@ -447,6 +486,14 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                                 placeholder="レアリティ"
                               />
                             </div>
+                            {editDupCheck[card.id]?.checking && (
+                              <p className="text-[10px] text-gray-400">重複チェック中...</p>
+                            )}
+                            {editDupCheck[card.id]?.match && !editDupCheck[card.id]?.checking && (
+                              <p className="text-[10px] text-red-500 font-medium">
+                                ⚠ 既存カードと重複: {editDupCheck[card.id].match}
+                              </p>
+                            )}
                             <div className="flex items-center gap-2">
                               {card.cardData && (
                                 <span className="text-[10px] text-gray-400">
