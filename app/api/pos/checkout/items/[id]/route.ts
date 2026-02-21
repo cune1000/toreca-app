@@ -42,6 +42,22 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
         if (updateError) throw updateError
 
+        // LOTモード: ロットのremaining_qtyを復元
+        if (item.lot_id) {
+            const { data: lot } = await supabase
+                .from('pos_lots')
+                .select('remaining_qty')
+                .eq('id', item.lot_id)
+                .single()
+            if (lot) {
+                const { error: lotUpdateError } = await supabase
+                    .from('pos_lots')
+                    .update({ remaining_qty: lot.remaining_qty + item.quantity })
+                    .eq('id', item.lot_id)
+                if (lotUpdateError) throw lotUpdateError
+            }
+        }
+
         // 履歴記録
         const { error: historyError } = await supabase
             .from('pos_history')

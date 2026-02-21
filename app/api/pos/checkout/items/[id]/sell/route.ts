@@ -108,6 +108,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     quantity: qty,
                     unit_cost: item.unit_cost,
                     unit_expense: item.unit_expense,
+                    lot_id: item.lot_id || null,
                     status: 'sold',
                     sale_unit_price: unit_price,
                     sale_expenses: totalSaleExpenses,

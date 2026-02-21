@@ -165,6 +165,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     quantity,
                     unit_cost: item.unit_cost,
                     unit_expense: item.unit_expense,
+                    lot_id: item.lot_id || null,
                     status: 'converted',
                     converted_condition: new_condition.trim(),
                     converted_expenses: totalExpenses,

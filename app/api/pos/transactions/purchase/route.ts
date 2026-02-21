@@ -10,12 +10,20 @@ const supabase = createClient(
 async function generateLotNumber(): Promise<string> {
     const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
     const prefix = `L-${today}-`
-    const { count } = await supabase
+    // MAX方式: 最大番号を取得して+1（削除されたロットがあっても重複しない）
+    const { data: latest } = await supabase
         .from('pos_lots')
-        .select('id', { count: 'exact', head: true })
+        .select('lot_number')
         .like('lot_number', `${prefix}%`)
-    const seq = String((count || 0) + 1).padStart(3, '0')
-    return `${prefix}${seq}`
+        .order('lot_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    let seq = 1
+    if (latest?.lot_number) {
+        const lastSeq = parseInt(latest.lot_number.replace(prefix, ''), 10)
+        if (!isNaN(lastSeq)) seq = lastSeq + 1
+    }
+    return `${prefix}${String(seq).padStart(3, '0')}`
 }
 
 export async function POST(request: NextRequest) {
@@ -134,27 +142,35 @@ export async function POST(request: NextRequest) {
         // 7. LOT モードの場合、ロットを自動作成
         let lot = null
         if (isLotMode) {
-            const lotNumber = await generateLotNumber()
-            const { data: lotData, error: lotError } = await supabase
-                .from('pos_lots')
-                .insert({
-                    lot_number: lotNumber,
-                    source_id: source_id || null,
-                    inventory_id: inventory.id,
-                    quantity,
-                    remaining_qty: quantity,
-                    unit_cost: unit_price,
-                    expenses: totalExpenses,
-                    unit_expense: expensePerUnit,
-                    purchase_date: txDate,
-                    transaction_id: transaction?.id,
-                    notes: notes || null,
-                })
-                .select()
-                .single()
+            // UNIQUE制約エラー時は最大2回リトライ
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const lotNumber = await generateLotNumber()
+                const { data: lotData, error: lotError } = await supabase
+                    .from('pos_lots')
+                    .insert({
+                        lot_number: lotNumber,
+                        source_id: source_id || null,
+                        inventory_id: inventory.id,
+                        quantity,
+                        remaining_qty: quantity,
+                        unit_cost: unit_price,
+                        expenses: totalExpenses,
+                        unit_expense: expensePerUnit,
+                        purchase_date: txDate,
+                        transaction_id: transaction?.id,
+                        notes: notes || null,
+                    })
+                    .select()
+                    .single()
 
-            if (lotError) throw lotError
-            lot = lotData
+                if (lotError) {
+                    // UNIQUE制約違反 (23505) ならリトライ
+                    if (lotError.code === '23505' && attempt < 2) continue
+                    throw lotError
+                }
+                lot = lotData
+                break
+            }
 
             // 取引にlot_idを紐付け
             const { error: txLotError } = await supabase

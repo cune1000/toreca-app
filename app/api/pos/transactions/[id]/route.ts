@@ -286,6 +286,43 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
             .eq('id', tx.inventory_id)
             .single()
 
+        // LOT: 仕入れ取引に紐づくロットを削除（ロットから参照されているチェックアウトがないか確認）
+        if (tx.type === 'purchase' && tx.lot_id) {
+            // ロットを参照しているチェックアウトアイテムがある場合は削除不可
+            const { data: lotCheckouts } = await supabase
+                .from('pos_checkout_items')
+                .select('id')
+                .eq('lot_id', tx.lot_id)
+                .limit(1)
+            if (lotCheckouts && lotCheckouts.length > 0) {
+                return NextResponse.json({
+                    success: false,
+                    error: 'このロットは持ち出しで使用中のため、取引を削除できません',
+                }, { status: 400 })
+            }
+
+            // ロットを参照している他の販売取引があるか確認
+            const { data: lotSales } = await supabase
+                .from('pos_transactions')
+                .select('id')
+                .eq('lot_id', tx.lot_id)
+                .neq('id', id)
+                .limit(1)
+            if (lotSales && lotSales.length > 0) {
+                return NextResponse.json({
+                    success: false,
+                    error: 'このロットは販売取引で使用中のため、取引を削除できません',
+                }, { status: 400 })
+            }
+
+            // ロットを削除
+            const { error: lotDelError } = await supabase
+                .from('pos_lots')
+                .delete()
+                .eq('id', tx.lot_id)
+            if (lotDelError) throw lotDelError
+        }
+
         // 取引を削除
         const { error: deleteError } = await supabase
             .from('pos_transactions')
