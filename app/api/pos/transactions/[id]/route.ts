@@ -8,12 +8,14 @@ const supabase = createClient(
 
 // 在庫を全取引から再計算する（full replay方式）
 async function recalculateInventory(inventoryId: string) {
-    const { data: allTxs } = await supabase
+    const { data: allTxs, error: txFetchError } = await supabase
         .from('pos_transactions')
         .select('*')
         .eq('inventory_id', inventoryId)
         .order('transaction_date', { ascending: true })
         .order('created_at', { ascending: true })
+
+    if (txFetchError) throw txFetchError
 
     let quantity = 0
     let avgPurchasePrice = 0
@@ -23,6 +25,7 @@ async function recalculateInventory(inventoryId: string) {
 
     for (const tx of (allTxs || [])) {
         if (tx.type === 'purchase') {
+            // convert入庫（is_checkout=true）も含めて通常処理
             const newTotalPurchased = totalPurchased + tx.quantity
             avgPurchasePrice = newTotalPurchased > 0
                 ? Math.round((avgPurchasePrice * totalPurchased + tx.unit_price * tx.quantity) / newTotalPurchased)
@@ -32,6 +35,9 @@ async function recalculateInventory(inventoryId: string) {
             totalExpenses += tx.expenses || 0
             quantity += tx.quantity
         } else if (tx.type === 'sale') {
+            // チェックアウト売却はスキップ（持ち出し時に在庫から直接減算済み）
+            if (tx.is_checkout) continue
+
             const avgExpense = totalPurchased > 0 ? Math.round(totalExpenses / totalPurchased) : 0
             const profit = (tx.unit_price - avgPurchasePrice) * tx.quantity
             const profitRate = avgPurchasePrice > 0
@@ -39,19 +45,34 @@ async function recalculateInventory(inventoryId: string) {
                 : 0
 
             // 販売取引の利益と経費按分を再計算
-            await supabase.from('pos_transactions').update({
+            const { error: txUpdateError } = await supabase.from('pos_transactions').update({
                 profit,
                 profit_rate: profitRate,
                 expenses: avgExpense * tx.quantity,
             }).eq('id', tx.id)
+            if (txUpdateError) throw txUpdateError
 
             quantity -= tx.quantity
         }
     }
 
+    // チェックアウトで持ち出されて在庫に戻っていない分を差し引く
+    // pending: 持ち出し中 / sold: 売却済み / converted: 変換済み
+    // returned は在庫に戻されているので差し引き不要
+    const { data: activeCheckouts, error: checkoutError } = await supabase
+        .from('pos_checkout_items')
+        .select('quantity')
+        .eq('inventory_id', inventoryId)
+        .in('status', ['pending', 'sold', 'converted'])
+
+    if (checkoutError) throw checkoutError
+
+    const checkoutQty = (activeCheckouts || []).reduce((sum: number, ci: any) => sum + ci.quantity, 0)
+    quantity -= checkoutQty
+
     const avgExpensePerUnit = totalPurchased > 0 ? Math.round(totalExpenses / totalPurchased) : 0
 
-    await supabase.from('pos_inventory').update({
+    const { error: invUpdateError } = await supabase.from('pos_inventory').update({
         quantity,
         avg_purchase_price: avgPurchasePrice,
         total_purchase_cost: totalPurchaseCost,
@@ -60,6 +81,7 @@ async function recalculateInventory(inventoryId: string) {
         avg_expense_per_unit: avgExpensePerUnit,
         updated_at: new Date().toISOString(),
     }).eq('id', inventoryId)
+    if (invUpdateError) throw invUpdateError
 
     return { quantity }
 }
@@ -148,7 +170,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             .eq('id', tx.inventory_id)
             .single()
 
-        await supabase.from('pos_history').insert({
+        const { error: histError } = await supabase.from('pos_history').insert({
             inventory_id: tx.inventory_id,
             action_type: tx.type,
             quantity_change: quantityDiff,
@@ -159,6 +181,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             modified_at: new Date().toISOString(),
             modified_reason: reason || '取引を修正',
         })
+        if (histError) throw histError
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
@@ -215,7 +238,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
         // 削除履歴を記録
         const reason = (body as any).reason || '取引削除'
-        await supabase.from('pos_history').insert({
+        const { error: delHistError } = await supabase.from('pos_history').insert({
             inventory_id: tx.inventory_id,
             action_type: 'adjustment',
             quantity_change: tx.type === 'purchase' ? -tx.quantity : tx.quantity,
@@ -226,6 +249,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
             modified_at: new Date().toISOString(),
             modified_reason: reason,
         })
+        if (delHistError) throw delHistError
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

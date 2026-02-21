@@ -48,13 +48,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
 
             const newQty = currentQty - item.quantity
-            await supabase
+            const { error: invUpdateError } = await supabase
                 .from('pos_inventory')
                 .update({ quantity: newQty, updated_at: new Date().toISOString() })
                 .eq('id', item.inventory_id)
+            if (invUpdateError) throw invUpdateError
 
             // 履歴記録
-            await supabase
+            const { error: histError } = await supabase
                 .from('pos_history')
                 .insert({
                     inventory_id: item.inventory_id,
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     quantity_after: newQty,
                     reason: `取消: 返却を元に戻し（${item.folder?.name || ''})`,
                 })
+            if (histError) throw histError
         }
 
         // === 売却の取消 ===
@@ -71,15 +73,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             // transaction_idがあれば削除
             if (item.transaction_id) {
                 // 関連する履歴も削除
-                await supabase
+                const { error: histDelError } = await supabase
                     .from('pos_history')
                     .delete()
                     .eq('transaction_id', item.transaction_id)
+                if (histDelError) throw histDelError
 
-                await supabase
+                const { error: txDelError } = await supabase
                     .from('pos_transactions')
                     .delete()
                     .eq('id', item.transaction_id)
+                if (txDelError) throw txDelError
             }
         }
 
@@ -114,7 +118,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     const newTotalExpenses = (targetInv.total_expenses || 0) - originalExpenses - convertExpenses
                     const newAvgExpense = newTotalPurchased > 0 ? Math.round(Math.max(0, newTotalExpenses) / newTotalPurchased) : 0
 
-                    await supabase
+                    const { error: targetUpdateError } = await supabase
                         .from('pos_inventory')
                         .update({
                             quantity: newQty,
@@ -126,25 +130,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             updated_at: new Date().toISOString(),
                         })
                         .eq('id', targetInv.id)
+                    if (targetUpdateError) throw targetUpdateError
                 }
             }
 
             // transaction_idがあれば削除
             if (item.transaction_id) {
-                await supabase
+                const { error: convHistDelError } = await supabase
                     .from('pos_history')
                     .delete()
                     .eq('transaction_id', item.transaction_id)
+                if (convHistDelError) throw convHistDelError
 
-                await supabase
+                const { error: convTxDelError } = await supabase
                     .from('pos_transactions')
                     .delete()
                     .eq('id', item.transaction_id)
+                if (convTxDelError) throw convTxDelError
             }
         }
 
         // アイテムをpendingに戻す
-        await supabase
+        const { error: resetError } = await supabase
             .from('pos_checkout_items')
             .update({
                 status: 'pending',
@@ -159,6 +166,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 updated_at: new Date().toISOString(),
             })
             .eq('id', id)
+        if (resetError) throw resetError
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

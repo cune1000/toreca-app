@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
         if (txError) throw txError
 
         // 6. 履歴レコード作成
-        await supabase
+        const { error: historyError } = await supabase
             .from('pos_history')
             .insert({
                 inventory_id: inventory.id,
@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
                 quantity_after: newQuantity,
                 transaction_id: transaction?.id,
             })
+        if (historyError) throw historyError
 
         return NextResponse.json({
             success: true,

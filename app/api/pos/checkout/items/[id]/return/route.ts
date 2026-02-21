@@ -42,13 +42,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const currentQty = inventory?.quantity ?? 0
         const newQuantity = currentQty + qty
 
-        await supabase
+        const { error: updateError } = await supabase
             .from('pos_inventory')
             .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
             .eq('id', item.inventory_id)
+        if (updateError) throw updateError
 
         // 履歴記録
-        await supabase
+        const { error: historyError } = await supabase
             .from('pos_history')
             .insert({
                 inventory_id: item.inventory_id,
@@ -59,15 +60,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 reason: `持ち出し返却: ${item.folder?.name || ''}`,
                 notes: notes || null,
             })
+        if (historyError) throw historyError
 
         if (isPartial) {
             // 部分返却: 元アイテムの数量を減らし、解決分を新しいアイテムとして作成
-            await supabase
+            const { error: partialUpdateError } = await supabase
                 .from('pos_checkout_items')
                 .update({ quantity: item.quantity - qty, updated_at: new Date().toISOString() })
                 .eq('id', id)
+            if (partialUpdateError) throw partialUpdateError
 
-            await supabase
+            const { error: partialInsertError } = await supabase
                 .from('pos_checkout_items')
                 .insert({
                     folder_id: item.folder_id,
@@ -79,9 +82,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     resolved_at: new Date().toISOString(),
                     resolution_notes: notes || null,
                 })
+            if (partialInsertError) throw partialInsertError
         } else {
             // 全量返却
-            await supabase
+            const { error: fullUpdateError } = await supabase
                 .from('pos_checkout_items')
                 .update({
                     status: 'returned',
@@ -90,6 +94,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', id)
+            if (fullUpdateError) throw fullUpdateError
         }
 
         return NextResponse.json({ success: true })

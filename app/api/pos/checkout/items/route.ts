@@ -47,13 +47,14 @@ export async function POST(request: NextRequest) {
 
         // 在庫から引く
         const newQuantity = inventory.quantity - quantity
-        await supabase
+        const { error: updateError } = await supabase
             .from('pos_inventory')
             .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
             .eq('id', inventory_id)
+        if (updateError) throw updateError
 
         // 履歴記録
-        await supabase
+        const { error: historyError } = await supabase
             .from('pos_history')
             .insert({
                 inventory_id,
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
                 quantity_after: newQuantity,
                 reason: `持ち出し: ${folder.name}`,
             })
+        if (historyError) throw historyError
 
         // チェックアウトアイテム作成
         const { data: item, error: itemError } = await supabase

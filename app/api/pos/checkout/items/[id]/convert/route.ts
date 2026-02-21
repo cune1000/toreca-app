@@ -99,7 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const newAvgExpense = newTotalPurchased > 0 ? Math.round(newTotalExpenses / newTotalPurchased) : 0
 
         // 変換先在庫を更新
-        await supabase
+        const { error: targetUpdateError } = await supabase
             .from('pos_inventory')
             .update({
                 quantity: newQuantity,
@@ -111,6 +111,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 updated_at: new Date().toISOString(),
             })
             .eq('id', targetInv.id)
+        if (targetUpdateError) throw targetUpdateError
 
         // 取引レコード（purchaseとして記録）
         const { data: transaction, error: txError } = await supabase
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 notes: notes
                     ? `持ち出し変換: ${item.inventory?.condition} → ${new_condition.trim()} (${notes})`
                     : `持ち出し変換: ${item.inventory?.condition} → ${new_condition.trim()} (${item.folder?.name || ''})`,
+                is_checkout: true,
             })
             .select()
             .single()
@@ -133,7 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (txError) throw txError
 
         // 履歴記録
-        await supabase
+        const { error: historyError } = await supabase
             .from('pos_history')
             .insert({
                 inventory_id: targetInv.id,
@@ -145,15 +147,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 reason: `持ち出し変換: ${item.inventory?.condition} → ${new_condition.trim()}`,
                 notes: notes || null,
             })
+        if (historyError) throw historyError
 
         if (isPartial) {
             // 部分変換: 元アイテムの数量を減らし、解決分を新しいアイテムとして作成
-            await supabase
+            const { error: partialUpdateError } = await supabase
                 .from('pos_checkout_items')
                 .update({ quantity: item.quantity - quantity, updated_at: new Date().toISOString() })
                 .eq('id', id)
+            if (partialUpdateError) throw partialUpdateError
 
-            await supabase
+            const { error: partialInsertError } = await supabase
                 .from('pos_checkout_items')
                 .insert({
                     folder_id: item.folder_id,
@@ -168,9 +172,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     resolved_at: new Date().toISOString(),
                     resolution_notes: notes || null,
                 })
+            if (partialInsertError) throw partialInsertError
         } else {
             // 全量変換
-            await supabase
+            const { error: fullUpdateError } = await supabase
                 .from('pos_checkout_items')
                 .update({
                     status: 'converted',
@@ -182,6 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', id)
+            if (fullUpdateError) throw fullUpdateError
         }
 
         return NextResponse.json({ success: true, data: { transaction, new_condition: new_condition.trim() } })

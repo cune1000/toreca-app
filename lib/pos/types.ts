@@ -50,6 +50,7 @@ export interface PosTransaction {
     profit_rate: number | null
     transaction_date: string
     notes: string | null
+    is_checkout: boolean
     created_at: string
     // JOIN時
     inventory?: PosInventory & { catalog?: PosCatalog }
