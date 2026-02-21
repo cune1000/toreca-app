@@ -15,12 +15,23 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: '検索キーワードが必要です' }, { status: 400 })
         }
 
+        const limit = Math.min(parseInt(searchParams.get('limit') || '30'), 100)
+        const offset = parseInt(searchParams.get('offset') || '0')
+
+        // 総件数を取得
+        const { count, error: countError } = await supabase
+            .from('cards')
+            .select('id', { count: 'exact', head: true })
+            .ilike('name', `%${q}%`)
+
+        if (countError) throw countError
+
         // 既存の cards テーブルから検索
         const { data, error } = await supabase
             .from('cards')
             .select('id, name, image_url, category_large_id, category_medium_id, rarity_id')
             .ilike('name', `%${q}%`)
-            .limit(20)
+            .range(offset, offset + limit - 1)
 
         if (error) throw error
 
@@ -50,7 +61,7 @@ export async function GET(request: NextRequest) {
             rarity: rarMap[card.rarity_id] || null,
         }))
 
-        return NextResponse.json({ success: true, data: results })
+        return NextResponse.json({ success: true, data: results, total: count || 0, limit, offset })
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }

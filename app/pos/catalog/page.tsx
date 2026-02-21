@@ -29,6 +29,8 @@ function CatalogPage() {
     const [apiQuery, setApiQuery] = useState('')
     const [apiResults, setApiResults] = useState<any[]>([])
     const [apiSearching, setApiSearching] = useState(false)
+    const [apiTotal, setApiTotal] = useState(0)
+    const [apiLoadingMore, setApiLoadingMore] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
@@ -109,8 +111,20 @@ function CatalogPage() {
         try {
             const res = await searchCatalogFromAPI(apiQuery)
             setApiResults(res.data)
+            setApiTotal(res.total)
         } catch (err) { alert(getErrorMessage(err)) }
         finally { setApiSearching(false) }
+    }
+
+    const handleApiLoadMore = async () => {
+        if (!apiQuery.trim()) return
+        setApiLoadingMore(true)
+        try {
+            const res = await searchCatalogFromAPI(apiQuery, { offset: apiResults.length })
+            setApiResults(prev => [...prev, ...res.data])
+            setApiTotal(res.total)
+        } catch (err) { alert(getErrorMessage(err)) }
+        finally { setApiLoadingMore(false) }
     }
 
     const handleImportFromApi = async (item: any) => {
@@ -182,23 +196,33 @@ function CatalogPage() {
                         >{apiSearching ? '...' : '検索'}</button>
                     </div>
                     {apiResults.length > 0 && (
-                        <div className="bg-white rounded-lg border border-blue-100 divide-y divide-blue-50 max-h-72 overflow-y-auto">
-                            {apiResults.map((item: any) => (
-                                <div key={item.api_card_id} className="px-4 py-3 flex items-center gap-3 md:gap-4 hover:bg-blue-50/50">
-                                    {item.image_url && (
-                                        <img src={item.image_url} alt="" className="w-10 h-14 object-cover rounded" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                                        <p className="text-xs text-gray-400">{item.category} / {item.rarity}</p>
+                        <>
+                            <p className="text-xs text-blue-600 mb-2 font-medium">{apiTotal}件中 {apiResults.length}件を表示</p>
+                            <div className="bg-white rounded-lg border border-blue-100 divide-y divide-blue-50 max-h-96 overflow-y-auto">
+                                {apiResults.map((item: any) => (
+                                    <div key={item.api_card_id} className="px-4 py-3 flex items-center gap-3 md:gap-4 hover:bg-blue-50/50">
+                                        {item.image_url && (
+                                            <img src={item.image_url} alt="" className="w-10 h-14 object-cover rounded" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                                            <p className="text-xs text-gray-400">{item.category} / {item.rarity}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleImportFromApi(item)}
+                                            className="px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
+                                        >追加</button>
                                     </div>
-                                    <button
-                                        onClick={() => handleImportFromApi(item)}
-                                        className="px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
-                                    >追加</button>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                            {apiResults.length < apiTotal && (
+                                <button
+                                    onClick={handleApiLoadMore}
+                                    disabled={apiLoadingMore}
+                                    className="w-full mt-2 py-2.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold hover:bg-blue-200 transition-colors"
+                                >{apiLoadingMore ? '読み込み中...' : `さらに表示（残り${apiTotal - apiResults.length}件）`}</button>
+                            )}
+                        </>
                     )}
                 </div>
             )}

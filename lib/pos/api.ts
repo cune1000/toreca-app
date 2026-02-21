@@ -52,8 +52,11 @@ export async function deleteCatalog(id: string) {
     return request<{ success: true }>(`${BASE}/catalog/${id}`, { method: 'DELETE' })
 }
 
-export async function searchCatalogFromAPI(keyword: string) {
-    return request<{ success: true; data: any[] }>(`${BASE}/catalog/search-api?q=${encodeURIComponent(keyword)}`)
+export async function searchCatalogFromAPI(keyword: string, params?: { limit?: number; offset?: number }) {
+    const sp = new URLSearchParams({ q: keyword })
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<{ success: true; data: any[]; total: number; limit: number; offset: number }>(`${BASE}/catalog/search-api?${sp.toString()}`)
 }
 
 // =============================================================================
