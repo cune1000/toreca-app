@@ -27,6 +27,7 @@ interface PCCard {
   editName: string
   editNumber: string
   editRarity: string
+  editSetCode: string
   // 状態
   exists: boolean
   existsReason?: string
@@ -176,6 +177,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
             editName: r.cardData?.name || r.pricechartingName || '',
             editNumber: r.cardData?.number || '',
             editRarity: r.cardData?.rarity || '',
+            editSetCode: r.setCode || '',
             exists,
             existsReason,
             existingId,
@@ -251,7 +253,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
           if (card.pricechartingId) {
             const updateFields: Record<string, any> = {
               pricecharting_id: card.pricechartingId,
-              ...(card.setCode ? { set_code: card.setCode } : {}),
+              ...(card.editSetCode ? { set_code: card.editSetCode } : {}),
             }
 
             // 既存カードに画像がなければアップロード
@@ -283,7 +285,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
             card_number: card.editNumber || null,
             image_url: uploadedImageUrl,
             pricecharting_id: card.pricechartingId,
-            set_code: card.setCode || null,
+            set_code: card.editSetCode || null,
             category_large_id: categoryLargeId || null,
           })
           .select('id')
@@ -485,11 +487,12 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                                 className="w-20 px-2 py-0.5 border border-gray-200 rounded text-xs"
                                 placeholder="レアリティ"
                               />
-                              {card.setCode && (
-                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-mono font-bold shrink-0">
-                                  {card.setCode}
-                                </span>
-                              )}
+                              <input
+                                value={card.editSetCode}
+                                onChange={(e) => setCards(prev => prev.map(c => c.id === card.id ? { ...c, editSetCode: e.target.value } : c))}
+                                className="w-16 px-2 py-0.5 border border-amber-300 bg-amber-50 rounded text-xs font-mono"
+                                placeholder="SET"
+                              />
                             </div>
                             {editDupCheck[card.id]?.checking && (
                               <p className="text-[10px] text-gray-400">重複チェック中...</p>
