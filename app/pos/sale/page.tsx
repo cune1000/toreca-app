@@ -50,11 +50,11 @@ function SalePage() {
         .filter(inv => !search || inv.catalog?.name?.toLowerCase().includes(search.toLowerCase())),
         [inventory, search])
 
-    // カタログ名でグループ化
+    // カタログIDでグループ化
     const grouped = filtered.reduce((acc, inv) => {
-        const name = inv.catalog?.name || '不明'
-        if (!acc[name]) acc[name] = { items: [], catalog: inv.catalog }
-        acc[name].items.push(inv)
+        const key = inv.catalog_id || inv.id
+        if (!acc[key]) acc[key] = { items: [], catalog: inv.catalog }
+        acc[key].items.push(inv)
         return acc
     }, {} as Record<string, { items: typeof filtered; catalog: any }>)
 
