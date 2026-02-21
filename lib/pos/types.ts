@@ -15,6 +15,7 @@ export interface PosCatalog {
     api_card_id: string | null
     api_linked_at: string | null
     fixed_price: number | null
+    tracking_mode: 'lot' | 'average'
     is_active: boolean
     created_at: string
     updated_at: string
@@ -51,9 +52,13 @@ export interface PosTransaction {
     transaction_date: string
     notes: string | null
     is_checkout: boolean
+    lot_id: string | null
+    source_id: string | null
     created_at: string
     // JOIN時
     inventory?: PosInventory & { catalog?: PosCatalog }
+    lot?: PosLot
+    source?: PosSource
 }
 
 export interface PosHistory {
@@ -129,10 +134,12 @@ export interface PosCheckoutItem {
     sale_profit: number | null
     converted_condition: string | null
     converted_expenses: number | null
+    lot_id: string | null
     created_at: string
     updated_at: string
     // JOIN時
     inventory?: PosInventory & { catalog?: PosCatalog }
+    lot?: PosLot
 }
 
 export interface PosCheckoutFolderDetail extends PosCheckoutFolder {
@@ -145,4 +152,39 @@ export interface PosCheckoutStats {
     totalLockedValue: number
     pendingItems: number
     openFolders: number
+}
+
+// =============================================================================
+// 仕入先・ロット
+// =============================================================================
+
+export interface PosSource {
+    id: string
+    name: string
+    type: 'wholesale' | 'individual' | 'event' | 'other'
+    trust_level: 'trusted' | 'unverified'
+    contact_info: string | null
+    notes: string | null
+    is_active: boolean
+    created_at: string
+    updated_at: string
+}
+
+export interface PosLot {
+    id: string
+    lot_number: string
+    source_id: string | null
+    inventory_id: string
+    quantity: number
+    remaining_qty: number
+    unit_cost: number
+    expenses: number
+    unit_expense: number
+    purchase_date: string
+    transaction_id: string | null
+    notes: string | null
+    created_at: string
+    // JOIN時
+    source?: PosSource
+    inventory?: PosInventory & { catalog?: PosCatalog }
 }

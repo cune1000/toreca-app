@@ -6,10 +6,22 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// ロット番号を自動生成（L-YYYYMMDD-NNN）
+async function generateLotNumber(): Promise<string> {
+    const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
+    const prefix = `L-${today}-`
+    const { count } = await supabase
+        .from('pos_lots')
+        .select('id', { count: 'exact', head: true })
+        .like('lot_number', `${prefix}%`)
+    const seq = String((count || 0) + 1).padStart(3, '0')
+    return `${prefix}${seq}`
+}
+
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { catalog_id, condition, quantity, unit_price, expenses, transaction_date, notes } = body
+        const { catalog_id, condition, quantity, unit_price, expenses, transaction_date, notes, source_id } = body
 
         if (!catalog_id || !condition || !quantity || quantity <= 0 || !Number.isInteger(quantity) || unit_price === undefined || unit_price === null || unit_price < 0) {
             return NextResponse.json({ success: false, error: '入力値が不正です' }, { status: 400 })
@@ -91,7 +103,16 @@ export async function POST(request: NextRequest) {
 
         if (updateError) throw updateError
 
-        // 5. 取引レコード作成
+        // 5. カタログの tracking_mode を確認
+        const { data: catalog } = await supabase
+            .from('pos_catalogs')
+            .select('tracking_mode')
+            .eq('id', catalog_id)
+            .single()
+        const isLotMode = catalog?.tracking_mode === 'lot'
+
+        // 6. 取引レコード作成
+        const txDate = transaction_date || new Date().toISOString().split('T')[0]
         const { data: transaction, error: txError } = await supabase
             .from('pos_transactions')
             .insert({
@@ -101,15 +122,49 @@ export async function POST(request: NextRequest) {
                 unit_price,
                 total_price: unit_price * quantity,
                 expenses: totalExpenses,
-                transaction_date: transaction_date || new Date().toISOString().split('T')[0],
+                transaction_date: txDate,
                 notes: notes || null,
+                source_id: source_id || null,
             })
             .select()
             .single()
 
         if (txError) throw txError
 
-        // 6. 履歴レコード作成
+        // 7. LOT モードの場合、ロットを自動作成
+        let lot = null
+        if (isLotMode) {
+            const lotNumber = await generateLotNumber()
+            const { data: lotData, error: lotError } = await supabase
+                .from('pos_lots')
+                .insert({
+                    lot_number: lotNumber,
+                    source_id: source_id || null,
+                    inventory_id: inventory.id,
+                    quantity,
+                    remaining_qty: quantity,
+                    unit_cost: unit_price,
+                    expenses: totalExpenses,
+                    unit_expense: expensePerUnit,
+                    purchase_date: txDate,
+                    transaction_id: transaction?.id,
+                    notes: notes || null,
+                })
+                .select()
+                .single()
+
+            if (lotError) throw lotError
+            lot = lotData
+
+            // 取引にlot_idを紐付け
+            const { error: txLotError } = await supabase
+                .from('pos_transactions')
+                .update({ lot_id: lot.id })
+                .eq('id', transaction.id)
+            if (txLotError) throw txLotError
+        }
+
+        // 8. 履歴レコード作成
         const { error: historyError } = await supabase
             .from('pos_history')
             .insert({
@@ -125,6 +180,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             success: true,
             transaction,
+            lot,
             inventory: {
                 id: inventory.id,
                 quantity: newQuantity,

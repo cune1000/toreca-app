@@ -10,7 +10,7 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { folder_id, inventory_id, quantity } = body
+        const { folder_id, inventory_id, quantity, lot_id } = body
 
         if (!folder_id || !inventory_id || !quantity || quantity <= 0 || !Number.isInteger(quantity)) {
             return NextResponse.json({ success: false, error: '入力値が不正です' }, { status: 400 })
@@ -66,6 +66,31 @@ export async function POST(request: NextRequest) {
             })
         if (historyError) throw historyError
 
+        // LOTモードの場合: ロットの情報を使い、remaining_qtyを減らす
+        let unitCost = inventory.avg_purchase_price
+        let unitExpense = inventory.avg_expense_per_unit || 0
+        if (lot_id) {
+            const { data: lot, error: lotError } = await supabase
+                .from('pos_lots')
+                .select('*')
+                .eq('id', lot_id)
+                .single()
+            if (lotError || !lot) {
+                return NextResponse.json({ success: false, error: 'ロットが見つかりません' }, { status: 404 })
+            }
+            if (lot.remaining_qty < quantity) {
+                return NextResponse.json({ success: false, error: `ロット残数不足です（残: ${lot.remaining_qty}点）` }, { status: 400 })
+            }
+            unitCost = lot.unit_cost
+            unitExpense = lot.unit_expense
+            // ロットのremaining_qtyを減らす
+            const { error: lotUpdateError } = await supabase
+                .from('pos_lots')
+                .update({ remaining_qty: lot.remaining_qty - quantity })
+                .eq('id', lot_id)
+            if (lotUpdateError) throw lotUpdateError
+        }
+
         // チェックアウトアイテム作成
         const { data: item, error: itemError } = await supabase
             .from('pos_checkout_items')
@@ -73,8 +98,9 @@ export async function POST(request: NextRequest) {
                 folder_id,
                 inventory_id,
                 quantity,
-                unit_cost: inventory.avg_purchase_price,
-                unit_expense: inventory.avg_expense_per_unit || 0,
+                unit_cost: unitCost,
+                unit_expense: unitExpense,
+                lot_id: lot_id || null,
             })
             .select()
             .single()

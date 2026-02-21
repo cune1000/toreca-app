@@ -6,9 +6,10 @@ import PosLayout from '@/components/pos/PosLayout'
 import PosSpinner from '@/components/pos/PosSpinner'
 import CardThumbnail from '@/components/pos/CardThumbnail'
 import { getCatalogs, getCatalog, registerPurchase } from '@/lib/pos/api'
-import { CONDITIONS, formatPrice } from '@/lib/pos/constants'
+import { CONDITIONS, formatPrice, getSourceType, getTrustLevel } from '@/lib/pos/constants'
 import { getErrorMessage } from '@/lib/pos/utils'
-import type { PosCatalog } from '@/lib/pos/types'
+import SourceSelectModal from '@/components/pos/SourceSelectModal'
+import type { PosCatalog, PosSource } from '@/lib/pos/types'
 
 export default function PurchasePageWrapper() {
     return <Suspense fallback={<PosLayout><div className="py-12 text-center"><div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" /></div></PosLayout>}><PurchasePage /></Suspense>
@@ -30,6 +31,8 @@ function PurchasePage() {
     const [expenseMode, setExpenseMode] = useState<'total' | 'unit'>('total')
     const [expensesInput, setExpensesInput] = useState('')
     const [notes, setNotes] = useState('')
+    const [selectedSource, setSelectedSource] = useState<PosSource | null>(null)
+    const [showSourceModal, setShowSourceModal] = useState(false)
     const [showResult, setShowResult] = useState(false)
     const [submitting, setSubmitting] = useState(false)
 
@@ -63,8 +66,14 @@ function PurchasePage() {
         ? (parseInt(expensesInput) || 0)
         : quantity > 0 ? Math.round((parseInt(expensesInput) || 0) / quantity) : 0
 
+    const isLotMode = selectedCatalog?.tracking_mode === 'lot'
+
     const handleSubmit = async () => {
         if (!selectedCatalog || !effectiveCondition || priceInput === '') return
+        if (isLotMode && !selectedSource) {
+            alert('LOTモードでは仕入先の選択が必須です')
+            return
+        }
         setSubmitting(true)
         try {
             await registerPurchase({
@@ -74,6 +83,7 @@ function PurchasePage() {
                 unit_price: unitPrice,
                 expenses: totalExpenses || undefined,
                 notes: notes || undefined,
+                source_id: selectedSource?.id,
             })
             setShowResult(true)
             setPriceInput('')
@@ -82,6 +92,7 @@ function PurchasePage() {
             setExpensesInput('')
             setCustomCondition('')
             setUseCustomCondition(false)
+            setSelectedSource(null)
             setTimeout(() => {
                 setShowResult(false)
                 setSelectedCatalog(null)
@@ -153,15 +164,85 @@ function PurchasePage() {
                             </div>
                             <button onClick={() => setSelectedCatalog(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
                         </div>
-                        {selectedCatalog.fixed_price && (
-                            <div className="bg-blue-50 rounded-lg px-4 py-2.5 text-sm text-blue-600">
-                                📊 販売設定価格: {formatPrice(selectedCatalog.fixed_price)}
-                            </div>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {selectedCatalog.fixed_price && (
+                                <div className="bg-blue-50 rounded-lg px-4 py-2.5 text-sm text-blue-600">
+                                    📊 販売設定価格: {formatPrice(selectedCatalog.fixed_price)}
+                                </div>
+                            )}
+                            {isLotMode && (
+                                <div className="bg-amber-50 rounded-lg px-4 py-2.5 text-sm text-amber-700 font-bold">
+                                    📦 LOTモード
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* 入力フォーム */}
                     <div className="space-y-5">
+                        {/* 仕入先選択 */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <label className="text-sm font-bold text-gray-600">仕入先</label>
+                                {isLotMode && (
+                                    <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">LOT必須</span>
+                                )}
+                            </div>
+                            {selectedSource ? (
+                                <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-gray-800">{selectedSource.name}</p>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <span
+                                                className="text-xs px-2 py-0.5 rounded text-white font-bold"
+                                                style={{ backgroundColor: getSourceType(selectedSource.type).color }}
+                                            >
+                                                {getSourceType(selectedSource.type).label}
+                                            </span>
+                                            <span
+                                                className="text-xs px-2 py-0.5 rounded text-white font-bold"
+                                                style={{ backgroundColor: getTrustLevel(selectedSource.trust_level).color }}
+                                            >
+                                                {getTrustLevel(selectedSource.trust_level).label}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowSourceModal(true)}
+                                        className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 font-bold"
+                                    >
+                                        変更
+                                    </button>
+                                    {!isLotMode && (
+                                        <button
+                                            onClick={() => setSelectedSource(null)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setShowSourceModal(true)}
+                                    className={`w-full py-3 rounded-xl border-2 border-dashed text-sm font-bold transition-colors ${isLotMode
+                                        ? 'border-amber-300 text-amber-600 hover:border-amber-400 bg-amber-50'
+                                        : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                                        }`}
+                                >
+                                    🏢 仕入先を選択{!isLotMode && '（任意）'}
+                                </button>
+                            )}
+                        </div>
+
+                        {showSourceModal && (
+                            <SourceSelectModal
+                                selectedId={selectedSource?.id}
+                                onSelect={(source) => { setSelectedSource(source); setShowSourceModal(false) }}
+                                onClose={() => setShowSourceModal(false)}
+                            />
+                        )}
+
                         {/* 状態（プリセット＋その他） */}
                         <div>
                             <label className="text-sm font-bold text-gray-600 mb-3 block">状態</label>

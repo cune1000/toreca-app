@@ -54,6 +54,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 .eq('id', item.inventory_id)
             if (invUpdateError) throw invUpdateError
 
+            // LOTモード: ロットのremaining_qtyを再び減らす（返却を取消すので）
+            if (item.lot_id) {
+                const { data: lot } = await supabase.from('pos_lots').select('remaining_qty').eq('id', item.lot_id).single()
+                if (lot) {
+                    const { error: lotErr } = await supabase.from('pos_lots').update({ remaining_qty: lot.remaining_qty - item.quantity }).eq('id', item.lot_id)
+                    if (lotErr) throw lotErr
+                }
+            }
+
             // 履歴記録
             const { error: histError } = await supabase
                 .from('pos_history')
@@ -85,6 +94,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     .eq('id', item.transaction_id)
                 if (txDelError) throw txDelError
             }
+
+            // LOTモード: 売却取消なのでロットのremaining_qtyを戻す（pending状態に戻すため）
+            // ※ pendingに戻した後、再度持ち出し中扱いなのでremaining_qtyは増やさない
+            // （recalculateInventoryがcheckout pendingを考慮済み）
         }
 
         // === 変換の取消 ===

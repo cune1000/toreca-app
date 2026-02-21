@@ -40,7 +40,7 @@ export async function PUT(
         const body = await request.json()
 
         // 許可フィールドのみ抽出
-        const allowedFields = ['name', 'image_url', 'category', 'subcategory', 'card_number', 'rarity', 'jan_code', 'fixed_price'] as const
+        const allowedFields = ['name', 'image_url', 'category', 'subcategory', 'card_number', 'rarity', 'jan_code', 'fixed_price', 'tracking_mode'] as const
         const updates: Record<string, any> = {}
         for (const key of allowedFields) {
             if (body[key] !== undefined) updates[key] = body[key]

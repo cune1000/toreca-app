@@ -9,9 +9,9 @@ import TransactionTypeBadge from '@/components/pos/TransactionTypeBadge'
 import TransactionEditModal from '@/components/pos/TransactionEditModal'
 import TransactionDeleteDialog from '@/components/pos/TransactionDeleteDialog'
 import CatalogEditModal from '@/components/pos/CatalogEditModal'
-import { getCatalog, getInventory, getTransactions, refreshMarketPrices, updateInventoryPrice } from '@/lib/pos/api'
-import { formatPrice, getCondition } from '@/lib/pos/constants'
-import type { PosCatalog, PosInventory, PosTransaction } from '@/lib/pos/types'
+import { getCatalog, getInventory, getTransactions, refreshMarketPrices, updateInventoryPrice, updateCatalog, getLots } from '@/lib/pos/api'
+import { formatPrice, getCondition, getSourceType, getTrustLevel } from '@/lib/pos/constants'
+import type { PosCatalog, PosInventory, PosTransaction, PosLot } from '@/lib/pos/types'
 
 export default function CatalogDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params)
@@ -20,7 +20,8 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
     const [inventoryItems, setInventoryItems] = useState<PosInventory[]>([])
     const [transactions, setTransactions] = useState<PosTransaction[]>([])
     const [loading, setLoading] = useState(true)
-    const [activeTab, setActiveTab] = useState<'inventory' | 'transactions'>('inventory')
+    const [activeTab, setActiveTab] = useState<'inventory' | 'transactions' | 'lots'>('inventory')
+    const [lots, setLots] = useState<PosLot[]>([])
     const [editingTx, setEditingTx] = useState<PosTransaction | null>(null)
     const [deletingTx, setDeletingTx] = useState<PosTransaction | null>(null)
     const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
@@ -30,14 +31,16 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
 
     const loadData = async () => {
         try {
-            const [catRes, invRes, txRes] = await Promise.all([
+            const [catRes, invRes, txRes, lotsRes] = await Promise.all([
                 getCatalog(id),
                 getInventory({ catalog_id: id }),
                 getTransactions({ catalog_id: id }),
+                getLots({ catalog_id: id }),
             ])
             setCatalog(catRes.data)
             setInventoryItems(invRes.data)
             setTransactions(txRes.data)
+            setLots(lotsRes.data)
         } catch (err) { console.error(err) }
         finally { setLoading(false) }
     }
@@ -124,6 +127,36 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                         </div>
                     </div>
                     <div className="mt-4 md:mt-5 pt-4 md:pt-5 border-t border-gray-100 space-y-2.5">
+                        {/* 在庫管理モード切替 */}
+                        <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
+                            <span className="text-xs font-bold text-gray-500">在庫管理</span>
+                            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5">
+                                <button
+                                    onClick={async () => {
+                                        if (catalog.tracking_mode === 'average') return
+                                        try {
+                                            const res = await updateCatalog(catalog.id, { tracking_mode: 'average' } as any)
+                                            setCatalog(res.data)
+                                        } catch (err) { console.error(err) }
+                                    }}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${catalog.tracking_mode === 'average' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    AVERAGE
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (catalog.tracking_mode === 'lot') return
+                                        try {
+                                            const res = await updateCatalog(catalog.id, { tracking_mode: 'lot' } as any)
+                                            setCatalog(res.data)
+                                        } catch (err) { console.error(err) }
+                                    }}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${catalog.tracking_mode === 'lot' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    LOT
+                                </button>
+                            </div>
+                        </div>
                         {catalog.api_card_id && (
                             <button
                                 onClick={handleRefreshMarket}
@@ -196,6 +229,7 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                 {[
                     { key: 'inventory' as const, label: '📦 在庫詳細', count: inventoryItems.length },
                     { key: 'transactions' as const, label: '📜 取引履歴', count: transactions.length },
+                    { key: 'lots' as const, label: '📦 ロット', count: lots.length },
                 ].map(tab => (
                     <button
                         key={tab.key}
@@ -443,6 +477,85 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                             <p className="text-center py-12 text-sm text-gray-400">取引履歴がありません</p>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* ロットタブ */}
+            {activeTab === 'lots' && (
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    {lots.length > 0 ? (
+                        <div className="divide-y divide-gray-50">
+                            {lots.map(lot => {
+                                const st = lot.source ? getSourceType(lot.source.type) : null
+                                const tl = lot.source ? getTrustLevel(lot.source.trust_level) : null
+                                const condCode = lot.inventory?.condition || ''
+                                const cond = getCondition(condCode)
+                                const isCompleted = lot.remaining_qty === 0
+                                return (
+                                    <div key={lot.id} className={`px-4 md:px-6 py-4 ${isCompleted ? 'opacity-60' : ''}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold text-gray-800">{lot.lot_number}</span>
+                                                <span
+                                                    className="text-xs px-2 py-0.5 rounded text-white font-bold"
+                                                    style={{ backgroundColor: cond?.color || '#6b7280' }}
+                                                >
+                                                    {condCode}
+                                                </span>
+                                                {isCompleted && (
+                                                    <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full">完売</span>
+                                                )}
+                                            </div>
+                                            <span className="text-xs text-gray-400">
+                                                {new Date(lot.purchase_date).toLocaleDateString('ja-JP')}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                                            {lot.source && (
+                                                <span className="text-xs text-gray-600 font-bold">{lot.source.name}</span>
+                                            )}
+                                            {st && (
+                                                <span className="text-xs px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: st.color }}>{st.label}</span>
+                                            )}
+                                            {tl && (
+                                                <span className="text-xs px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: tl.color }}>{tl.label}</span>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                            <div>
+                                                <span className="text-gray-400">入荷</span>
+                                                <p className="text-sm font-bold text-gray-700">{lot.quantity}個</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-400">残数</span>
+                                                <p className={`text-sm font-bold ${lot.remaining_qty > 0 ? 'text-green-600' : 'text-gray-400'}`}>{lot.remaining_qty}個</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-400">仕入単価</span>
+                                                <p className="text-sm font-bold text-gray-700">{formatPrice(lot.unit_cost)}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-400">経費/個</span>
+                                                <p className="text-sm font-bold text-gray-700">{lot.unit_expense > 0 ? formatPrice(lot.unit_expense) : '-'}</p>
+                                            </div>
+                                        </div>
+                                        {lot.notes && (
+                                            <p className="text-xs text-gray-400 mt-2">{lot.notes}</p>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12">
+                            <p className="text-sm text-gray-400">
+                                {catalog.tracking_mode === 'lot'
+                                    ? 'ロットがまだありません。仕入れを登録するとロットが自動作成されます。'
+                                    : 'LOTモードに切り替えるとロットが作成されます。'
+                                }
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
 

@@ -63,6 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 transaction_date: new Date().toISOString().split('T')[0],
                 notes: notes ? `持ち出し売却: ${notes}` : `持ち出し売却（${item.folder?.name || ''})`,
                 is_checkout: true,
+                lot_id: item.lot_id || null,
             })
             .select()
             .single()

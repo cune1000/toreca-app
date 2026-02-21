@@ -48,6 +48,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .eq('id', item.inventory_id)
         if (updateError) throw updateError
 
+        // LOTモード: ロットのremaining_qtyを戻す
+        if (item.lot_id) {
+            const { data: lot } = await supabase
+                .from('pos_lots')
+                .select('remaining_qty')
+                .eq('id', item.lot_id)
+                .single()
+            if (lot) {
+                const { error: lotUpdateError } = await supabase
+                    .from('pos_lots')
+                    .update({ remaining_qty: lot.remaining_qty + qty })
+                    .eq('id', item.lot_id)
+                if (lotUpdateError) throw lotUpdateError
+            }
+        }
+
         // 履歴記録
         const { error: historyError } = await supabase
             .from('pos_history')

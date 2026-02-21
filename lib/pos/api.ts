@@ -2,7 +2,7 @@
 // POS API クライアント
 // =============================================================================
 
-import type { PosCatalog, PosInventory, PosTransaction, PosHistory, PosApiResponse, PosStats, PosCheckoutFolder, PosCheckoutFolderDetail, PosCheckoutStats } from './types'
+import type { PosCatalog, PosInventory, PosTransaction, PosHistory, PosApiResponse, PosStats, PosCheckoutFolder, PosCheckoutFolderDetail, PosCheckoutStats, PosSource, PosLot } from './types'
 
 const BASE = '/api/pos'
 
@@ -84,6 +84,7 @@ export async function registerPurchase(data: {
     expenses?: number
     transaction_date?: string
     notes?: string
+    source_id?: string
 }) {
     return request<PosApiResponse>(`${BASE}/transactions/purchase`, {
         method: 'POST',
@@ -97,6 +98,7 @@ export async function registerSale(data: {
     unit_price: number
     transaction_date?: string
     notes?: string
+    lot_id?: string
 }) {
     return request<PosApiResponse>(`${BASE}/transactions/sale`, {
         method: 'POST',
@@ -220,7 +222,7 @@ export async function deleteCheckoutFolder(id: string) {
     return request<{ success: true }>(`${BASE}/checkout/folders/${id}`, { method: 'DELETE' })
 }
 
-export async function checkoutItem(data: { folder_id: string; inventory_id: string; quantity: number }) {
+export async function checkoutItem(data: { folder_id: string; inventory_id: string; quantity: number; lot_id?: string }) {
     return request<PosApiResponse>(`${BASE}/checkout/items`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -263,4 +265,55 @@ export async function undoCheckoutItem(itemId: string) {
 
 export async function getCheckoutStats() {
     return request<{ success: true; data: PosCheckoutStats }>(`${BASE}/checkout/stats`)
+}
+
+// =============================================================================
+// 仕入先
+// =============================================================================
+
+export async function getSources(params?: { active?: boolean; type?: string }) {
+    const sp = new URLSearchParams()
+    if (params?.active !== undefined) sp.set('active', String(params.active))
+    if (params?.type) sp.set('type', params.type)
+    const q = sp.toString()
+    return request<{ success: true; data: PosSource[] }>(`${BASE}/sources${q ? `?${q}` : ''}`)
+}
+
+export async function getSource(id: string) {
+    return request<{ success: true; data: PosSource }>(`${BASE}/sources/${id}`)
+}
+
+export async function createSource(data: { name: string; type?: string; trust_level?: string; contact_info?: string; notes?: string }) {
+    return request<{ success: true; data: PosSource }>(`${BASE}/sources`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function updateSource(id: string, data: Partial<PosSource>) {
+    return request<{ success: true; data: PosSource }>(`${BASE}/sources/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    })
+}
+
+export async function deleteSource(id: string) {
+    return request<PosApiResponse>(`${BASE}/sources/${id}`, { method: 'DELETE' })
+}
+
+// =============================================================================
+// ロット
+// =============================================================================
+
+export async function getLots(params?: { inventory_id?: string; has_remaining?: boolean; catalog_id?: string }) {
+    const sp = new URLSearchParams()
+    if (params?.inventory_id) sp.set('inventory_id', params.inventory_id)
+    if (params?.has_remaining !== undefined) sp.set('has_remaining', String(params.has_remaining))
+    if (params?.catalog_id) sp.set('catalog_id', params.catalog_id)
+    const q = sp.toString()
+    return request<{ success: true; data: PosLot[] }>(`${BASE}/lots${q ? `?${q}` : ''}`)
+}
+
+export async function getLot(id: string) {
+    return request<{ success: true; data: PosLot }>(`${BASE}/lots/${id}`)
 }

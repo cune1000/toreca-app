@@ -23,6 +23,9 @@ async function recalculateInventory(inventoryId: string) {
     let totalPurchased = 0
     let totalExpenses = 0
 
+    // ロット別の販売数量を追跡（remaining_qty 再計算用）
+    const lotSoldQty: Record<string, number> = {}
+
     for (const tx of (allTxs || [])) {
         if (tx.type === 'purchase') {
             // convert入庫（is_checkout=true）も含めて通常処理
@@ -38,21 +41,79 @@ async function recalculateInventory(inventoryId: string) {
             // チェックアウト売却はスキップ（持ち出し時に在庫から直接減算済み）
             if (tx.is_checkout) continue
 
-            const avgExpense = totalPurchased > 0 ? Math.round(totalExpenses / totalPurchased) : 0
-            const profit = (tx.unit_price - avgPurchasePrice) * tx.quantity
-            const profitRate = avgPurchasePrice > 0
-                ? Math.round((tx.unit_price - avgPurchasePrice) / avgPurchasePrice * 10000) / 100
-                : 0
+            // ロット紐付きの販売はロット原価で利益計算
+            let profit: number
+            let profitRate: number
+            let expenseAmount: number
+
+            if (tx.lot_id) {
+                // LOTモード: ロット原価を取得して利益計算
+                const { data: lot } = await supabase.from('pos_lots').select('unit_cost, unit_expense').eq('id', tx.lot_id).single()
+                if (lot) {
+                    profit = (tx.unit_price - lot.unit_cost) * tx.quantity
+                    profitRate = lot.unit_cost > 0
+                        ? Math.round((tx.unit_price - lot.unit_cost) / lot.unit_cost * 10000) / 100
+                        : 0
+                    expenseAmount = lot.unit_expense * tx.quantity
+                } else {
+                    // ロットが見つからない場合はフォールバック
+                    profit = (tx.unit_price - avgPurchasePrice) * tx.quantity
+                    profitRate = avgPurchasePrice > 0
+                        ? Math.round((tx.unit_price - avgPurchasePrice) / avgPurchasePrice * 10000) / 100
+                        : 0
+                    expenseAmount = (totalPurchased > 0 ? Math.round(totalExpenses / totalPurchased) : 0) * tx.quantity
+                }
+                lotSoldQty[tx.lot_id] = (lotSoldQty[tx.lot_id] || 0) + tx.quantity
+            } else {
+                // AVERAGEモード: 移動平均で利益計算（既存）
+                const avgExpense = totalPurchased > 0 ? Math.round(totalExpenses / totalPurchased) : 0
+                profit = (tx.unit_price - avgPurchasePrice) * tx.quantity
+                profitRate = avgPurchasePrice > 0
+                    ? Math.round((tx.unit_price - avgPurchasePrice) / avgPurchasePrice * 10000) / 100
+                    : 0
+                expenseAmount = avgExpense * tx.quantity
+            }
 
             // 販売取引の利益と経費按分を再計算
             const { error: txUpdateError } = await supabase.from('pos_transactions').update({
                 profit,
                 profit_rate: profitRate,
-                expenses: avgExpense * tx.quantity,
+                expenses: expenseAmount,
             }).eq('id', tx.id)
             if (txUpdateError) throw txUpdateError
 
             quantity -= tx.quantity
+        }
+    }
+
+    // ロットの remaining_qty を再計算
+    // チェックアウトでロットから持ち出されている分も考慮
+    const { data: checkoutLotItems } = await supabase
+        .from('pos_checkout_items')
+        .select('lot_id, quantity')
+        .eq('inventory_id', inventoryId)
+        .in('status', ['pending', 'sold', 'converted'])
+        .not('lot_id', 'is', null)
+
+    const lotCheckoutQty: Record<string, number> = {}
+    for (const ci of (checkoutLotItems || [])) {
+        if (ci.lot_id) {
+            lotCheckoutQty[ci.lot_id] = (lotCheckoutQty[ci.lot_id] || 0) + ci.quantity
+        }
+    }
+
+    // 影響のあるロットの remaining_qty を一括更新
+    const allLotIds = new Set([...Object.keys(lotSoldQty), ...Object.keys(lotCheckoutQty)])
+    for (const lotId of allLotIds) {
+        const { data: lot } = await supabase.from('pos_lots').select('quantity').eq('id', lotId).single()
+        if (lot) {
+            const sold = lotSoldQty[lotId] || 0
+            const checkedOut = lotCheckoutQty[lotId] || 0
+            const remaining = lot.quantity - sold - checkedOut
+            const { error: lotUpdateError } = await supabase.from('pos_lots').update({
+                remaining_qty: Math.max(0, remaining),
+            }).eq('id', lotId)
+            if (lotUpdateError) throw lotUpdateError
         }
     }
 

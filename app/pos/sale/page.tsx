@@ -5,11 +5,11 @@ import { useSearchParams } from 'next/navigation'
 import PosLayout from '@/components/pos/PosLayout'
 import PosSpinner from '@/components/pos/PosSpinner'
 import CardThumbnail from '@/components/pos/CardThumbnail'
-import { getInventory, registerSale } from '@/lib/pos/api'
-import { formatPrice, getCondition } from '@/lib/pos/constants'
+import { getInventory, registerSale, getLots } from '@/lib/pos/api'
+import { formatPrice, getCondition, getSourceType, getTrustLevel } from '@/lib/pos/constants'
 import { getErrorMessage } from '@/lib/pos/utils'
 import { calculateProfit } from '@/lib/pos/calculations'
-import type { PosInventory } from '@/lib/pos/types'
+import type { PosInventory, PosLot } from '@/lib/pos/types'
 
 export default function SalePageWrapper() {
     return <Suspense fallback={<PosLayout><div className="py-12 text-center"><div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" /></div></PosLayout>}><SalePage /></Suspense>
@@ -25,6 +25,8 @@ function SalePage() {
     const [quantity, setQuantity] = useState(1)
     const [unitPrice, setUnitPrice] = useState('')
     const [notes, setNotes] = useState('')
+    const [selectedLot, setSelectedLot] = useState<PosLot | null>(null)
+    const [availableLots, setAvailableLots] = useState<PosLot[]>([])
     const [showResult, setShowResult] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [loading, setLoading] = useState(true)
@@ -56,13 +58,35 @@ function SalePage() {
         return acc
     }, {} as Record<string, { items: typeof filtered; catalog: any }>)
 
+    const isLotMode = selectedInv?.catalog?.tracking_mode === 'lot'
+
+    // LOTモード時: 在庫選択後にロットを読み込む
+    useEffect(() => {
+        if (selectedInv && isLotMode) {
+            getLots({ inventory_id: selectedInv.id, has_remaining: true })
+                .then(res => setAvailableLots(res.data))
+                .catch(console.error)
+        } else {
+            setAvailableLots([])
+            setSelectedLot(null)
+        }
+    }, [selectedInv?.id, isLotMode])
+
     const total = quantity * (parseInt(unitPrice) || 0)
     const profit = selectedInv
-        ? calculateProfit(parseInt(unitPrice) || 0, selectedInv.avg_purchase_price, quantity, selectedInv.avg_expense_per_unit || 0)
+        ? selectedLot
+            ? calculateProfit(parseInt(unitPrice) || 0, selectedLot.unit_cost, quantity, selectedLot.unit_expense || 0)
+            : calculateProfit(parseInt(unitPrice) || 0, selectedInv.avg_purchase_price, quantity, selectedInv.avg_expense_per_unit || 0)
         : null
+
+    const maxQuantity = selectedLot ? selectedLot.remaining_qty : (selectedInv?.quantity || 0)
 
     const handleSubmit = async () => {
         if (!selectedInv || unitPrice === '') return
+        if (isLotMode && !selectedLot) {
+            alert('LOTモードではロットを選択してください')
+            return
+        }
         setSubmitting(true)
         try {
             await registerSale({
@@ -70,11 +94,14 @@ function SalePage() {
                 quantity,
                 unit_price: parseInt(unitPrice) || 0,
                 notes: notes || undefined,
+                lot_id: selectedLot?.id,
             })
             setShowResult(true)
             setUnitPrice('')
             setQuantity(1)
             setNotes('')
+            setSelectedLot(null)
+            setAvailableLots([])
             loadInventory()
             setTimeout(() => {
                 setShowResult(false)
@@ -184,9 +211,61 @@ function SalePage() {
                     </div>
 
                     <div className="space-y-5">
+                        {/* LOTモード: ロット選択 */}
+                        {isLotMode && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <label className="text-sm font-bold text-gray-600">ロット選択</label>
+                                    <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">LOT必須</span>
+                                </div>
+                                {availableLots.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {availableLots.map(lot => {
+                                            const isSelected = selectedLot?.id === lot.id
+                                            const st = lot.source ? getSourceType(lot.source.type) : null
+                                            const tl = lot.source ? getTrustLevel(lot.source.trust_level) : null
+                                            return (
+                                                <button
+                                                    key={lot.id}
+                                                    onClick={() => {
+                                                        setSelectedLot(lot)
+                                                        setQuantity(1)
+                                                    }}
+                                                    className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${isSelected
+                                                        ? 'border-blue-400 bg-blue-50'
+                                                        : 'border-gray-100 bg-white hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-sm font-bold text-gray-800">{lot.lot_number}</span>
+                                                        <span className="text-sm font-bold text-gray-600">残 {lot.remaining_qty}個</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {lot.source && (
+                                                            <span className="text-xs text-gray-500">{lot.source.name}</span>
+                                                        )}
+                                                        {st && (
+                                                            <span className="text-xs px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: st.color }}>{st.label}</span>
+                                                        )}
+                                                        {tl && (
+                                                            <span className="text-xs px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: tl.color }}>{tl.label}</span>
+                                                        )}
+                                                        <span className="text-xs text-gray-400">仕入 {formatPrice(lot.unit_cost)}</span>
+                                                        <span className="text-xs text-gray-400">{new Date(lot.purchase_date).toLocaleDateString('ja-JP')}</span>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-xl">在庫のあるロットがありません</p>
+                                )}
+                            </div>
+                        )}
+
                         {/* 数量 */}
                         <div>
-                            <label className="text-sm font-bold text-gray-600 mb-3 block">数量（最大 {selectedInv.quantity}点）</label>
+                            <label className="text-sm font-bold text-gray-600 mb-3 block">数量（最大 {maxQuantity}点）</label>
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -196,13 +275,13 @@ function SalePage() {
                                     type="number"
                                     value={quantity || ''}
                                     onChange={e => setQuantity(parseInt(e.target.value) || 0)}
-                                    onBlur={() => { if (quantity < 1) setQuantity(1); if (quantity > selectedInv.quantity) setQuantity(selectedInv.quantity) }}
+                                    onBlur={() => { if (quantity < 1) setQuantity(1); if (quantity > maxQuantity) setQuantity(maxQuantity) }}
                                     className="w-20 text-center text-2xl font-bold text-gray-900 border border-gray-200 rounded-lg py-2 focus:outline-none focus:border-gray-400"
                                     min={1}
-                                    max={selectedInv.quantity}
+                                    max={maxQuantity}
                                 />
                                 <button
-                                    onClick={() => setQuantity(Math.min(selectedInv.quantity, quantity + 1))}
+                                    onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
                                     className="w-12 h-12 bg-gray-100 rounded-lg text-xl font-bold text-gray-600 hover:bg-gray-200 transition-colors"
                                 >+</button>
                             </div>
@@ -272,8 +351,8 @@ function SalePage() {
                         {/* 登録ボタン */}
                         <button
                             onClick={handleSubmit}
-                            disabled={unitPrice === '' || quantity > selectedInv.quantity || submitting}
-                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${unitPrice !== '' && quantity <= selectedInv.quantity && !submitting
+                            disabled={unitPrice === '' || quantity > maxQuantity || submitting || (isLotMode && !selectedLot)}
+                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${unitPrice !== '' && quantity <= maxQuantity && !submitting && (!isLotMode || selectedLot)
                                 ? 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]'
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}
