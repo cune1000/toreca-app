@@ -57,7 +57,7 @@ async function fetchSetCode(slug: string): Promise<string | null> {
     })
     if (!res.ok) { setCodeCache.set(slug, null); return null }
     const html = await res.text()
-    const match = html.match(/Set Code:\s*([^<]+)/)
+    const match = html.match(/Set Code:\s*([^<"]+)/)
     const code = match ? match[1].trim() : null
     setCodeCache.set(slug, code)
     return code
