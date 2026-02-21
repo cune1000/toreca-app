@@ -146,6 +146,8 @@ export default function CatalogDetailPage({ params }: { params: Promise<{ id: st
                                 <button
                                     onClick={async () => {
                                         if (catalog.tracking_mode === 'lot') return
+                                        const hasStock = inventoryItems.some(i => i.quantity > 0)
+                                        if (hasStock && !confirm('LOTモードに切り替えると、既存在庫はロットなしの状態になります。新規仕入れからロットが作成されます。切り替えますか？')) return
                                         try {
                                             const res = await updateCatalog(catalog.id, { tracking_mode: 'lot' } as any)
                                             setCatalog(res.data)

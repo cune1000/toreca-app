@@ -8,7 +8,10 @@ const supabase = createClient(
 
 // ロット番号を自動生成（L-YYYYMMDD-NNN）
 async function generateLotNumber(): Promise<string> {
-    const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
+    // JST日付を使用（UTC+9）
+    const now = new Date()
+    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const today = jst.toISOString().split('T')[0].replace(/-/g, '')
     const prefix = `L-${today}-`
     // MAX方式: 最大番号を取得して+1（削除されたロットがあっても重複しない）
     const { data: latest } = await supabase

@@ -33,7 +33,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const { name, type, trust_level, contact_info, notes } = body
 
         const updates: any = { updated_at: new Date().toISOString() }
-        if (name !== undefined) updates.name = name.trim()
+        if (name !== undefined) {
+            if (!name.trim()) {
+                return NextResponse.json({ success: false, error: '仕入先名を入力してください' }, { status: 400 })
+            }
+            updates.name = name.trim()
+        }
         if (type !== undefined) updates.type = type
         if (trust_level !== undefined) updates.trust_level = trust_level
         if (contact_info !== undefined) updates.contact_info = contact_info || null

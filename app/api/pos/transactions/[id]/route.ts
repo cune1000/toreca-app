@@ -223,6 +223,33 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json({ success: false, error: '在庫がマイナスになるため変更できません' }, { status: 400 })
         }
 
+        // LOT: 仕入れ取引のロット経費を同期
+        if (tx.type === 'purchase' && tx.lot_id) {
+            const lotUpdates: any = {}
+            if (updates.expenses !== undefined) {
+                const newExpenses = updates.expenses
+                const lotQty = updates.quantity ?? tx.quantity
+                lotUpdates.expenses = newExpenses
+                lotUpdates.unit_expense = lotQty > 0 ? Math.round(newExpenses / lotQty) : 0
+            }
+            if (updates.unit_price !== undefined) {
+                lotUpdates.unit_cost = updates.unit_price
+            }
+            if (updates.quantity !== undefined) {
+                lotUpdates.quantity = updates.quantity
+                // remaining_qty は recalculateInventory が処理済み
+                const newExpenses = updates.expenses ?? tx.expenses
+                lotUpdates.unit_expense = updates.quantity > 0 ? Math.round(newExpenses / updates.quantity) : 0
+            }
+            if (Object.keys(lotUpdates).length > 0) {
+                const { error: lotUpdateError } = await supabase
+                    .from('pos_lots')
+                    .update(lotUpdates)
+                    .eq('id', tx.lot_id)
+                if (lotUpdateError) throw lotUpdateError
+            }
+        }
+
         // 修正履歴を記録
         const quantityDiff = (updates.quantity ?? tx.quantity) - tx.quantity
         const { data: inv } = await supabase
@@ -333,6 +360,31 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
         // 在庫を再計算
         const result = await recalculateInventory(tx.inventory_id)
+
+        // 在庫がマイナスになっていないかチェック
+        if (result.quantity < 0) {
+            // ロールバック: 取引を復元
+            const { error: restoreError } = await supabase.from('pos_transactions').insert({
+                id: tx.id,
+                inventory_id: tx.inventory_id,
+                type: tx.type,
+                quantity: tx.quantity,
+                unit_price: tx.unit_price,
+                total_price: tx.total_price,
+                expenses: tx.expenses,
+                profit: tx.profit,
+                profit_rate: tx.profit_rate,
+                transaction_date: tx.transaction_date,
+                notes: tx.notes,
+                is_checkout: tx.is_checkout,
+                lot_id: tx.lot_id,
+                source_id: tx.source_id,
+            })
+            if (!restoreError) {
+                await recalculateInventory(tx.inventory_id)
+            }
+            return NextResponse.json({ success: false, error: '在庫がマイナスになるため削除できません' }, { status: 400 })
+        }
 
         // 削除履歴を記録
         const reason = (body as any).reason || '取引削除'
