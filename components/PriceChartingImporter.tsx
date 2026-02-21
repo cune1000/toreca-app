@@ -468,7 +468,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                               className="w-full px-2 py-1 border border-gray-200 rounded text-sm font-medium"
                               placeholder="カード名"
                             />
-                            <div className="flex gap-1.5">
+                            <div className="flex gap-1.5 items-center">
                               <input
                                 value={card.editNumber}
                                 onChange={(e) => {
@@ -485,6 +485,11 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                                 className="w-20 px-2 py-0.5 border border-gray-200 rounded text-xs"
                                 placeholder="レアリティ"
                               />
+                              {card.setCode && (
+                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-mono font-bold shrink-0">
+                                  {card.setCode}
+                                </span>
+                              )}
                             </div>
                             {editDupCheck[card.id]?.checking && (
                               <p className="text-[10px] text-gray-400">重複チェック中...</p>
@@ -494,18 +499,11 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                                 ⚠ 既存カードと重複: {editDupCheck[card.id].match}
                               </p>
                             )}
-                            <div className="flex items-center gap-2">
-                              {card.cardData && (
-                                <span className="text-[10px] text-gray-400">
-                                  AI信頼度: {Math.round(card.cardData.confidence * 100)}%
-                                </span>
-                              )}
-                              {card.setCode && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded font-mono font-medium">
-                                  {card.setCode}
-                                </span>
-                              )}
-                            </div>
+                            {card.cardData && (
+                              <span className="text-[10px] text-gray-400">
+                                AI信頼度: {Math.round(card.cardData.confidence * 100)}%
+                              </span>
+                            )}
                             {card.exists && (
                               <p className="text-[10px] text-orange-600 font-medium">
                                 {card.existsReason?.startsWith('PC ID一致')

@@ -190,6 +190,9 @@ export default function CardDetailHeader({
                   {typeof card.rarity === 'object' ? card.rarity.name : card.rarity}
                 </span>
               )}
+              {card?.set_code && (
+                <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-sm font-mono font-medium">{card.set_code}</span>
+              )}
               {card?.expansion && (
                 <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">{card.expansion}</span>
               )}
