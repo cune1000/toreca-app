@@ -53,7 +53,6 @@ export function getTrustLevel(code: string) {
 export const NAV_ITEMS = [
     { key: 'dashboard', icon: '📊', label: 'ダッシュボード', href: '/pos' },
     { key: 'catalog', icon: '📋', label: 'カタログ・在庫', href: '/pos/catalog' },
-    { key: 'purchase', icon: '💰', label: '仕入れ', href: '/pos/purchase' },
     { key: 'sale', icon: '🛒', label: '販売', href: '/pos/sale' },
     { key: 'sources', icon: '🏢', label: '仕入先', href: '/pos/sources' },
     { key: 'history', icon: '📜', label: '履歴', href: '/pos/history' },
