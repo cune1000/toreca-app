@@ -69,7 +69,7 @@ export function isValidPrice(p: unknown): p is number {
 }
 
 export function formatUpdated(ts: number | null) {
-  if (!ts) return '-'
+  if (ts == null) return '-'
   const d = new Date(ts * 1000)
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }

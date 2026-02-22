@@ -29,7 +29,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json()
+    let body: any
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ success: false, error: '不正なリクエスト形式' }, { status: 400 })
+    }
     const { name, number: cardNumber, game } = body
 
     if (!name || typeof name !== 'string') {
@@ -80,9 +85,9 @@ export async function POST(request: NextRequest) {
     try {
       const imgController = new AbortController()
       const imgTimeout = setTimeout(() => imgController.abort(), 5000)
-      const pageRes = await fetch(pricechartingUrl, { signal: imgController.signal })
+      const pageRes = await fetch(pricechartingUrl, { signal: imgController.signal, redirect: 'manual' })
       clearTimeout(imgTimeout)
-      if (pageRes.ok) {
+      if (pageRes.ok && pageRes.status === 200) {
         const html = await pageRes.text()
         const imgMatch = html.match(/src=["'](https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^"']+)/)
         if (imgMatch) {

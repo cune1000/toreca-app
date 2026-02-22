@@ -77,7 +77,7 @@ export default memo(function LeftPanel({
             placeholder="セット検索..."
             className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)] bg-white mb-1.5"
           />
-          <div className="max-h-48 overflow-y-auto space-y-0.5">
+          <div className="max-h-64 overflow-y-auto space-y-0.5">
             {loadingSets ? (
               <p className="text-xs text-[var(--jtcg-text-muted)] py-3 text-center">読み込み中...</p>
             ) : (

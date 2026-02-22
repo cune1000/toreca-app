@@ -15,8 +15,8 @@ export default memo(function SparklineChart({ data }: SparklineChartProps) {
   if (validData.length < 2) return null
 
   const prices = validData.map(d => d.p)
-  const min = Math.min(...prices)
-  const max = Math.max(...prices)
+  const min = prices.reduce((a, b) => a < b ? a : b, prices[0])
+  const max = prices.reduce((a, b) => a > b ? a : b, prices[0])
   const range = max - min || 1
 
   const first = prices[0]

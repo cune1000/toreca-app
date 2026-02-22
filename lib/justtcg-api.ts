@@ -78,33 +78,36 @@ async function fetchJustTcg<T>(path: string, params?: Record<string, string>): P
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
-  const res = await fetch(url.toString(), {
-    headers: { 'x-api-key': JUSTTCG_API_KEY },
-    signal: controller.signal,
-  })
-  clearTimeout(timeout)
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { 'x-api-key': JUSTTCG_API_KEY },
+      signal: controller.signal,
+    })
 
-  if (!res.ok) {
-    throw new Error(`JustTCG API error: ${res.status} ${res.statusText}`)
-  }
+    if (!res.ok) {
+      throw new Error(`JustTCG API error: ${res.status} ${res.statusText}`)
+    }
 
-  const json = await res.json()
-  if (json.error) {
-    throw new Error(`JustTCG API error: ${json.error} (${json.code})`)
-  }
+    const json = await res.json()
+    if (json.error) {
+      throw new Error(`JustTCG API error: ${json.error} (${json.code})`)
+    }
 
-  const md: JustTcgMetadata = json._metadata || {}
-  return {
-    data: json.data,
-    meta: json.meta || { total: 0, limit: 0, offset: 0, hasMore: false },
-    usage: {
-      dailyUsed: md.apiDailyRequestsUsed ?? 0,
-      dailyLimit: md.apiDailyLimit ?? 100,
-      dailyRemaining: md.apiDailyRequestsRemaining ?? 0,
-      monthlyUsed: md.apiRequestsUsed ?? 0,
-      monthlyLimit: md.apiRequestLimit ?? 1000,
-      monthlyRemaining: md.apiRequestsRemaining ?? 0,
-    },
+    const md: JustTcgMetadata = json._metadata || {}
+    return {
+      data: json.data,
+      meta: json.meta || { total: 0, limit: 0, offset: 0, hasMore: false },
+      usage: {
+        dailyUsed: md.apiDailyRequestsUsed ?? 0,
+        dailyLimit: md.apiDailyLimit ?? 100,
+        dailyRemaining: md.apiDailyRequestsRemaining ?? 0,
+        monthlyUsed: md.apiRequestsUsed ?? 0,
+        monthlyLimit: md.apiRequestLimit ?? 1000,
+        monthlyRemaining: md.apiRequestsRemaining ?? 0,
+      },
+    }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

@@ -44,6 +44,7 @@ export default memo(function PriceHistoryChart({ data }: PriceHistoryChartProps)
             tick={{ fontSize: 10, fill: 'var(--jtcg-text-muted)' }}
             tickLine={false}
             axisLine={false}
+            interval="preserveStartEnd"
           />
           <YAxis
             tick={{ fontSize: 10, fill: 'var(--jtcg-text-muted)' }}

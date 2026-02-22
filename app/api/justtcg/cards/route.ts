@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     while (pages < MAX_PAGES) {
       const result = await getCards(setId, { offset, limit, game })
-      allCards = allCards.concat(result.data)
+      if (Array.isArray(result.data)) allCards = allCards.concat(result.data)
       usage = result.usage
       pages++
 

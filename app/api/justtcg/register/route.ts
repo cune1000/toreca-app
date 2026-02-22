@@ -28,7 +28,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json()
+    let body: any
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ success: false, error: '不正なリクエスト形式' }, { status: 400 })
+    }
     const {
       name,
       name_en,
@@ -59,6 +64,18 @@ export async function POST(request: NextRequest) {
         { success: false, error: '入力が長すぎます' },
         { status: 400 }
       )
+    }
+
+    // 文字列フィールドのサニタイズ（型チェック + 長さ制限）
+    const str = (v: unknown, max = 500): string | null => {
+      if (typeof v !== 'string') return null
+      const t = v.trim()
+      return t.length > 0 && t.length <= max ? t : null
+    }
+    const url = (v: unknown): string | null => {
+      const s = str(v, 2000)
+      if (!s) return null
+      try { const u = new URL(s); return u.protocol === 'https:' || u.protocol === 'http:' ? s : null } catch { return null }
     }
 
     const supabase = createServiceClient()
@@ -96,23 +113,27 @@ export async function POST(request: NextRequest) {
       .eq('name', categoryName)
       .maybeSingle()
 
+    if (!category) {
+      console.warn(`Category not found for game: ${validGame} (name: ${categoryName})`)
+    }
+
     // INSERT
     const { data: card, error } = await supabase
       .from('cards')
       .insert({
         name,
-        name_en: name_en || null,
-        card_number: card_number || null,
-        rarity: rarity || null,
-        set_code: set_code || null,
-        set_name_en: set_name_en || null,
-        release_year: release_year || null,
-        expansion: expansion || null,
-        image_url: image_url || null,
+        name_en: str(name_en, 200),
+        card_number: str(card_number, 50),
+        rarity: str(rarity, 50),
+        set_code: str(set_code, 100),
+        set_name_en: str(set_name_en, 200),
+        release_year: typeof release_year === 'number' ? release_year : null,
+        expansion: str(expansion, 200),
+        image_url: url(image_url),
         justtcg_id,
-        tcgplayer_id: tcgplayer_id || null,
-        pricecharting_id: pricecharting_id || null,
-        pricecharting_url: pricecharting_url || null,
+        tcgplayer_id: str(tcgplayer_id, 100),
+        pricecharting_id: str(pricecharting_id, 100),
+        pricecharting_url: url(pricecharting_url),
         category_large_id: category?.id || null,
       })
       .select()
