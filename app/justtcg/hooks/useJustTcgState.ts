@@ -246,12 +246,15 @@ export function useJustTcgState() {
     }
   }, [cards])
 
-  // PC検索 — useRef で pcLoading / selectedGame を参照
+  // PC検索 — useRef で pcLoading / selectedGame / selectedSetId を参照
   const selectedGameRef = useRef(selectedGame)
   selectedGameRef.current = selectedGame
+  const selectedSetIdRef = useRef(selectedSetId)
+  selectedSetIdRef.current = selectedSetId
 
   const handlePcMatch = useCallback(async (card: JTCard) => {
     if (pcLoadingRef.current[card.id]) return
+    const capturedSetId = selectedSetIdRef.current
     setPcLoading(prev => ({ ...prev, [card.id]: true }))
     try {
       const res = await fetch('/api/justtcg/match', {
@@ -260,9 +263,14 @@ export function useJustTcgState() {
         body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current }),
       })
       const json = await res.json()
-      setPcMatches(prev => ({ ...prev, [card.id]: json.success ? json.data : null }))
+      // セット切替後のstale writeを防止
+      if (selectedSetIdRef.current === capturedSetId) {
+        setPcMatches(prev => ({ ...prev, [card.id]: json.success ? json.data : null }))
+      }
     } catch {
-      setPcMatches(prev => ({ ...prev, [card.id]: null }))
+      if (selectedSetIdRef.current === capturedSetId) {
+        setPcMatches(prev => ({ ...prev, [card.id]: null }))
+      }
     } finally {
       setPcLoading(prev => ({ ...prev, [card.id]: false }))
     }

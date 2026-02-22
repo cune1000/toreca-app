@@ -53,7 +53,7 @@ export default memo(function RightPanel({
   // UI-05: カード切替時にチャートを閉じる
   useEffect(() => { setShowChart(false) }, [card?.id])
 
-  if (!card) return <aside aria-label="カード詳細" className={`transition-[width,opacity] duration-300 w-0 overflow-hidden ${className}`} />
+  if (!card) return <aside aria-label="カード詳細" className={`w-0 overflow-hidden ${className}`} />
 
   const japaneseVariants = card.variants.filter(v => v.language === 'Japanese')
   const otherVariants = card.variants.filter(v => v.language !== 'Japanese')
@@ -63,8 +63,8 @@ export default memo(function RightPanel({
   return (
     <aside
       aria-label="カード詳細"
-      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} transition-[width,opacity] duration-300 ease-in-out shrink-0 ${
-        open ? 'w-80 opacity-100' : 'w-0 opacity-0 overflow-hidden'
+      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} w-80 shrink-0 transition-opacity duration-200 ease-in-out ${
+        open ? 'opacity-100' : 'opacity-0 overflow-hidden pointer-events-none'
       } ${className}`}
     >
       <div className="p-4 space-y-4">

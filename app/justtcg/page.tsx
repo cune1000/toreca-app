@@ -128,7 +128,32 @@ export default function JustTcgExplorer() {
       {/* 3カラム本体 */}
       <div className="flex flex-1 overflow-hidden">
         <LeftPanel {...leftPanelProps} className="w-56 shrink-0 hidden lg:block" />
-        <CenterPanel state={state} reg={reg} onSelectCard={handleSelectCard} className="flex-1 min-w-0" />
+        <CenterPanel
+          filteredCards={state.filteredCards}
+          totalCards={state.cards.length}
+          selectedCardId={card?.id ?? null}
+          search={state.search}
+          setSearch={state.setSearch}
+          loadingSets={state.loadingSets}
+          loadingCards={state.loadingCards}
+          hasSelectedSet={!!state.selectedSetId}
+          totalSets={state.sets.length}
+          rarities={state.rarities}
+          rarityFilter={state.rarityFilter}
+          setRarityFilter={state.setRarityFilter}
+          showRegistration={state.showRegistration}
+          onSelectCard={handleSelectCard}
+          checkedCards={reg.checkedCards}
+          registered={reg.registered}
+          checkedCount={reg.checkedCount}
+          readyCount={reg.readyCount}
+          bulkProgress={reg.bulkProgress}
+          toggleCheck={reg.toggleCheck}
+          toggleAllFiltered={reg.toggleAllFiltered}
+          handleBulkRegister={reg.handleBulkRegister}
+          cancelBulkRegister={reg.cancelBulkRegister}
+          className="flex-1 min-w-0"
+        />
         <div className="hidden lg:block">
           <RightPanel
             card={card}

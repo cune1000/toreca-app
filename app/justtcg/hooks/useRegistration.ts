@@ -15,7 +15,8 @@ export function useRegistration(
   const [registering, setRegistering] = useState<Record<string, boolean>>({})
   const [registered, setRegistered] = useState<Record<string, boolean>>({})
   const [registerError, setRegisterError] = useState<Record<string, string>>({})
-  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null)
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; succeeded: number; failed: number } | null>(null)
+  const cancelBulkRef = useRef(false)
 
   // セット切替時にステートをリセット（registeredは保持しない — 別セットのIDなので無意味）
   const prevSetId = useRef(selectedSet?.id)
@@ -133,13 +134,27 @@ export function useRegistration(
 
   const handleBulkRegister = useCallback(async () => {
     const toRegister = cardsRef.current.filter(c => checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id])
-    setBulkProgress({ current: 0, total: toRegister.length })
+    cancelBulkRef.current = false
+    let succeeded = 0
+    let failed = 0
+    setBulkProgress({ current: 0, total: toRegister.length, succeeded: 0, failed: 0 })
     for (let i = 0; i < toRegister.length; i++) {
-      setBulkProgress({ current: i + 1, total: toRegister.length })
+      if (cancelBulkRef.current) break
+      // レート制限対策: 2件目以降は5.5秒待機（サーバー側5秒制限）
+      if (i > 0) await new Promise(r => setTimeout(r, 5500))
+      if (cancelBulkRef.current) break
+      const wasRegistered = registeredRef.current[toRegister[i].id]
       await handleRegister(toRegister[i])
+      if (registeredRef.current[toRegister[i].id] && !wasRegistered) succeeded++
+      else if (!registeredRef.current[toRegister[i].id]) failed++
+      setBulkProgress({ current: i + 1, total: toRegister.length, succeeded, failed })
     }
     setBulkProgress(null)
   }, [handleRegister])
+
+  const cancelBulkRegister = useCallback(() => {
+    cancelBulkRef.current = true
+  }, [])
 
   const checkedCount = checkedCards.size
   const readyCount = useMemo(() =>
@@ -160,5 +175,6 @@ export function useRegistration(
     setJaName,
     handleRegister,
     handleBulkRegister,
+    cancelBulkRegister,
   }
 }
