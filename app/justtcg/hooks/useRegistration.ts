@@ -57,9 +57,15 @@ export function useRegistration(
     setJaNames(prev => ({ ...prev, [cardId]: name }))
   }, [])
 
-  // jaNames を ref で保持し、handleRegister の deps から除外（stale closure 防止）
+  // ref で最新値を保持し、useCallback の deps から除外（stale closure 防止）
   const jaNamesRef = useRef(jaNames)
   jaNamesRef.current = jaNames
+  const pcMatchesRef = useRef(pcMatches)
+  pcMatchesRef.current = pcMatches
+  const selectedSetRef = useRef(selectedSet)
+  selectedSetRef.current = selectedSet
+  const selectedGameRef = useRef(selectedGame)
+  selectedGameRef.current = selectedGame
 
   const handleRegister = useCallback(async (card: JTCard) => {
     const jaName = jaNamesRef.current[card.id]?.trim()
@@ -70,9 +76,10 @@ export function useRegistration(
     setRegistering(prev => ({ ...prev, [card.id]: true }))
     setRegisterError(prev => ({ ...prev, [card.id]: '' }))
 
-    const pc = pcMatches[card.id]
-    const setCode = selectedSet ? extractSetCode(selectedSet.id) : null
-    const releaseYear = selectedSet ? extractReleaseYear(selectedSet.release_date) : null
+    const pc = pcMatchesRef.current[card.id]
+    const currentSet = selectedSetRef.current
+    const setCode = currentSet ? extractSetCode(currentSet.id) : null
+    const releaseYear = currentSet ? extractReleaseYear(currentSet.release_date) : null
 
     try {
       const res = await fetch('/api/justtcg/register', {
@@ -84,15 +91,15 @@ export function useRegistration(
           card_number: card.number,
           rarity: card.rarity,
           set_code: setCode,
-          set_name_en: selectedSet?.name || card.set_name,
+          set_name_en: currentSet?.name || card.set_name,
           release_year: releaseYear,
-          expansion: selectedSet ? getSetNameJa(selectedSet.id, selectedSet.name) : card.set_name,
+          expansion: currentSet ? getSetNameJa(currentSet.id, currentSet.name) : card.set_name,
           image_url: pc?.imageUrl || null,
           justtcg_id: card.id,
           tcgplayer_id: card.variants?.[0]?.id || null,
           pricecharting_id: pc?.id || null,
           pricecharting_url: pc?.pricechartingUrl || null,
-          game: selectedGame,
+          game: selectedGameRef.current,
         }),
       })
       const json = await res.json()
@@ -115,17 +122,24 @@ export function useRegistration(
     } finally {
       setRegistering(prev => ({ ...prev, [card.id]: false }))
     }
-  }, [pcMatches, selectedSet, selectedGame])
+  }, [])
+
+  const cardsRef = useRef(cards)
+  cardsRef.current = cards
+  const checkedCardsRef = useRef(checkedCards)
+  checkedCardsRef.current = checkedCards
+  const registeredRef = useRef(registered)
+  registeredRef.current = registered
 
   const handleBulkRegister = useCallback(async () => {
-    const toRegister = cards.filter(c => checkedCards.has(c.id) && !registered[c.id])
+    const toRegister = cardsRef.current.filter(c => checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id])
     setBulkProgress({ current: 0, total: toRegister.length })
     for (let i = 0; i < toRegister.length; i++) {
       setBulkProgress({ current: i + 1, total: toRegister.length })
       await handleRegister(toRegister[i])
     }
     setBulkProgress(null)
-  }, [cards, checkedCards, registered, handleRegister])
+  }, [handleRegister])
 
   const checkedCount = checkedCards.size
   const readyCount = useMemo(() =>

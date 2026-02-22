@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search, Package } from 'lucide-react'
 import CardListItem from './CardListItem'
@@ -32,6 +32,12 @@ export default function CenterPanel({ state, reg, onSelectCard, className = '' }
   })
 
   const showList = !state.loadingSets && !!state.selectedSetId && !state.loadingCards && state.filteredCards.length > 0
+
+  // 全選択チェック（最大2000件の every() をメモ化）
+  const filteredIds = useMemo(() => state.filteredCards.map(c => c.id), [state.filteredCards])
+  const allChecked = useMemo(() =>
+    filteredIds.length > 0 && filteredIds.every(id => reg.checkedCards.has(id))
+  , [filteredIds, reg.checkedCards])
 
   return (
     <main className={`flex flex-col overflow-hidden ${className}`}>
@@ -85,10 +91,10 @@ export default function CenterPanel({ state, reg, onSelectCard, className = '' }
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--jtcg-border)]">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => reg.toggleAllFiltered(state.filteredCards.map(c => c.id))}
+                onClick={() => reg.toggleAllFiltered(filteredIds)}
                 className="text-[10px] px-2 py-1 rounded-[var(--jtcg-radius)] bg-gray-100 hover:bg-gray-200 text-[var(--jtcg-text-secondary)]"
               >
-                {state.filteredCards.every(c => reg.checkedCards.has(c.id)) ? '全解除' : '全選択'}
+                {allChecked ? '全解除' : '全選択'}
               </button>
               {reg.checkedCount > 0 && (
                 <span className="text-xs text-[var(--jtcg-text-secondary)]">

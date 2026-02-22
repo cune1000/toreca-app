@@ -8,6 +8,8 @@ import PriceHistoryChart from './PriceHistoryChart'
 import type { JTCard, PCMatch } from '../hooks/useJustTcgState'
 import { getNmVariant, formatUpdated, isValidPrice } from '../hooks/useJustTcgState'
 
+const EMPTY_HISTORY: Array<{ p: number; t: number }> = []
+
 interface RightPanelProps {
   card: JTCard | null
   open: boolean
@@ -15,6 +17,7 @@ interface RightPanelProps {
   className?: string
   // 登録モード
   showRegistration: boolean
+  /** undefined=未検索, null=検索済み一致なし, PCMatch=一致あり */
   pcMatch?: PCMatch | null
   pcLoading?: boolean
   onPcMatch?: () => void
@@ -52,7 +55,7 @@ export default memo(function RightPanel({
   const japaneseVariants = card.variants.filter(v => v.language === 'Japanese')
   const otherVariants = card.variants.filter(v => v.language !== 'Japanese')
   const nm = getNmVariant(card)
-  const priceHistory = nm?.priceHistory || []
+  const priceHistory = nm?.priceHistory ?? EMPTY_HISTORY
 
   return (
     <aside
@@ -153,9 +156,9 @@ export default memo(function RightPanel({
             {/* PC検索 */}
             {pcMatch === undefined ? (
               <button
-                onClick={onPcMatch}
+                onClick={() => onPcMatch?.()}
                 disabled={pcLoading}
-                className="w-full text-xs px-3 py-2 rounded-[var(--jtcg-radius)] bg-purple-50 text-purple-700 font-bold hover:bg-purple-100 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="w-full text-xs px-3 py-2.5 rounded-[var(--jtcg-radius)] bg-purple-50 text-purple-700 font-bold hover:bg-purple-100 disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <SearchIcon size={12} />
                 {pcLoading ? '検索中...' : 'PriceCharting 検索'}
@@ -204,9 +207,9 @@ export default memo(function RightPanel({
                   className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
                 />
                 <button
-                  onClick={onRegister}
+                  onClick={() => onRegister?.()}
                   disabled={isRegistering || !jaName?.trim()}
-                  className="w-full text-xs px-3 py-2 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full text-xs px-3 py-2.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isRegistering ? '登録中...' : '登録'}
                 </button>
