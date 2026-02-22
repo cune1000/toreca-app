@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
     const gameParam = searchParams.get('game') || 'pokemon-japan'
     const game = VALID_GAMES.has(gameParam) ? gameParam : 'pokemon-japan'
 
-    if (!setId) {
+    if (!setId || typeof setId !== 'string' || setId.length > 200) {
       return NextResponse.json(
-        { success: false, error: 'set パラメータが必要です' },
+        { success: false, error: 'set パラメータが不正です' },
         { status: 400 }
       )
     }
@@ -32,8 +32,9 @@ export async function GET(request: NextRequest) {
         success: true,
         data: cached.data.data,
         total: cached.data.total,
-        usage: cached.data.usage || null,
         cached: true,
+      }, {
+        headers: { 'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800' },
       })
     }
 
@@ -46,7 +47,8 @@ export async function GET(request: NextRequest) {
 
     while (pages < MAX_PAGES) {
       const result = await getCards(setId, { offset, limit, game })
-      if (Array.isArray(result.data)) allCards = allCards.concat(result.data)
+      if (!Array.isArray(result.data) || result.data.length === 0) break
+      allCards = allCards.concat(result.data)
       usage = result.usage
       pages++
 

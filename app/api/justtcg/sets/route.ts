@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
     const now = Date.now()
     const cached = cacheMap.get(game)
     if (cached && now - cached.at < CACHE_TTL) {
-      return NextResponse.json({ success: true, data: cached.data, cached: true })
+      return NextResponse.json({ success: true, data: cached.data, cached: true }, {
+        headers: { 'Cache-Control': 'public, max-age=1800, stale-while-revalidate=3600' },
+      })
     }
 
     const result = await getSets(game)

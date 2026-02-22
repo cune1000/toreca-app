@@ -22,10 +22,14 @@ export async function POST(request: NextRequest) {
     }
     lastRequestMap.set(clientIp, now)
 
-    // レート制限Mapのクリーンアップ
+    // レート制限Mapのクリーンアップ（期限切れ削除 + 上限超過時は古い順に半分削除）
     if (lastRequestMap.size > MAX_RATE_LIMIT_ENTRIES) {
       for (const [ip, ts] of lastRequestMap) {
         if (now - ts > RATE_LIMIT_MS * 10) lastRequestMap.delete(ip)
+      }
+      if (lastRequestMap.size > MAX_RATE_LIMIT_ENTRIES) {
+        const sorted = [...lastRequestMap.entries()].sort((a, b) => a[1] - b[1])
+        sorted.slice(0, Math.floor(sorted.length / 2)).forEach(([ip]) => lastRequestMap.delete(ip))
       }
     }
 
@@ -101,7 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        id: best.id,
+        id: String(best.id),
         name: best['product-name'],
         consoleName: best['console-name'],
         loosePrice,

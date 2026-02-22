@@ -277,13 +277,15 @@ export function useJustTcgState() {
   }, [])
 
   // アクション
+  const setsRef = useRef(sets)
+  setsRef.current = sets
   const selectSet = useCallback((setId: string) => {
     setSelectedSetId(setId)
     if (setId) {
-      const s = sets.find(s => s.id === setId)
+      const s = setsRef.current.find(s => s.id === setId)
       if (s) setSetFilterText(getSetNameJa(s.id, s.name))
     }
-  }, [sets])
+  }, [])
 
   const selectCard = useCallback((card: JTCard | null) => {
     setSelectedCard(card)

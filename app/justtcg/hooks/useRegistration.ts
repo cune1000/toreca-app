@@ -68,11 +68,12 @@ export function useRegistration(
   const selectedGameRef = useRef(selectedGame)
   selectedGameRef.current = selectedGame
 
-  const handleRegister = useCallback(async (card: JTCard) => {
+  /** カード1件を登録。成功（or 既に登録済み）なら true を返す */
+  const handleRegister = useCallback(async (card: JTCard): Promise<boolean> => {
     const jaName = jaNamesRef.current[card.id]?.trim()
     if (!jaName) {
       setRegisterError(prev => ({ ...prev, [card.id]: '日本語名を入力してください' }))
-      return
+      return false
     }
     setRegistering(prev => ({ ...prev, [card.id]: true }))
     setRegisterError(prev => ({ ...prev, [card.id]: '' }))
@@ -98,7 +99,7 @@ export function useRegistration(
           image_url: pc?.imageUrl || null,
           justtcg_id: card.id,
           tcgplayer_id: card.variants?.[0]?.id || null,
-          pricecharting_id: pc?.id || null,
+          pricecharting_id: pc?.id ? String(pc.id) : null,
           pricecharting_url: pc?.pricechartingUrl || null,
           game: selectedGameRef.current,
         }),
@@ -111,15 +112,19 @@ export function useRegistration(
           next.delete(card.id)
           return next
         })
+        return true
       } else {
         setRegisterError(prev => ({ ...prev, [card.id]: json.error || '登録失敗' }))
         if (res.status === 409) {
           setRegistered(prev => ({ ...prev, [card.id]: true }))
+          return true // 既に登録済み
         }
+        return false
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : '登録エラー'
       setRegisterError(prev => ({ ...prev, [card.id]: message }))
+      return false
     } finally {
       setRegistering(prev => ({ ...prev, [card.id]: false }))
     }
@@ -132,24 +137,31 @@ export function useRegistration(
   const registeredRef = useRef(registered)
   registeredRef.current = registered
 
+  const bulkRunningRef = useRef(false)
+
   const handleBulkRegister = useCallback(async () => {
-    const toRegister = cardsRef.current.filter(c => checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id])
-    cancelBulkRef.current = false
-    let succeeded = 0
-    let failed = 0
-    setBulkProgress({ current: 0, total: toRegister.length, succeeded: 0, failed: 0 })
-    for (let i = 0; i < toRegister.length; i++) {
-      if (cancelBulkRef.current) break
-      // レート制限対策: 2件目以降は5.5秒待機（サーバー側5秒制限）
-      if (i > 0) await new Promise(r => setTimeout(r, 5500))
-      if (cancelBulkRef.current) break
-      const wasRegistered = registeredRef.current[toRegister[i].id]
-      await handleRegister(toRegister[i])
-      if (registeredRef.current[toRegister[i].id] && !wasRegistered) succeeded++
-      else if (!registeredRef.current[toRegister[i].id]) failed++
-      setBulkProgress({ current: i + 1, total: toRegister.length, succeeded, failed })
+    if (bulkRunningRef.current) return
+    bulkRunningRef.current = true
+    try {
+      const toRegister = cardsRef.current.filter(c => checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id])
+      cancelBulkRef.current = false
+      let succeeded = 0
+      let failed = 0
+      setBulkProgress({ current: 0, total: toRegister.length, succeeded: 0, failed: 0 })
+      for (let i = 0; i < toRegister.length; i++) {
+        if (cancelBulkRef.current) break
+        // レート制限対策: 2件目以降は5.5秒待機（サーバー側5秒制限）
+        if (i > 0) await new Promise(r => setTimeout(r, 5500))
+        if (cancelBulkRef.current) break
+        const ok = await handleRegister(toRegister[i])
+        if (ok) succeeded++
+        else failed++
+        setBulkProgress({ current: i + 1, total: toRegister.length, succeeded, failed })
+      }
+      setBulkProgress(null)
+    } finally {
+      bulkRunningRef.current = false
     }
-    setBulkProgress(null)
   }, [handleRegister])
 
   const cancelBulkRegister = useCallback(() => {
