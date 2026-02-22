@@ -78,7 +78,7 @@ export default function JustTcgExplorer() {
       .finally(() => setLoadingSets(false))
   }, [])
 
-  // カード取得
+  // カード取得（全件、価格順）
   useEffect(() => {
     if (!selectedSetId) { setCards([]); return }
     setLoadingCards(true)
@@ -309,7 +309,7 @@ export default function JustTcgExplorer() {
           <>
             <p className="text-xs text-gray-400 mb-3">
               {filtered.length === cards.length
-                ? `${cards.length}件`
+                ? `${cards.length}件（価格順）`
                 : `${filtered.length} / ${cards.length}件`
               }
             </p>
@@ -470,6 +470,7 @@ export default function JustTcgExplorer() {
                 <p className="text-center py-12 text-sm text-gray-400">該当するカードがありません</p>
               )}
             </div>
+
           </>
         )}
       </div>
