@@ -53,7 +53,14 @@ export default memo(function RightPanel({
   // UI-05: カード切替時にチャートを閉じる
   useEffect(() => { setShowChart(false) }, [card?.id])
 
-  if (!card) return <aside aria-label="カード詳細" className={`w-0 overflow-hidden ${className}`} />
+  // R11-17: w-80 固定でレイアウトジャンプ防止（プレースホルダー表示）
+  if (!card) return (
+    <aside aria-label="カード詳細" className={`w-80 shrink-0 border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${className}`}>
+      <div className="flex items-center justify-center h-full">
+        <p className="text-xs text-[var(--jtcg-text-muted)]">カードを選択してください</p>
+      </div>
+    </aside>
+  )
 
   const japaneseVariants = card.variants.filter(v => v.language === 'Japanese')
   const otherVariants = card.variants.filter(v => v.language !== 'Japanese')
@@ -193,7 +200,16 @@ export default memo(function RightPanel({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-[var(--jtcg-text-muted)]">PriceChartingで一致なし</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-[var(--jtcg-text-muted)]">PriceChartingで一致なし</p>
+                <button
+                  onClick={() => onPcMatch?.()}
+                  disabled={pcLoading}
+                  className="text-[10px] text-purple-600 hover:text-purple-800 underline disabled:opacity-50"
+                >
+                  再検索
+                </button>
+              </div>
             )}
 
             {/* 日本語名入力 + 登録ボタン */}

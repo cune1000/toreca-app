@@ -154,31 +154,35 @@ export default function JustTcgExplorer() {
           cancelBulkRegister={reg.cancelBulkRegister}
           className="flex-1 min-w-0"
         />
-        <div className="hidden lg:block">
-          <RightPanel
-            card={card}
-            open={!!card}
-            onClose={handleClosePanel}
-            showRegistration={state.showRegistration}
-            pcMatch={card ? state.pcMatches[card.id] : undefined}
-            pcLoading={card ? state.pcLoading[card.id] : false}
-            onPcMatch={handlePcMatch}
-            jaName={card ? reg.jaNames[card.id] : ''}
-            onJaNameChange={handleJaNameChange}
-            isRegistered={card ? !!reg.registered[card.id] : false}
-            isRegistering={card ? !!reg.registering[card.id] : false}
-            registerError={card ? reg.registerError[card.id] : ''}
-            onRegister={handleRegister}
-          />
-        </div>
+        {/* R11-17: カードがある場合のみ右パネルを表示（セット選択時に自然に出現） */}
+        {hasCards && (
+          <div className="hidden lg:block">
+            <RightPanel
+              card={card}
+              open={!!card}
+              onClose={handleClosePanel}
+              showRegistration={state.showRegistration}
+              pcMatch={card ? state.pcMatches[card.id] : undefined}
+              pcLoading={card ? state.pcLoading[card.id] : false}
+              onPcMatch={handlePcMatch}
+              jaName={card ? reg.jaNames[card.id] : ''}
+              onJaNameChange={handleJaNameChange}
+              isRegistered={card ? !!reg.registered[card.id] : false}
+              isRegistering={card ? !!reg.registering[card.id] : false}
+              registerError={card ? reg.registerError[card.id] : ''}
+              onRegister={handleRegister}
+            />
+          </div>
+        )}
       </div>
 
       {/* モバイル: 左パネルドロワー（カード詳細が開いていたら非表示） */}
       {mobileFilterOpen && !card && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileFilterOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[var(--jtcg-surface)] shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--jtcg-border)]">
+          {/* R11-03: flex レイアウトでヘッダー分を差し引き、コンテンツ切れを防止 */}
+          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[var(--jtcg-surface)] shadow-xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--jtcg-border)] shrink-0">
               <h2 className="text-sm font-bold text-[var(--jtcg-ink)]" style={{ fontFamily: 'var(--font-heading)' }}>
                 <Settings2 size={14} className="inline mr-1.5" />
                 Filters
@@ -187,7 +191,7 @@ export default function JustTcgExplorer() {
                 <X size={16} />
               </button>
             </div>
-            <LeftPanel {...leftPanelProps} className="h-full overflow-y-auto" />
+            <LeftPanel {...leftPanelProps} className="flex-1 min-h-0 overflow-y-auto" />
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@ const cache = new Map<string, { data: any; at: number }>()
 const CACHE_TTL = 60 * 60 * 1000
 const MAX_CACHE_ENTRIES = 50
 const MAX_PAGES = 20 // 安全ガード: 最大2000カード
+const PAGINATION_TIMEOUT = 25_000 // R11-02: 25秒（Vercel関数タイムアウトの余裕）
 const VALID_GAMES = new Set(['pokemon-japan', 'pokemon', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world'])
 
 export async function GET(request: NextRequest) {
@@ -44,8 +45,14 @@ export async function GET(request: NextRequest) {
     const limit = 100
     let usage: any = null
     let pages = 0
+    const paginationStart = Date.now()
 
     while (pages < MAX_PAGES) {
+      // R11-02: 全体タイムアウトチェック（大量セットでVercel関数タイムアウトを防止）
+      if (Date.now() - paginationStart > PAGINATION_TIMEOUT) {
+        console.warn(`JustTCG cards pagination timeout: ${pages} pages fetched for ${cacheKey}`)
+        break
+      }
       const result = await getCards(setId, { offset, limit, game })
       if (!Array.isArray(result.data) || result.data.length === 0) break
       allCards = allCards.concat(result.data)

@@ -23,6 +23,7 @@ export function useRegistration(
   useEffect(() => {
     if (selectedSet?.id !== prevSetId.current) {
       prevSetId.current = selectedSet?.id
+      cancelBulkRef.current = true // R11-01: 進行中の一括登録を中断
       setCheckedCards(new Set())
       setJaNames({})
       setRegistering({})
