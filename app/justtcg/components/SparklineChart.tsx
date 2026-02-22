@@ -1,21 +1,23 @@
 'use client'
 
+import { memo } from 'react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 
 interface SparklineChartProps {
   data: Array<{ p: number; t: number }>
 }
 
-export default function SparklineChart({ data }: SparklineChartProps) {
-  if (data.length < 2) return null
+export default memo(function SparklineChart({ data }: SparklineChartProps) {
+  const validData = data.filter(d => typeof d.p === 'number' && !isNaN(d.p))
+  if (validData.length < 2) return null
 
-  const first = data[0]?.p ?? 0
-  const last = data[data.length - 1]?.p ?? 0
+  const first = validData[0].p
+  const last = validData[validData.length - 1].p
   const color = last >= first ? '#059669' : '#DC2626'
 
   return (
     <ResponsiveContainer width="100%" height={24}>
-      <LineChart data={data}>
+      <LineChart data={validData}>
         <Line
           type="monotone"
           dataKey="p"
@@ -27,4 +29,4 @@ export default function SparklineChart({ data }: SparklineChartProps) {
       </LineChart>
     </ResponsiveContainer>
   )
-}
+})

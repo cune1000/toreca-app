@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, number: cardNumber } = body
+    const { name, number: cardNumber, game } = body
 
     if (!name) {
       return NextResponse.json(
@@ -39,8 +39,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // PriceCharting検索: 英語名 + "japanese"
-    const query = `${name} japanese`
+    // ゲームに応じて "japanese" を付加（日本版ゲームのみ）
+    const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world']
+    const isJapaneseGame = !game || JAPANESE_GAMES.includes(game)
+    const query = isJapaneseGame ? `${name} japanese` : name
     const products = await searchProducts(query)
 
     if (!products || products.length === 0) {
@@ -61,13 +63,16 @@ export async function POST(request: NextRequest) {
 
     // 最もマッチ度が高い結果を返却
     const best = matched[0]
-    const loosePrice = best['loose-price'] || null
+    const loosePrice = best['loose-price'] ?? null
 
-    // PriceChartingページから画像URL取得
+    // PriceChartingページから画像URL取得（5秒タイムアウト）
     let imageUrl: string | null = null
     const pricechartingUrl = `https://www.pricecharting.com/offers?product=${best.id}`
     try {
-      const pageRes = await fetch(pricechartingUrl)
+      const imgController = new AbortController()
+      const imgTimeout = setTimeout(() => imgController.abort(), 5000)
+      const pageRes = await fetch(pricechartingUrl, { signal: imgController.signal })
+      clearTimeout(imgTimeout)
       if (pageRes.ok) {
         const html = await pageRes.text()
         const imgMatch = html.match(/src=["'](https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^"']+)/)

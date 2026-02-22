@@ -242,7 +242,10 @@ export function useJustTcgState() {
     }
   }, [cards])
 
-  // PC検索 — BUG-02: useRef で pcLoading を参照し依存配列から除外
+  // PC検索 — useRef で pcLoading / selectedGame を参照
+  const selectedGameRef = useRef(selectedGame)
+  selectedGameRef.current = selectedGame
+
   const handlePcMatch = useCallback(async (card: JTCard) => {
     if (pcLoadingRef.current[card.id]) return
     setPcLoading(prev => ({ ...prev, [card.id]: true }))
@@ -250,7 +253,7 @@ export function useJustTcgState() {
       const res = await fetch('/api/justtcg/match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: card.name, number: card.number }),
+        body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current }),
       })
       const json = await res.json()
       setPcMatches(prev => ({ ...prev, [card.id]: json.success ? json.data : null }))

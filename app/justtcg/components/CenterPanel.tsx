@@ -83,13 +83,20 @@ export default function CenterPanel({ state, reg, onSelectCard, className = '' }
               )}
             </div>
             {reg.checkedCount > 0 && (
-              <button
-                onClick={reg.handleBulkRegister}
-                disabled={reg.readyCount === 0}
-                className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {reg.readyCount}件を一括登録
-              </button>
+              <div className="flex items-center gap-2">
+                {reg.bulkProgress && (
+                  <span className="text-[10px] text-[var(--jtcg-text-secondary)] tabular-nums">
+                    {reg.bulkProgress.current}/{reg.bulkProgress.total}
+                  </span>
+                )}
+                <button
+                  onClick={reg.handleBulkRegister}
+                  disabled={reg.readyCount === 0 || !!reg.bulkProgress}
+                  className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {reg.bulkProgress ? `登録中...` : `${reg.readyCount}件を一括登録`}
+                </button>
+              </div>
             )}
           </div>
         )}

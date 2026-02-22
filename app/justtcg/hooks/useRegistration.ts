@@ -15,6 +15,7 @@ export function useRegistration(
   const [registering, setRegistering] = useState<Record<string, boolean>>({})
   const [registered, setRegistered] = useState<Record<string, boolean>>({})
   const [registerError, setRegisterError] = useState<Record<string, string>>({})
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null)
 
   const toggleCheck = useCallback((cardId: string) => {
     setCheckedCards(prev => {
@@ -100,9 +101,12 @@ export function useRegistration(
 
   const handleBulkRegister = useCallback(async () => {
     const toRegister = cards.filter(c => checkedCards.has(c.id) && !registered[c.id])
-    for (const card of toRegister) {
-      await handleRegister(card)
+    setBulkProgress({ current: 0, total: toRegister.length })
+    for (let i = 0; i < toRegister.length; i++) {
+      setBulkProgress({ current: i + 1, total: toRegister.length })
+      await handleRegister(toRegister[i])
     }
+    setBulkProgress(null)
   }, [cards, checkedCards, registered, handleRegister])
 
   const reset = useCallback(() => {
@@ -123,6 +127,7 @@ export function useRegistration(
     registerError,
     checkedCount,
     readyCount,
+    bulkProgress,
     toggleCheck,
     toggleAllFiltered,
     setJaName,

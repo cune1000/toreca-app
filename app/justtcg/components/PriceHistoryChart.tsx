@@ -9,12 +9,16 @@ interface PriceHistoryChartProps {
 export default function PriceHistoryChart({ data }: PriceHistoryChartProps) {
   if (data.length < 2) return <p className="text-xs text-[var(--jtcg-text-muted)] text-center py-4">データ不足</p>
 
-  const chartData = data.map(d => ({
+  // NaN/無効なデータポイントを除外
+  const validData = data.filter(d => typeof d.p === 'number' && !isNaN(d.p) && typeof d.t === 'number')
+  if (validData.length < 2) return <p className="text-xs text-[var(--jtcg-text-muted)] text-center py-4">データ不足</p>
+
+  const chartData = validData.map(d => ({
     price: d.p,
     date: new Date(d.t * 1000).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' }),
   }))
 
-  const avg = data.reduce((s, d) => s + d.p, 0) / data.length
+  const avg = validData.reduce((s, d) => s + d.p, 0) / validData.length
 
   return (
     <div className="bg-gray-50 rounded-[var(--jtcg-radius)] p-3">

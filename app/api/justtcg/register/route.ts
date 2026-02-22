@@ -88,9 +88,11 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Card register error:', error)
+      // 重複キーエラーの場合は409を返す（レースコンディション対策）
+      const isDuplicate = error.code === '23505' || error.message?.includes('duplicate')
       return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 500 }
+        { success: false, error: isDuplicate ? '既に登録済みです（重複）' : error.message },
+        { status: isDuplicate ? 409 : 500 }
       )
     }
 

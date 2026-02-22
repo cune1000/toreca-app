@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import type { JTVariant } from '../hooks/useJustTcgState'
 
@@ -20,7 +21,7 @@ function PriceChange({ change, label }: { change: number | null; label: string }
   )
 }
 
-export default function VariantRow({ variant }: { variant: JTVariant }) {
+export default memo(function VariantRow({ variant }: { variant: JTVariant }) {
   const isJapanese = variant.language === 'Japanese'
 
   return (
@@ -59,4 +60,4 @@ export default function VariantRow({ variant }: { variant: JTVariant }) {
       </div>
     </div>
   )
-}
+})
