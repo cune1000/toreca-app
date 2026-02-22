@@ -76,9 +76,13 @@ async function fetchJustTcg<T>(path: string, params?: Record<string, string>): P
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
   const res = await fetch(url.toString(), {
     headers: { 'x-api-key': JUSTTCG_API_KEY },
+    signal: controller.signal,
   })
+  clearTimeout(timeout)
 
   if (!res.ok) {
     throw new Error(`JustTCG API error: ${res.status} ${res.statusText}`)

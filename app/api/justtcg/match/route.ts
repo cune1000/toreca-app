@@ -32,16 +32,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, number: cardNumber, game } = body
 
-    if (!name) {
+    if (!name || typeof name !== 'string') {
       return NextResponse.json(
         { success: false, error: 'name が必要です' },
         { status: 400 }
       )
     }
 
+    // 入力長制限
+    if (name.length > 200) {
+      return NextResponse.json(
+        { success: false, error: '入力が長すぎます' },
+        { status: 400 }
+      )
+    }
+
     // ゲームに応じて "japanese" を付加（日本版ゲームのみ）
     const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world']
-    const isJapaneseGame = !game || JAPANESE_GAMES.includes(game)
+    const validGame = typeof game === 'string' && JAPANESE_GAMES.concat(['pokemon']).includes(game) ? game : 'pokemon-japan'
+    const isJapaneseGame = JAPANESE_GAMES.includes(validGame)
     const query = isJapaneseGame ? `${name} japanese` : name
     const products = await searchProducts(query)
 

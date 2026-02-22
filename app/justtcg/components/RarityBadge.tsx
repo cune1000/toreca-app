@@ -1,8 +1,9 @@
 'use client'
 
+import { memo } from 'react'
 import { RARITY_COLORS } from '../lib/constants'
 
-export default function RarityBadge({ rarity }: { rarity: string }) {
+export default memo(function RarityBadge({ rarity }: { rarity: string }) {
   if (!rarity || rarity === 'None') return null
 
   const colors = RARITY_COLORS[rarity] || { bg: 'bg-gray-100', text: 'text-gray-500' }
@@ -12,4 +13,4 @@ export default function RarityBadge({ rarity }: { rarity: string }) {
       {rarity}
     </span>
   )
-}
+})

@@ -157,7 +157,7 @@ export default function JustTcgExplorer() {
               className="w-full"
               showRegistration={state.showRegistration}
               pcMatch={state.pcMatches[card.id]}
-              pcLoading={state.pcLoading[card.id]}
+              pcLoading={state.pcLoading[card.id] || false}
               onPcMatch={handlePcMatch}
               jaName={reg.jaNames[card.id] || ''}
               onJaNameChange={handleJaNameChange}

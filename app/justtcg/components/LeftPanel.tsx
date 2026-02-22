@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { ChevronDown, ChevronUp, Filter } from 'lucide-react'
 import { GAME_OPTIONS, SORT_OPTIONS } from '../lib/constants'
 import { getSetNameJa } from '@/lib/justtcg-set-names'
@@ -12,7 +13,7 @@ interface LeftPanelProps {
   className?: string
 }
 
-export default function LeftPanel({ state, className = '' }: LeftPanelProps) {
+export default memo(function LeftPanel({ state, className = '' }: LeftPanelProps) {
   return (
     <aside className={`border-r border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] overflow-y-auto ${className}`}>
       <div className="p-4 space-y-5">
@@ -176,4 +177,4 @@ export default function LeftPanel({ state, className = '' }: LeftPanelProps) {
       </div>
     </aside>
   )
-}
+})

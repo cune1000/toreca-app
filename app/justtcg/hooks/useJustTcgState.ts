@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from 'react'
 import { getSetNameJa } from '@/lib/justtcg-set-names'
 import type { SortKey } from '../lib/constants'
 
@@ -176,12 +176,15 @@ export function useJustTcgState() {
     return Array.from(set).sort()
   }, [cards])
 
+  // 検索テキストのデバウンス（入力中のUI応答性を維持しつつフィルタリングを遅延）
+  const deferredSearch = useDeferredValue(search)
+
   // フィルタ・ソート済みカード — BUG-01: price ソートも含めて全ソートを処理
   const filteredCards = useMemo(() => {
     let list = cards
 
-    if (search) {
-      const q = search.toLowerCase()
+    if (deferredSearch) {
+      const q = deferredSearch.toLowerCase()
       list = list.filter(c =>
         c.name.toLowerCase().includes(q) ||
         c.number.toLowerCase().includes(q)
@@ -219,7 +222,7 @@ export function useJustTcgState() {
     })
 
     return list
-  }, [cards, search, rarityFilter, japaneseOnly, sortBy, sortOrder])
+  }, [cards, deferredSearch, rarityFilter, japaneseOnly, sortBy, sortOrder])
 
   // セットフィルタ
   const filteredSets = useMemo(() => {

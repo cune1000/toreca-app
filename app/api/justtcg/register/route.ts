@@ -87,7 +87,8 @@ export async function POST(request: NextRequest) {
       'hololive-official-card-game': 'ホロライブカード',
       'dragon-ball-super-fusion-world': 'ドラゴンボール',
     }
-    const categoryName = GAME_CATEGORY_MAP[game || 'pokemon-japan'] || 'ポケモンカード'
+    const validGame = typeof game === 'string' && game in GAME_CATEGORY_MAP ? game : 'pokemon-japan'
+    const categoryName = GAME_CATEGORY_MAP[validGame]
 
     const { data: category } = await supabase
       .from('category_large')

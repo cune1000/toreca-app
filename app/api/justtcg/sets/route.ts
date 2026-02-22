@@ -7,11 +7,13 @@ export const dynamic = 'force-dynamic'
 const cacheMap = new Map<string, { data: any; at: number }>()
 const CACHE_TTL = 24 * 60 * 60 * 1000
 const MAX_CACHE_ENTRIES = 10
+const VALID_GAMES = new Set(['pokemon-japan', 'pokemon', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world'])
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const game = searchParams.get('game') || 'pokemon-japan'
+    const gameParam = searchParams.get('game') || 'pokemon-japan'
+    const game = VALID_GAMES.has(gameParam) ? gameParam : 'pokemon-japan'
 
     const now = Date.now()
     const cached = cacheMap.get(game)

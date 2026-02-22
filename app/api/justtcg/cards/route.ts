@@ -8,12 +8,14 @@ const cache = new Map<string, { data: any; at: number }>()
 const CACHE_TTL = 60 * 60 * 1000
 const MAX_CACHE_ENTRIES = 50
 const MAX_PAGES = 20 // 安全ガード: 最大2000カード
+const VALID_GAMES = new Set(['pokemon-japan', 'pokemon', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world'])
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const setId = searchParams.get('set')
-    const game = searchParams.get('game') || 'pokemon-japan'
+    const gameParam = searchParams.get('game') || 'pokemon-japan'
+    const game = VALID_GAMES.has(gameParam) ? gameParam : 'pokemon-japan'
 
     if (!setId) {
       return NextResponse.json(
@@ -53,7 +55,11 @@ export async function GET(request: NextRequest) {
     }
 
     const responseData = { data: allCards, total: allCards.length, usage }
-    cache.set(cacheKey, { data: responseData, at: now })
+
+    // 空データはキャッシュしない（API一時エラーの可能性）
+    if (allCards.length > 0) {
+      cache.set(cacheKey, { data: responseData, at: now })
+    }
 
     // キャッシュサイズ制限（古いエントリを削除）
     if (cache.size > MAX_CACHE_ENTRIES) {

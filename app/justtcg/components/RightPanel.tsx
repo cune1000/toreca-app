@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { X, ChevronDown, ChevronUp, Search as SearchIcon, ExternalLink } from 'lucide-react'
 import RarityBadge from './RarityBadge'
 import VariantRow from './VariantRow'
@@ -26,7 +26,7 @@ interface RightPanelProps {
   onRegister?: () => void
 }
 
-export default function RightPanel({
+export default memo(function RightPanel({
   card,
   open,
   onClose,
@@ -47,7 +47,7 @@ export default function RightPanel({
   // UI-05: カード切替時にチャートを閉じる
   useEffect(() => { setShowChart(false) }, [card?.id])
 
-  if (!card) return <aside className={`transition-all duration-300 w-0 overflow-hidden ${className}`} />
+  if (!card) return <aside aria-label="カード詳細" className={`transition-[width,opacity] duration-300 w-0 overflow-hidden ${className}`} />
 
   const japaneseVariants = card.variants.filter(v => v.language === 'Japanese')
   const otherVariants = card.variants.filter(v => v.language !== 'Japanese')
@@ -56,7 +56,8 @@ export default function RightPanel({
 
   return (
     <aside
-      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] overflow-y-auto transition-all duration-300 ease-in-out shrink-0 ${
+      aria-label="カード詳細"
+      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] overflow-y-auto transition-[width,opacity] duration-300 ease-in-out shrink-0 ${
         open ? 'w-80 opacity-100' : 'w-0 opacity-0 overflow-hidden'
       } ${className}`}
     >
@@ -78,7 +79,7 @@ export default function RightPanel({
           <button
             onClick={onClose}
             aria-label="詳細パネルを閉じる"
-            className="p-1 rounded-[var(--jtcg-radius)] hover:bg-gray-100 text-[var(--jtcg-text-muted)] shrink-0"
+            className="p-2.5 -m-1.5 rounded-[var(--jtcg-radius)] hover:bg-gray-100 text-[var(--jtcg-text-muted)] shrink-0"
           >
             <X size={16} />
           </button>
@@ -128,6 +129,7 @@ export default function RightPanel({
           <div>
             <button
               onClick={() => setShowChart(!showChart)}
+              aria-expanded={showChart}
               className="w-full text-xs text-center py-2 rounded-[var(--jtcg-radius)] border border-[var(--jtcg-border)] hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5 text-[var(--jtcg-text-secondary)]"
             >
               {showChart ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -166,7 +168,7 @@ export default function RightPanel({
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-purple-800 truncate">{pcMatch.name}</p>
-                    {pcMatch.loosePriceDollars != null && (
+                    {isValidPrice(pcMatch.loosePriceDollars) && (
                       <p className="text-xs text-purple-600" style={{ fontFamily: 'var(--font-price)' }}>
                         PC: ${pcMatch.loosePriceDollars.toFixed(2)}
                       </p>
@@ -198,6 +200,7 @@ export default function RightPanel({
                   value={jaName || ''}
                   onChange={e => onJaNameChange?.(e.target.value)}
                   placeholder="日本語名を入力..."
+                  aria-label="日本語名"
                   className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
                 />
                 <button
@@ -207,7 +210,7 @@ export default function RightPanel({
                 >
                   {isRegistering ? '登録中...' : '登録'}
                 </button>
-                {registerError && <p className="text-xs text-red-500">{registerError}</p>}
+                {registerError && <p className="text-xs text-red-500" role="alert">{registerError}</p>}
                 {pcMatch === undefined && (
                   <p className="text-[10px] text-amber-600">PC検索未実施（画像なしで登録されます）</p>
                 )}
@@ -218,4 +221,4 @@ export default function RightPanel({
       </div>
     </aside>
   )
-}
+})
