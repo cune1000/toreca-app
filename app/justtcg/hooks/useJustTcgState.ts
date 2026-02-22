@@ -58,9 +58,11 @@ export interface PCMatch {
 // === ユーティリティ ===
 
 export function getNmVariant(card: JTCard): JTVariant | undefined {
-  return card.variants.find(v => v.condition === 'Near Mint' && v.printing === 'Normal')
-    || card.variants.find(v => v.condition === 'Near Mint')
-    || card.variants[0]
+  const v = card.variants
+  if (!Array.isArray(v) || v.length === 0) return undefined
+  return v.find(v => v.condition === 'Near Mint' && v.printing === 'Normal')
+    || v.find(v => v.condition === 'Near Mint')
+    || v[0]
 }
 
 /** 価格が有効な数値かチェック */
@@ -147,6 +149,7 @@ export function useJustTcgState() {
     setSearch('')
     setRarityFilter('')
     setSelectedCard(null)
+    setError('') // R12-06: 前セットのエラーをクリア
     setPcMatches({})
     setPcLoading({})
 
@@ -194,7 +197,7 @@ export function useJustTcgState() {
       list = list.filter(c => c.rarity === rarityFilter)
     }
     if (japaneseOnly) {
-      list = list.filter(c => c.variants.some(v => v.language === 'Japanese'))
+      list = list.filter(c => Array.isArray(c.variants) && c.variants.some(v => v.language === 'Japanese'))
     }
 
     // ソート（price含む全モード）
@@ -223,6 +226,13 @@ export function useJustTcgState() {
 
     return list
   }, [cards, deferredSearch, rarityFilter, japaneseOnly, sortBy, sortOrder])
+
+  // R12-01: フィルタ変更で selectedCard がリストから消えたらクリア
+  useEffect(() => {
+    if (selectedCard && filteredCards.length > 0 && !filteredCards.some(c => c.id === selectedCard.id)) {
+      setSelectedCard(null)
+    }
+  }, [filteredCards, selectedCard])
 
   // セットフィルタ
   const filteredSets = useMemo(() => {
@@ -272,7 +282,10 @@ export function useJustTcgState() {
         setPcMatches(prev => ({ ...prev, [card.id]: null }))
       }
     } finally {
-      setPcLoading(prev => ({ ...prev, [card.id]: false }))
+      // R12-05: セット切替後のstale writeを防止（pcLoadingも同様にガード）
+      if (selectedSetIdRef.current === capturedSetId) {
+        setPcLoading(prev => ({ ...prev, [card.id]: false }))
+      }
     }
   }, [])
 
