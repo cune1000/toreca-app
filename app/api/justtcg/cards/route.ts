@@ -25,13 +25,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, ...cached.data, cached: true })
     }
 
-    // 全カード取得（ページング、Free Tierはlimit最大20）
+    // 全カード取得（ページング、Free Tier: limit最大20, 10req/min）
     let allCards: any[] = []
     let offset = 0
     const limit = 20
     let usage: any = null
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
     while (true) {
+      if (offset > 0) await delay(7000) // レート制限回避: 7秒待機
       const result = await getCards(setId, { offset, limit })
       allCards = allCards.concat(result.data)
       usage = result.usage
