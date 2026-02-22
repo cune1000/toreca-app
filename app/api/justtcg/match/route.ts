@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 // レート制限（IPごとに3秒間隔）
 const lastRequestMap = new Map<string, number>()
 const RATE_LIMIT_MS = 3_000
+const MAX_RATE_LIMIT_ENTRIES = 100
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,13 @@ export async function POST(request: NextRequest) {
       )
     }
     lastRequestMap.set(clientIp, now)
+
+    // レート制限Mapのクリーンアップ
+    if (lastRequestMap.size > MAX_RATE_LIMIT_ENTRIES) {
+      for (const [ip, ts] of lastRequestMap) {
+        if (now - ts > RATE_LIMIT_MS * 10) lastRequestMap.delete(ip)
+      }
+    }
 
     const body = await request.json()
     const { name, number: cardNumber } = body
@@ -83,10 +91,11 @@ export async function POST(request: NextRequest) {
         pricechartingUrl,
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Match failed'
     console.error('JustTCG match error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Match failed' },
+      { success: false, error: message },
       { status: 500 }
     )
   }

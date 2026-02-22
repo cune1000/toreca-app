@@ -1,10 +1,11 @@
 'use client'
 
+import { memo } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import RarityBadge from './RarityBadge'
 import SparklineChart from './SparklineChart'
 import type { JTCard } from '../hooks/useJustTcgState'
-import { getNmVariant } from '../hooks/useJustTcgState'
+import { getNmVariant, isValidPrice } from '../hooks/useJustTcgState'
 
 interface CardListItemProps {
   card: JTCard
@@ -16,7 +17,7 @@ interface CardListItemProps {
   onToggleCheck: () => void
 }
 
-export default function CardListItem({
+export default memo(function CardListItem({
   card,
   selected,
   onClick,
@@ -29,6 +30,7 @@ export default function CardListItem({
   const hasJapanese = card.variants.some(v => v.language === 'Japanese')
   const priceHistory = nm?.priceHistory || []
   const change7d = nm?.priceChange7d
+  const price = nm?.price
 
   return (
     <div
@@ -39,7 +41,6 @@ export default function CardListItem({
       } ${isRegistered ? 'opacity-40' : ''}`}
       onClick={onClick}
     >
-      {/* チェックボックス（登録モード時） */}
       {showRegistration && (
         <div className="shrink-0" onClick={e => e.stopPropagation()}>
           {isRegistered ? (
@@ -55,12 +56,10 @@ export default function CardListItem({
         </div>
       )}
 
-      {/* レアリティバッジ */}
       <div className="shrink-0">
         <RarityBadge rarity={card.rarity} />
       </div>
 
-      {/* カード番号 */}
       <span
         className="text-[11px] text-[var(--jtcg-text-muted)] w-14 shrink-0 tabular-nums"
         style={{ fontFamily: 'var(--font-price)' }}
@@ -68,32 +67,25 @@ export default function CardListItem({
         #{card.number}
       </span>
 
-      {/* カード名 + セット名 */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[var(--jtcg-text)] truncate leading-tight">{card.name}</p>
         <p className="text-[10px] text-[var(--jtcg-text-muted)] truncate">{card.set_name}</p>
       </div>
 
-      {/* 日本語フラグ */}
       {hasJapanese && <span className="text-xs shrink-0" title="日本語版あり">🇯🇵</span>}
 
-      {/* 価格 */}
       <div className="text-right shrink-0 w-16">
-        {nm?.price != null ? (
-          <span
-            className="text-sm font-bold text-[var(--jtcg-text)] tabular-nums"
-            style={{ fontFamily: 'var(--font-price)' }}
-          >
-            ${nm.price.toFixed(2)}
+        {isValidPrice(price) ? (
+          <span className="text-sm font-bold text-[var(--jtcg-text)] tabular-nums" style={{ fontFamily: 'var(--font-price)' }}>
+            ${price.toFixed(2)}
           </span>
         ) : (
           <span className="text-xs text-[var(--jtcg-text-muted)]">--</span>
         )}
       </div>
 
-      {/* 7日変動 */}
       <div className="w-14 text-right shrink-0">
-        {change7d != null ? (
+        {change7d != null && !isNaN(change7d) ? (
           <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold ${
             change7d > 0 ? 'text-[var(--jtcg-up)]' : change7d < 0 ? 'text-[var(--jtcg-down)]' : 'text-[var(--jtcg-text-muted)]'
           }`}>
@@ -103,10 +95,9 @@ export default function CardListItem({
         ) : null}
       </div>
 
-      {/* スパークライン */}
       <div className="w-16 h-6 shrink-0 hidden sm:block">
         {priceHistory.length > 1 && <SparklineChart data={priceHistory} />}
       </div>
     </div>
   )
-}
+})

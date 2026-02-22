@@ -90,8 +90,9 @@ export function useRegistration(
           setRegistered(prev => ({ ...prev, [card.id]: true }))
         }
       }
-    } catch (e: any) {
-      setRegisterError(prev => ({ ...prev, [card.id]: e.message }))
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : '登録エラー'
+      setRegisterError(prev => ({ ...prev, [card.id]: message }))
     } finally {
       setRegistering(prev => ({ ...prev, [card.id]: false }))
     }

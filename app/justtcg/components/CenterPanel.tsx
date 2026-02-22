@@ -3,6 +3,7 @@
 import { Search, Package } from 'lucide-react'
 import CardListItem from './CardListItem'
 import type { useJustTcgState } from '../hooks/useJustTcgState'
+import type { JTCard } from '../hooks/useJustTcgState'
 import type { useRegistration } from '../hooks/useRegistration'
 
 type State = ReturnType<typeof useJustTcgState>
@@ -11,10 +12,13 @@ type Reg = ReturnType<typeof useRegistration>
 interface CenterPanelProps {
   state: State
   reg: Reg
+  onSelectCard?: (card: JTCard | null) => void
   className?: string
 }
 
-export default function CenterPanel({ state, reg, className = '' }: CenterPanelProps) {
+export default function CenterPanel({ state, reg, onSelectCard, className = '' }: CenterPanelProps) {
+  const handleSelect = onSelectCard || state.selectCard
+
   return (
     <main className={`flex flex-col overflow-hidden ${className}`}>
       {/* 検索バー */}
@@ -36,7 +40,6 @@ export default function CenterPanel({ state, reg, className = '' }: CenterPanelP
               : `${state.filteredCards.length} / ${state.cards.length}件`
             }
           </span>
-          {/* レアリティフィルタピル */}
           {state.rarities.length > 0 && (
             <>
               <span className="text-[var(--jtcg-border)]">|</span>
@@ -63,8 +66,8 @@ export default function CenterPanel({ state, reg, className = '' }: CenterPanelP
           )}
         </div>
 
-        {/* 一括登録ツールバー */}
-        {state.showRegistration && reg.checkedCount > 0 && (
+        {/* 登録ツールバー — UI-07: checkedCount === 0 でも全選択ボタンを表示 */}
+        {state.showRegistration && state.filteredCards.length > 0 && (
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--jtcg-border)]">
             <div className="flex items-center gap-2">
               <button
@@ -73,17 +76,21 @@ export default function CenterPanel({ state, reg, className = '' }: CenterPanelP
               >
                 {state.filteredCards.every(c => reg.checkedCards.has(c.id)) ? '全解除' : '全選択'}
               </button>
-              <span className="text-xs text-[var(--jtcg-text-secondary)]">
-                {reg.checkedCount}件選択
-              </span>
+              {reg.checkedCount > 0 && (
+                <span className="text-xs text-[var(--jtcg-text-secondary)]">
+                  {reg.checkedCount}件選択
+                </span>
+              )}
             </div>
-            <button
-              onClick={reg.handleBulkRegister}
-              disabled={reg.readyCount === 0}
-              className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {reg.readyCount}件を一括登録
-            </button>
+            {reg.checkedCount > 0 && (
+              <button
+                onClick={reg.handleBulkRegister}
+                disabled={reg.readyCount === 0}
+                className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {reg.readyCount}件を一括登録
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -117,7 +124,7 @@ export default function CenterPanel({ state, reg, className = '' }: CenterPanelP
                 key={card.id}
                 card={card}
                 selected={state.selectedCard?.id === card.id}
-                onClick={() => state.selectCard(card)}
+                onClick={() => handleSelect(card)}
                 showRegistration={state.showRegistration}
                 isChecked={reg.checkedCards.has(card.id)}
                 isRegistered={!!reg.registered[card.id]}

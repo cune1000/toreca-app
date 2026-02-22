@@ -140,16 +140,20 @@ export default function LeftPanel({ state, className = '' }: LeftPanelProps) {
               <div className="flex justify-between">
                 <span>平均価格</span>
                 <span className="font-bold" style={{ fontFamily: 'var(--font-price)' }}>
-                  ${state.stats.avgPrice.toFixed(2)}
+                  {state.stats.avgPrice > 0 ? `$${state.stats.avgPrice.toFixed(2)}` : '--'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>最高</span>
-                <span style={{ fontFamily: 'var(--font-price)' }}>${state.stats.maxPrice.toFixed(2)}</span>
+                <span style={{ fontFamily: 'var(--font-price)' }}>
+                  {state.stats.maxPrice > 0 ? `$${state.stats.maxPrice.toFixed(2)}` : '--'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>最低</span>
-                <span style={{ fontFamily: 'var(--font-price)' }}>${state.stats.minPrice.toFixed(2)}</span>
+                <span style={{ fontFamily: 'var(--font-price)' }}>
+                  {state.stats.minPrice > 0 ? `$${state.stats.minPrice.toFixed(2)}` : '--'}
+                </span>
               </div>
             </div>
           </div>

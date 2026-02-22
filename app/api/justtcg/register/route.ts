@@ -95,10 +95,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: card })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Registration failed'
     console.error('JustTCG register error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Registration failed' },
+      { success: false, error: message },
       { status: 500 }
     )
   }

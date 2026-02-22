@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, ChevronDown, ChevronUp, Search as SearchIcon, ExternalLink } from 'lucide-react'
 import RarityBadge from './RarityBadge'
 import VariantRow from './VariantRow'
 import PriceHistoryChart from './PriceHistoryChart'
 import type { JTCard, PCMatch } from '../hooks/useJustTcgState'
-import { getNmVariant, formatUpdated } from '../hooks/useJustTcgState'
+import { getNmVariant, formatUpdated, isValidPrice } from '../hooks/useJustTcgState'
 
 interface RightPanelProps {
   card: JTCard | null
@@ -44,6 +44,9 @@ export default function RightPanel({
 }: RightPanelProps) {
   const [showChart, setShowChart] = useState(false)
 
+  // UI-05: カード切替時にチャートを閉じる
+  useEffect(() => { setShowChart(false) }, [card?.id])
+
   if (!card) return <aside className={`transition-all duration-300 w-0 overflow-hidden ${className}`} />
 
   const japaneseVariants = card.variants.filter(v => v.language === 'Japanese')
@@ -74,6 +77,7 @@ export default function RightPanel({
           </div>
           <button
             onClick={onClose}
+            aria-label="詳細パネルを閉じる"
             className="p-1 rounded-[var(--jtcg-radius)] hover:bg-gray-100 text-[var(--jtcg-text-muted)] shrink-0"
           >
             <X size={16} />
@@ -86,7 +90,7 @@ export default function RightPanel({
             <div className="flex items-baseline justify-between">
               <span className="text-xs text-[var(--jtcg-text-muted)]">NM 価格</span>
               <span className="text-lg font-bold text-[var(--jtcg-text)]" style={{ fontFamily: 'var(--font-price)' }}>
-                {nm.price != null ? `$${nm.price.toFixed(2)}` : '--'}
+                {isValidPrice(nm.price) ? `$${nm.price.toFixed(2)}` : '--'}
               </span>
             </div>
             <div className="text-[10px] text-[var(--jtcg-text-muted)] text-right mt-0.5">

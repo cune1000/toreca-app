@@ -4,7 +4,7 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import type { JTVariant } from '../hooks/useJustTcgState'
 
 function PriceChange({ change, label }: { change: number | null; label: string }) {
-  if (change == null) return null
+  if (change == null || isNaN(change)) return null
   const pct = change.toFixed(1)
   const isUp = change > 0
   const isDown = change < 0
@@ -39,19 +39,19 @@ export default function VariantRow({ variant }: { variant: JTVariant }) {
               ? 'bg-amber-100 text-amber-800'
               : 'bg-gray-200 text-gray-600'
           }`}>
-            {variant.language === 'Japanese' ? 'JA' : variant.language === 'English' ? 'EN' : variant.language?.slice(0, 2).toUpperCase()}
+            {variant.language === 'Japanese' ? 'JA' : variant.language === 'English' ? 'EN' : (variant.language || '??').slice(0, 2).toUpperCase()}
           </span>
         </div>
 
         <span className="font-bold shrink-0" style={{ fontFamily: 'var(--font-price)' }}>
-          {variant.price != null ? `$${variant.price.toFixed(2)}` : '--'}
+          {variant.price != null && !isNaN(variant.price) ? `$${variant.price.toFixed(2)}` : '--'}
         </span>
       </div>
 
       <div className="flex items-center gap-3 mt-1">
         <PriceChange change={variant.priceChange7d ?? null} label="7d" />
         <PriceChange change={variant.priceChange30d ?? null} label="30d" />
-        {variant.avgPrice != null && (
+        {variant.avgPrice != null && !isNaN(variant.avgPrice) && (
           <span className="text-[10px] text-[var(--jtcg-text-muted)]">
             avg: ${variant.avgPrice.toFixed(2)}
           </span>

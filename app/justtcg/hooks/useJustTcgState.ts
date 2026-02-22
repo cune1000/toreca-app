@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { getSetNameJa } from '@/lib/justtcg-set-names'
 import type { SortKey } from '../lib/constants'
 
@@ -63,10 +63,9 @@ export function getNmVariant(card: JTCard): JTVariant | undefined {
     || card.variants[0]
 }
 
-export function formatChange(change: number | null) {
-  if (change == null) return null
-  const pct = change.toFixed(1)
-  return { pct: Number(pct), label: change > 0 ? `+${pct}%` : `${pct}%` }
+/** 価格が有効な数値かチェック */
+export function isValidPrice(p: unknown): p is number {
+  return typeof p === 'number' && !isNaN(p) && isFinite(p)
 }
 
 export function formatUpdated(ts: number | null) {
@@ -102,12 +101,15 @@ export function useJustTcgState() {
   // PC検索
   const [pcMatches, setPcMatches] = useState<Record<string, PCMatch | null>>({})
   const [pcLoading, setPcLoading] = useState<Record<string, boolean>>({})
+  const pcLoadingRef = useRef(pcLoading)
+  pcLoadingRef.current = pcLoading
 
   // 登録モード
   const [showRegistration, setShowRegistration] = useState(false)
 
-  // セット取得（ゲーム変更時）
+  // セット取得（ゲーム変更時）— AbortController でレースコンディション防止
   useEffect(() => {
+    const controller = new AbortController()
     setLoadingSets(true)
     setSets([])
     setSelectedSetId('')
@@ -117,7 +119,7 @@ export function useJustTcgState() {
     setError('')
     setPcMatches({})
 
-    fetch(`/api/justtcg/sets?game=${encodeURIComponent(selectedGame)}`)
+    fetch(`/api/justtcg/sets?game=${encodeURIComponent(selectedGame)}`, { signal: controller.signal })
       .then(r => r.json())
       .then(res => {
         if (res.success) {
@@ -127,20 +129,27 @@ export function useJustTcgState() {
           setError(res.error || 'セット取得失敗')
         }
       })
-      .catch(e => setError(e.message))
-      .finally(() => setLoadingSets(false))
+      .catch(e => {
+        if (e.name !== 'AbortError') setError(e.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingSets(false)
+      })
+
+    return () => controller.abort()
   }, [selectedGame])
 
-  // カード取得（セット変更時）
+  // カード取得（セット変更時）— AbortController でレースコンディション防止
   useEffect(() => {
     if (!selectedSetId) { setCards([]); return }
+    const controller = new AbortController()
     setLoadingCards(true)
     setSearch('')
     setRarityFilter('')
     setSelectedCard(null)
     setPcMatches({})
 
-    fetch(`/api/justtcg/cards?set=${encodeURIComponent(selectedSetId)}&game=${encodeURIComponent(selectedGame)}`)
+    fetch(`/api/justtcg/cards?set=${encodeURIComponent(selectedSetId)}&game=${encodeURIComponent(selectedGame)}`, { signal: controller.signal })
       .then(r => r.json())
       .then(res => {
         if (res.success) {
@@ -150,17 +159,23 @@ export function useJustTcgState() {
           setError(res.error || 'カード取得失敗')
         }
       })
-      .catch(e => setError(e.message))
-      .finally(() => setLoadingCards(false))
+      .catch(e => {
+        if (e.name !== 'AbortError') setError(e.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingCards(false)
+      })
+
+    return () => controller.abort()
   }, [selectedSetId, selectedGame])
 
-  // レアリティ一覧
+  // レアリティ一覧（"None" を除外）
   const rarities = useMemo(() => {
-    const set = new Set(cards.map(c => c.rarity).filter(Boolean))
+    const set = new Set(cards.map(c => c.rarity).filter(r => r && r !== 'None'))
     return Array.from(set).sort()
   }, [cards])
 
-  // フィルタ・ソート済みカード
+  // フィルタ・ソート済みカード — BUG-01: price ソートも含めて全ソートを処理
   const filteredCards = useMemo(() => {
     let list = cards
 
@@ -178,29 +193,29 @@ export function useJustTcgState() {
       list = list.filter(c => c.variants.some(v => v.language === 'Japanese'))
     }
 
-    // ソート
-    if (sortBy !== 'price') {
-      list = [...list].sort((a, b) => {
-        let va: number | string = 0, vb: number | string = 0
-        if (sortBy === 'number') {
-          va = a.number; vb = b.number
-          return sortOrder === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
-        }
-        if (sortBy === 'name') {
-          va = a.name; vb = b.name
-          return sortOrder === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
-        }
-        if (sortBy === 'change7d') {
-          va = getNmVariant(a)?.priceChange7d ?? 0
-          vb = getNmVariant(b)?.priceChange7d ?? 0
-        }
-        if (sortBy === 'change30d') {
-          va = getNmVariant(a)?.priceChange30d ?? 0
-          vb = getNmVariant(b)?.priceChange30d ?? 0
-        }
-        return sortOrder === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number)
-      })
-    }
+    // ソート（price含む全モード）
+    list = [...list].sort((a, b) => {
+      let va: number | string = 0, vb: number | string = 0
+
+      if (sortBy === 'price') {
+        va = getNmVariant(a)?.price ?? -Infinity
+        vb = getNmVariant(b)?.price ?? -Infinity
+      } else if (sortBy === 'number') {
+        va = a.number; vb = b.number
+        return sortOrder === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
+      } else if (sortBy === 'name') {
+        va = a.name; vb = b.name
+        return sortOrder === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
+      } else if (sortBy === 'change7d') {
+        va = getNmVariant(a)?.priceChange7d ?? -Infinity
+        vb = getNmVariant(b)?.priceChange7d ?? -Infinity
+      } else if (sortBy === 'change30d') {
+        va = getNmVariant(a)?.priceChange30d ?? -Infinity
+        vb = getNmVariant(b)?.priceChange30d ?? -Infinity
+      }
+
+      return sortOrder === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number)
+    })
 
     return list
   }, [cards, search, rarityFilter, japaneseOnly, sortBy, sortOrder])
@@ -216,9 +231,9 @@ export function useJustTcgState() {
     )
   }, [sets, setFilterText])
 
-  // 統計
+  // 統計 — NaN ガード追加
   const stats = useMemo(() => {
-    const prices = cards.map(c => getNmVariant(c)?.price).filter((p): p is number => p != null && p > 0)
+    const prices = cards.map(c => getNmVariant(c)?.price).filter((p): p is number => isValidPrice(p) && p > 0)
     return {
       totalCards: cards.length,
       avgPrice: prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : 0,
@@ -227,9 +242,9 @@ export function useJustTcgState() {
     }
   }, [cards])
 
-  // PC検索
+  // PC検索 — BUG-02: useRef で pcLoading を参照し依存配列から除外
   const handlePcMatch = useCallback(async (card: JTCard) => {
-    if (pcLoading[card.id]) return
+    if (pcLoadingRef.current[card.id]) return
     setPcLoading(prev => ({ ...prev, [card.id]: true }))
     try {
       const res = await fetch('/api/justtcg/match', {
@@ -244,7 +259,7 @@ export function useJustTcgState() {
     } finally {
       setPcLoading(prev => ({ ...prev, [card.id]: false }))
     }
-  }, [pcLoading])
+  }, [])
 
   // アクション
   const selectSet = useCallback((setId: string) => {
@@ -260,41 +275,16 @@ export function useJustTcgState() {
   }, [])
 
   return {
-    // 状態
-    selectedGame,
-    sets,
-    selectedSetId,
-    cards,
-    selectedCard,
-    usage,
-    loadingSets,
-    loadingCards,
-    error,
-    search,
-    rarityFilter,
-    setFilterText,
-    sortBy,
-    sortOrder,
-    japaneseOnly,
-    pcMatches,
-    pcLoading,
-    showRegistration,
-    filteredCards,
-    filteredSets,
-    rarities,
-    stats,
+    selectedGame, sets, selectedSetId, cards, selectedCard, usage,
+    loadingSets, loadingCards, error,
+    search, rarityFilter, setFilterText, sortBy, sortOrder, japaneseOnly,
+    pcMatches, pcLoading, showRegistration,
+    filteredCards, filteredSets, rarities, stats,
     selectedSet: sets.find(s => s.id === selectedSetId) || null,
 
-    // アクション
-    setSelectedGame,
-    selectSet,
-    selectCard,
-    setSearch,
-    setRarityFilter,
-    setSetFilterText,
-    setSortBy,
-    setSortOrder,
-    setJapaneseOnly,
+    setSelectedGame, selectSet, selectCard,
+    setSearch, setRarityFilter, setSetFilterText,
+    setSortBy, setSortOrder, setJapaneseOnly,
     handlePcMatch,
     clearError: () => setError(''),
     toggleRegistration: () => setShowRegistration(p => !p),
