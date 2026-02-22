@@ -7,6 +7,8 @@ import SparklineChart from './SparklineChart'
 import type { JTCard } from '../hooks/useJustTcgState'
 import { getNmVariant, isValidPrice } from '../hooks/useJustTcgState'
 
+const EMPTY_HISTORY: Array<{ p: number; t: number }> = []
+
 interface CardListItemProps {
   card: JTCard
   selected: boolean
@@ -28,7 +30,7 @@ export default memo(function CardListItem({
 }: CardListItemProps) {
   const nm = getNmVariant(card)
   const hasJapanese = card.variants.some(v => v.language === 'Japanese')
-  const priceHistory = nm?.priceHistory || []
+  const priceHistory = nm?.priceHistory ?? EMPTY_HISTORY
   const change7d = nm?.priceChange7d
   const price = nm?.price
 

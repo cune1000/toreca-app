@@ -17,6 +17,7 @@ export default function JustTcgExplorer() {
 
   const gameName = GAME_OPTIONS.find(g => g.id === state.selectedGame)?.short || 'JustTCG'
   const card = state.selectedCard
+  const hasCards = state.cards.length > 0
 
   // モバイルでカード選択時にフィルタドロワーを閉じる
   const handleSelectCard = useCallback((c: JTCard | null) => {
@@ -50,6 +51,28 @@ export default function JustTcgExplorer() {
   const handlePcMatch = useCallback(() => { if (card) state.handlePcMatch(card) }, [card, state.handlePcMatch])
   const handleJaNameChange = useCallback((v: string) => { if (card) reg.setJaName(card.id, v) }, [card, reg.setJaName])
   const handleRegister = useCallback(() => { if (card) reg.handleRegister(card) }, [card, reg.handleRegister])
+
+  // LeftPanel共通props（デスクトップ・モバイル両方で使用）
+  const leftPanelProps = {
+    selectedGame: state.selectedGame,
+    setSelectedGame: state.setSelectedGame,
+    setFilterText: state.setFilterText,
+    setSetFilterText: state.setSetFilterText,
+    filteredSets: state.filteredSets,
+    selectedSetId: state.selectedSetId,
+    selectSet: state.selectSet,
+    loadingSets: state.loadingSets,
+    sortBy: state.sortBy,
+    setSortBy: state.setSortBy,
+    sortOrder: state.sortOrder,
+    setSortOrder: state.setSortOrder,
+    japaneseOnly: state.japaneseOnly,
+    setJapaneseOnly: state.setJapaneseOnly,
+    hasCards,
+    stats: state.stats,
+    showRegistration: state.showRegistration,
+    toggleRegistration: state.toggleRegistration,
+  } as const
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden supports-[height:100dvh]:h-dvh" style={{ height: '100vh' }}>
@@ -104,7 +127,7 @@ export default function JustTcgExplorer() {
 
       {/* 3カラム本体 */}
       <div className="flex flex-1 overflow-hidden">
-        <LeftPanel state={state} className="w-56 shrink-0 hidden lg:block" />
+        <LeftPanel {...leftPanelProps} className="w-56 shrink-0 hidden lg:block" />
         <CenterPanel state={state} reg={reg} onSelectCard={handleSelectCard} className="flex-1 min-w-0" />
         <div className="hidden lg:block">
           <RightPanel
@@ -139,7 +162,7 @@ export default function JustTcgExplorer() {
                 <X size={16} />
               </button>
             </div>
-            <LeftPanel state={state} className="h-full overflow-y-auto" />
+            <LeftPanel {...leftPanelProps} className="h-full overflow-y-auto" />
           </div>
         </div>
       )}
@@ -154,6 +177,7 @@ export default function JustTcgExplorer() {
               card={card}
               open={true}
               onClose={handleClosePanel}
+              scrollable={false}
               className="w-full"
               showRegistration={state.showRegistration}
               pcMatch={state.pcMatches[card.id]}

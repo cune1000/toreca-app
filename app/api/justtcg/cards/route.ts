@@ -67,7 +67,9 @@ export async function GET(request: NextRequest) {
       if (oldest) cache.delete(oldest[0])
     }
 
-    return NextResponse.json({ success: true, ...responseData, usage, cached: false })
+    return NextResponse.json({ success: true, ...responseData, usage, cached: false }, {
+      headers: { 'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800' },
+    })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch cards'
     console.error('JustTCG cards error:', error)

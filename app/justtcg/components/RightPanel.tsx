@@ -27,6 +27,8 @@ interface RightPanelProps {
   isRegistering?: boolean
   registerError?: string
   onRegister?: () => void
+  /** false でスクロールを外部コンテナに委任（モバイルボトムシート用） */
+  scrollable?: boolean
 }
 
 export default memo(function RightPanel({
@@ -44,6 +46,7 @@ export default memo(function RightPanel({
   isRegistering,
   registerError,
   onRegister,
+  scrollable = true,
 }: RightPanelProps) {
   const [showChart, setShowChart] = useState(false)
 
@@ -60,7 +63,7 @@ export default memo(function RightPanel({
   return (
     <aside
       aria-label="カード詳細"
-      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] overflow-y-auto transition-[width,opacity] duration-300 ease-in-out shrink-0 ${
+      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} transition-[width,opacity] duration-300 ease-in-out shrink-0 ${
         open ? 'w-80 opacity-100' : 'w-0 opacity-0 overflow-hidden'
       } ${className}`}
     >

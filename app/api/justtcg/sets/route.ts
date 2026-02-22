@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
       data: result.data,
       usage: result.usage,
       cached: false,
+    }, {
+      headers: { 'Cache-Control': 'public, max-age=1800, stale-while-revalidate=3600' },
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch sets'
