@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { getSetNameJa, extractSetCode, extractReleaseYear } from '@/lib/justtcg-set-names'
 import type { JTCard, JTSet, PCMatch } from './useJustTcgState'
 
@@ -16,6 +16,20 @@ export function useRegistration(
   const [registered, setRegistered] = useState<Record<string, boolean>>({})
   const [registerError, setRegisterError] = useState<Record<string, string>>({})
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null)
+
+  // セット切替時にステートをリセット（registeredは保持しない — 別セットのIDなので無意味）
+  const prevSetId = useRef(selectedSet?.id)
+  useEffect(() => {
+    if (selectedSet?.id !== prevSetId.current) {
+      prevSetId.current = selectedSet?.id
+      setCheckedCards(new Set())
+      setJaNames({})
+      setRegistering({})
+      setRegistered({})
+      setRegisterError({})
+      setBulkProgress(null)
+    }
+  }, [selectedSet?.id])
 
   const toggleCheck = useCallback((cardId: string) => {
     setCheckedCards(prev => {

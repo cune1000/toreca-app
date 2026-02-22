@@ -34,12 +34,16 @@ export default memo(function CardListItem({
 
   return (
     <div
-      className={`flex items-center gap-2 px-3 py-2.5 rounded-[var(--jtcg-radius)] cursor-pointer transition-all ${
+      role="option"
+      aria-selected={selected}
+      tabIndex={0}
+      className={`flex items-center gap-2 px-3 py-2.5 rounded-[var(--jtcg-radius)] cursor-pointer transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--jtcg-ink-light)] ${
         selected
-          ? 'bg-[var(--jtcg-ink)]/5 border-l-2 border-[var(--jtcg-ink)]'
+          ? 'bg-[rgba(45,90,155,0.08)] border-l-2 border-[var(--jtcg-ink)]'
           : 'border-l-2 border-transparent hover:bg-gray-50/80'
       } ${isRegistered ? 'opacity-40' : ''}`}
       onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
     >
       {showRegistration && (
         <div className="shrink-0" onClick={e => e.stopPropagation()}>

@@ -61,7 +61,7 @@ export default function LeftPanel({ state, className = '' }: LeftPanelProps) {
                   onClick={() => state.selectSet(s.id)}
                   className={`w-full text-left px-2.5 py-1.5 rounded-[var(--jtcg-radius)] text-xs transition-colors ${
                     state.selectedSetId === s.id
-                      ? 'bg-[var(--jtcg-ink)]/10 text-[var(--jtcg-ink)] font-bold border-l-2 border-[var(--jtcg-ink)]'
+                      ? 'bg-[rgba(27,58,107,0.1)] text-[var(--jtcg-ink)] font-bold border-l-2 border-[var(--jtcg-ink)]'
                       : 'text-[var(--jtcg-text)] hover:bg-gray-50'
                   }`}
                 >

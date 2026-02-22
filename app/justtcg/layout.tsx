@@ -11,8 +11,9 @@ const playfair = Playfair_Display({
 const notoSans = Noto_Sans_JP({
   subsets: ['latin'],
   variable: '--font-body-ja',
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '700'],
   display: 'swap',
+  preload: false, // 日本語はUnicodeレンジ分割で自動ロード
 })
 
 const sourceSans = Source_Sans_3({

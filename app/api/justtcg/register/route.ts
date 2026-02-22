@@ -3,8 +3,31 @@ import { createServiceClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
+// レート制限（IPごとに5秒間隔）
+const lastRegisterMap = new Map<string, number>()
+const REGISTER_RATE_MS = 5_000
+
 export async function POST(request: NextRequest) {
   try {
+    // レート制限
+    const clientIp = (request.headers.get('x-forwarded-for') || 'unknown').split(',')[0].trim()
+    const now = Date.now()
+    const last = lastRegisterMap.get(clientIp) || 0
+    if (now - last < REGISTER_RATE_MS) {
+      return NextResponse.json(
+        { success: false, error: '登録リクエストが多すぎます。少し待ってください。' },
+        { status: 429 }
+      )
+    }
+    lastRegisterMap.set(clientIp, now)
+
+    // 古いエントリのクリーンアップ
+    if (lastRegisterMap.size > 50) {
+      for (const [ip, ts] of lastRegisterMap) {
+        if (now - ts > REGISTER_RATE_MS * 10) lastRegisterMap.delete(ip)
+      }
+    }
+
     const body = await request.json()
     const {
       name,
@@ -23,9 +46,17 @@ export async function POST(request: NextRequest) {
       game,
     } = body
 
-    if (!name || !justtcg_id) {
+    if (!name || !justtcg_id || typeof name !== 'string' || typeof justtcg_id !== 'string') {
       return NextResponse.json(
         { success: false, error: 'name と justtcg_id は必須です' },
+        { status: 400 }
+      )
+    }
+
+    // 入力長制限
+    if (name.length > 200 || justtcg_id.length > 200) {
+      return NextResponse.json(
+        { success: false, error: '入力が長すぎます' },
         { status: 400 }
       )
     }

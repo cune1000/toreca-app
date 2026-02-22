@@ -1,5 +1,7 @@
 'use client'
 
+import { useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search, Package } from 'lucide-react'
 import CardListItem from './CardListItem'
 import type { useJustTcgState } from '../hooks/useJustTcgState'
@@ -16,8 +18,20 @@ interface CenterPanelProps {
   className?: string
 }
 
+const ROW_HEIGHT = 48
+
 export default function CenterPanel({ state, reg, onSelectCard, className = '' }: CenterPanelProps) {
   const handleSelect = onSelectCard || state.selectCard
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const virtualizer = useVirtualizer({
+    count: state.filteredCards.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  })
+
+  const showList = !state.loadingSets && !!state.selectedSetId && !state.loadingCards && state.filteredCards.length > 0
 
   return (
     <main className={`flex flex-col overflow-hidden ${className}`}>
@@ -66,7 +80,7 @@ export default function CenterPanel({ state, reg, onSelectCard, className = '' }
           )}
         </div>
 
-        {/* 登録ツールバー — UI-07: checkedCount === 0 でも全選択ボタンを表示 */}
+        {/* 登録ツールバー */}
         {state.showRegistration && state.filteredCards.length > 0 && (
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--jtcg-border)]">
             <div className="flex items-center gap-2">
@@ -103,7 +117,7 @@ export default function CenterPanel({ state, reg, onSelectCard, className = '' }
       </div>
 
       {/* カードリスト */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {state.loadingSets ? (
           <div className="flex flex-col items-center justify-center h-full text-[var(--jtcg-text-muted)]">
             <div className="w-6 h-6 border-2 border-[var(--jtcg-border)] border-t-[var(--jtcg-ink)] rounded-full animate-spin" />
@@ -124,22 +138,38 @@ export default function CenterPanel({ state, reg, onSelectCard, className = '' }
           <div className="flex flex-col items-center justify-center h-full text-[var(--jtcg-text-muted)]">
             <p className="text-sm">該当するカードがありません</p>
           </div>
-        ) : (
-          <div className="p-2 space-y-0.5">
-            {state.filteredCards.map(card => (
-              <CardListItem
-                key={card.id}
-                card={card}
-                selected={state.selectedCard?.id === card.id}
-                onClick={() => handleSelect(card)}
-                showRegistration={state.showRegistration}
-                isChecked={reg.checkedCards.has(card.id)}
-                isRegistered={!!reg.registered[card.id]}
-                onToggleCheck={() => reg.toggleCheck(card.id)}
-              />
-            ))}
+        ) : showList ? (
+          <div
+            className="p-2"
+            style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}
+          >
+            {virtualizer.getVirtualItems().map(virtualRow => {
+              const card = state.filteredCards[virtualRow.index]
+              return (
+                <div
+                  key={card.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <CardListItem
+                    card={card}
+                    selected={state.selectedCard?.id === card.id}
+                    onClick={() => handleSelect(card)}
+                    showRegistration={state.showRegistration}
+                    isChecked={reg.checkedCards.has(card.id)}
+                    isRegistered={!!reg.registered[card.id]}
+                    onToggleCheck={() => reg.toggleCheck(card.id)}
+                  />
+                </div>
+              )
+            })}
           </div>
-        )}
+        ) : null}
       </div>
     </main>
   )

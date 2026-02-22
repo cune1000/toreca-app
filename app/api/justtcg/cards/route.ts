@@ -26,7 +26,13 @@ export async function GET(request: NextRequest) {
     const now = Date.now()
     const cached = cache.get(cacheKey)
     if (cached && now - cached.at < CACHE_TTL) {
-      return NextResponse.json({ success: true, data: cached.data.data, total: cached.data.total, cached: true })
+      return NextResponse.json({
+        success: true,
+        data: cached.data.data,
+        total: cached.data.total,
+        usage: cached.data.usage || null,
+        cached: true,
+      })
     }
 
     // 全カード取得（Professional: limit=100, 100req/min）
@@ -46,7 +52,7 @@ export async function GET(request: NextRequest) {
       offset += limit
     }
 
-    const responseData = { data: allCards, total: allCards.length }
+    const responseData = { data: allCards, total: allCards.length, usage }
     cache.set(cacheKey, { data: responseData, at: now })
 
     // キャッシュサイズ制限（古いエントリを削除）
