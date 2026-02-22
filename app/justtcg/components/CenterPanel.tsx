@@ -159,11 +159,11 @@ export default function CenterPanel({ state, reg, onSelectCard, className = '' }
                   <CardListItem
                     card={card}
                     selected={state.selectedCard?.id === card.id}
-                    onClick={() => handleSelect(card)}
+                    onSelect={handleSelect}
                     showRegistration={state.showRegistration}
                     isChecked={reg.checkedCards.has(card.id)}
                     isRegistered={!!reg.registered[card.id]}
-                    onToggleCheck={() => reg.toggleCheck(card.id)}
+                    onToggleCheck={reg.toggleCheck}
                   />
                 </div>
               )

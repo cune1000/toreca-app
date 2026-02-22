@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { getSetNameJa, extractSetCode, extractReleaseYear } from '@/lib/justtcg-set-names'
 import type { JTCard, JTSet, PCMatch } from './useJustTcgState'
 
@@ -57,8 +57,12 @@ export function useRegistration(
     setJaNames(prev => ({ ...prev, [cardId]: name }))
   }, [])
 
+  // jaNames を ref で保持し、handleRegister の deps から除外（stale closure 防止）
+  const jaNamesRef = useRef(jaNames)
+  jaNamesRef.current = jaNames
+
   const handleRegister = useCallback(async (card: JTCard) => {
-    const jaName = jaNames[card.id]?.trim()
+    const jaName = jaNamesRef.current[card.id]?.trim()
     if (!jaName) {
       setRegisterError(prev => ({ ...prev, [card.id]: '日本語名を入力してください' }))
       return
@@ -111,7 +115,7 @@ export function useRegistration(
     } finally {
       setRegistering(prev => ({ ...prev, [card.id]: false }))
     }
-  }, [jaNames, pcMatches, selectedSet, selectedGame])
+  }, [pcMatches, selectedSet, selectedGame])
 
   const handleBulkRegister = useCallback(async () => {
     const toRegister = cards.filter(c => checkedCards.has(c.id) && !registered[c.id])
@@ -123,15 +127,10 @@ export function useRegistration(
     setBulkProgress(null)
   }, [cards, checkedCards, registered, handleRegister])
 
-  const reset = useCallback(() => {
-    setCheckedCards(new Set())
-    setJaNames({})
-    setRegistered({})
-    setRegisterError({})
-  }, [])
-
   const checkedCount = checkedCards.size
-  const readyCount = cards.filter(c => checkedCards.has(c.id) && jaNames[c.id]?.trim() && !registered[c.id]).length
+  const readyCount = useMemo(() =>
+    cards.filter(c => checkedCards.has(c.id) && jaNames[c.id]?.trim() && !registered[c.id]).length
+  , [cards, checkedCards, jaNames, registered])
 
   return {
     checkedCards,
@@ -147,6 +146,5 @@ export function useRegistration(
     setJaName,
     handleRegister,
     handleBulkRegister,
-    reset,
   }
 }

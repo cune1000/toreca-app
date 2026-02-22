@@ -148,6 +148,7 @@ export function useJustTcgState() {
     setRarityFilter('')
     setSelectedCard(null)
     setPcMatches({})
+    setPcLoading({})
 
     fetch(`/api/justtcg/cards?set=${encodeURIComponent(selectedSetId)}&game=${encodeURIComponent(selectedGame)}`, { signal: controller.signal })
       .then(r => r.json())
@@ -237,8 +238,8 @@ export function useJustTcgState() {
     return {
       totalCards: cards.length,
       avgPrice: prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : 0,
-      maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
-      minPrice: prices.length > 0 ? Math.min(...prices) : 0,
+      maxPrice: prices.length > 0 ? prices.reduce((a, b) => a > b ? a : b, -Infinity) : 0,
+      minPrice: prices.length > 0 ? prices.reduce((a, b) => a < b ? a : b, Infinity) : 0,
     }
   }, [cards])
 
@@ -277,19 +278,27 @@ export function useJustTcgState() {
     setSelectedCard(card)
   }, [])
 
+  // selectedSet メモ化（毎レンダーの sets.find を防止）
+  const selectedSet = useMemo(() =>
+    sets.find(s => s.id === selectedSetId) || null
+  , [sets, selectedSetId])
+
+  const clearError = useCallback(() => setError(''), [])
+  const toggleRegistration = useCallback(() => setShowRegistration(p => !p), [])
+
   return {
     selectedGame, sets, selectedSetId, cards, selectedCard, usage,
     loadingSets, loadingCards, error,
     search, rarityFilter, setFilterText, sortBy, sortOrder, japaneseOnly,
     pcMatches, pcLoading, showRegistration,
     filteredCards, filteredSets, rarities, stats,
-    selectedSet: sets.find(s => s.id === selectedSetId) || null,
+    selectedSet,
 
     setSelectedGame, selectSet, selectCard,
     setSearch, setRarityFilter, setSetFilterText,
     setSortBy, setSortOrder, setJapaneseOnly,
     handlePcMatch,
-    clearError: () => setError(''),
-    toggleRegistration: () => setShowRegistration(p => !p),
+    clearError,
+    toggleRegistration,
   }
 }

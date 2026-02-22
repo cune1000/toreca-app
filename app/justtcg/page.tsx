@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Menu, X, Settings2 } from 'lucide-react'
 import { useJustTcgState } from './hooks/useJustTcgState'
 import { useRegistration } from './hooks/useRegistration'
@@ -8,6 +8,7 @@ import LeftPanel from './components/LeftPanel'
 import CenterPanel from './components/CenterPanel'
 import RightPanel from './components/RightPanel'
 import { GAME_OPTIONS } from './lib/constants'
+import type { JTCard } from './hooks/useJustTcgState'
 
 export default function JustTcgExplorer() {
   const state = useJustTcgState()
@@ -17,14 +18,41 @@ export default function JustTcgExplorer() {
   const gameName = GAME_OPTIONS.find(g => g.id === state.selectedGame)?.short || 'JustTCG'
   const card = state.selectedCard
 
-  // UI-01: モバイルでカード選択時にフィルタドロワーを閉じる
-  const handleSelectCard = (c: typeof card) => {
+  // モバイルでカード選択時にフィルタドロワーを閉じる
+  const handleSelectCard = useCallback((c: JTCard | null) => {
     state.selectCard(c)
     if (c) setMobileFilterOpen(false)
-  }
+  }, [state.selectCard])
+
+  // モバイルオーバーレイのスクロールロック
+  const isOverlayOpen = mobileFilterOpen || !!card
+  useEffect(() => {
+    if (isOverlayOpen) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [isOverlayOpen])
+
+  // ESCキーでオーバーレイを閉じる
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (card) state.selectCard(null)
+        else if (mobileFilterOpen) setMobileFilterOpen(false)
+      }
+    }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [card, mobileFilterOpen, state.selectCard])
+
+  // RightPanel用の安定コールバック
+  const handleClosePanel = useCallback(() => state.selectCard(null), [state.selectCard])
+  const handlePcMatch = useCallback(() => { if (card) state.handlePcMatch(card) }, [card, state.handlePcMatch])
+  const handleJaNameChange = useCallback((v: string) => { if (card) reg.setJaName(card.id, v) }, [card, reg.setJaName])
+  const handleRegister = useCallback(() => { if (card) reg.handleRegister(card) }, [card, reg.handleRegister])
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-dvh flex flex-col overflow-hidden supports-[height:100dvh]:h-dvh" style={{ height: '100vh' }}>
       {/* ヘッダー */}
       <header className="border-b border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] px-4 py-2.5 shrink-0 z-20">
         <div className="flex items-center justify-between gap-3">
@@ -82,23 +110,23 @@ export default function JustTcgExplorer() {
           <RightPanel
             card={card}
             open={!!card}
-            onClose={() => state.selectCard(null)}
+            onClose={handleClosePanel}
             showRegistration={state.showRegistration}
             pcMatch={card ? state.pcMatches[card.id] : undefined}
             pcLoading={card ? state.pcLoading[card.id] : false}
-            onPcMatch={() => card && state.handlePcMatch(card)}
+            onPcMatch={handlePcMatch}
             jaName={card ? reg.jaNames[card.id] : ''}
-            onJaNameChange={v => card && reg.setJaName(card.id, v)}
+            onJaNameChange={handleJaNameChange}
             isRegistered={card ? !!reg.registered[card.id] : false}
             isRegistering={card ? !!reg.registering[card.id] : false}
             registerError={card ? reg.registerError[card.id] : ''}
-            onRegister={() => card && reg.handleRegister(card)}
+            onRegister={handleRegister}
           />
         </div>
       </div>
 
-      {/* モバイル: 左パネルドロワー */}
-      {mobileFilterOpen && (
+      {/* モバイル: 左パネルドロワー（カード詳細が開いていたら非表示） */}
+      {mobileFilterOpen && !card && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileFilterOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-[var(--jtcg-surface)] shadow-xl">
@@ -119,24 +147,24 @@ export default function JustTcgExplorer() {
       {/* モバイル: カード詳細ボトムシート */}
       {card && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/30" onClick={() => state.selectCard(null)} />
-          <div className="absolute bottom-0 left-0 right-0 max-h-[85vh] bg-[var(--jtcg-surface)] rounded-t-2xl overflow-y-auto shadow-xl">
+          <div className="absolute inset-0 bg-black/30" onClick={handleClosePanel} />
+          <div className="absolute bottom-0 left-0 right-0 max-h-[85dvh] bg-[var(--jtcg-surface)] rounded-t-2xl overflow-y-auto shadow-xl overscroll-contain" style={{ maxHeight: '85vh' }}>
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-2 mb-1" />
             <RightPanel
               card={card}
               open={true}
-              onClose={() => state.selectCard(null)}
+              onClose={handleClosePanel}
               className="w-full"
               showRegistration={state.showRegistration}
               pcMatch={state.pcMatches[card.id]}
               pcLoading={state.pcLoading[card.id]}
-              onPcMatch={() => state.handlePcMatch(card)}
+              onPcMatch={handlePcMatch}
               jaName={reg.jaNames[card.id] || ''}
-              onJaNameChange={v => reg.setJaName(card.id, v)}
+              onJaNameChange={handleJaNameChange}
               isRegistered={!!reg.registered[card.id]}
               isRegistering={!!reg.registering[card.id]}
               registerError={reg.registerError[card.id] || ''}
-              onRegister={() => reg.handleRegister(card)}
+              onRegister={handleRegister}
             />
           </div>
         </div>
