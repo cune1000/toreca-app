@@ -65,7 +65,7 @@ export function getNmVariant(card: JTCard): JTVariant | undefined {
 
 export function formatChange(change: number | null) {
   if (change == null) return null
-  const pct = (change * 100).toFixed(1)
+  const pct = change.toFixed(1)
   return { pct: Number(pct), label: change > 0 ? `+${pct}%` : `${pct}%` }
 }
 

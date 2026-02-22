@@ -98,7 +98,7 @@ export default function CardListItem({
             change7d > 0 ? 'text-[var(--jtcg-up)]' : change7d < 0 ? 'text-[var(--jtcg-down)]' : 'text-[var(--jtcg-text-muted)]'
           }`}>
             {change7d > 0 ? <TrendingUp size={10} /> : change7d < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-            {change7d > 0 ? '+' : ''}{(change7d * 100).toFixed(1)}%
+            {change7d > 0 ? '+' : ''}{change7d.toFixed(1)}%
           </span>
         ) : null}
       </div>

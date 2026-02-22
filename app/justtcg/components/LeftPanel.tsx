@@ -67,7 +67,7 @@ export default function LeftPanel({ state, className = '' }: LeftPanelProps) {
                 >
                   <span className="block truncate">{getSetNameJa(s.id, s.name)}</span>
                   <span className="text-[10px] text-[var(--jtcg-text-muted)]">
-                    {s.cards_count}枚{s.release_date ? ` / ${s.release_date}` : ''}
+                    {s.cards_count}枚{s.release_date ? ` / ${s.release_date.slice(0, 10)}` : ''}
                   </span>
                 </button>
               ))

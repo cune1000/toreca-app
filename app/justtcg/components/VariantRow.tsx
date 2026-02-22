@@ -5,7 +5,7 @@ import type { JTVariant } from '../hooks/useJustTcgState'
 
 function PriceChange({ change, label }: { change: number | null; label: string }) {
   if (change == null) return null
-  const pct = (change * 100).toFixed(1)
+  const pct = change.toFixed(1)
   const isUp = change > 0
   const isDown = change < 0
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
