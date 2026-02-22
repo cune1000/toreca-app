@@ -47,6 +47,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 }, { status: 400 })
             }
 
+            // LOTモード: ロットのバリデーションを在庫減算の前に実行（失敗時に在庫が壊れないようにする）
+            let lotRemainingQty = 0
+            if (item.lot_id) {
+                const { data: lot } = await supabase.from('pos_lots').select('remaining_qty').eq('id', item.lot_id).single()
+                if (lot) {
+                    if (lot.remaining_qty < item.quantity) {
+                        return NextResponse.json({
+                            success: false,
+                            error: `ロットの残数が不足しています（残: ${lot.remaining_qty}点、必要: ${item.quantity}点）。返却後に同ロットから販売・持ち出しが行われた可能性があります`,
+                        }, { status: 400 })
+                    }
+                    lotRemainingQty = lot.remaining_qty
+                }
+            }
+
             const newQty = currentQty - item.quantity
             const { error: invUpdateError } = await supabase
                 .from('pos_inventory')
@@ -54,13 +69,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 .eq('id', item.inventory_id)
             if (invUpdateError) throw invUpdateError
 
-            // LOTモード: ロットのremaining_qtyを再び減らす（返却を取消すので）
-            if (item.lot_id) {
-                const { data: lot } = await supabase.from('pos_lots').select('remaining_qty').eq('id', item.lot_id).single()
-                if (lot) {
-                    const { error: lotErr } = await supabase.from('pos_lots').update({ remaining_qty: lot.remaining_qty - item.quantity }).eq('id', item.lot_id)
-                    if (lotErr) throw lotErr
-                }
+            // LOTモード: ロットのremaining_qtyを再び減らす（バリデーション済み）
+            if (item.lot_id && lotRemainingQty > 0) {
+                const { error: lotErr } = await supabase.from('pos_lots').update({ remaining_qty: lotRemainingQty - item.quantity }).eq('id', item.lot_id)
+                if (lotErr) throw lotErr
             }
 
             // 履歴記録

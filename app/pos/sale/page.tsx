@@ -79,7 +79,9 @@ function SalePage() {
             : calculateProfit(parseInt(unitPrice) || 0, selectedInv.avg_purchase_price, quantity, selectedInv.avg_expense_per_unit || 0)
         : null
 
-    const maxQuantity = selectedLot ? selectedLot.remaining_qty : (selectedInv?.quantity || 0)
+    const maxQuantity = selectedLot
+        ? Math.min(selectedLot.remaining_qty, selectedInv?.quantity || 0)
+        : (selectedInv?.quantity || 0)
 
     const handleSubmit = async () => {
         if (!selectedInv || unitPrice === '') return
@@ -142,13 +144,13 @@ function SalePage() {
                     </div>
 
                     <div className="space-y-3">
-                        {Object.entries(grouped).map(([name, { items, catalog }]) => (
-                            <div key={name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        {Object.entries(grouped).map(([key, { items, catalog }]) => (
+                            <div key={key} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                                 {/* 商品ヘッダー */}
                                 <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-50">
                                     <CardThumbnail url={catalog?.image_url} size="sm" name={catalog?.name} />
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-gray-800 truncate">{name}</p>
+                                        <p className="text-sm font-bold text-gray-800 truncate">{catalog?.name || '不明'}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <span className="text-xs text-gray-400">{catalog?.category || '-'}</span>
                                             {catalog?.fixed_price && (

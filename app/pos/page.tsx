@@ -50,10 +50,6 @@ export default function PosDashboard() {
                         className="px-3 sm:px-4 py-3 bg-purple-50 text-purple-700 rounded-lg text-sm font-bold hover:bg-purple-100 transition-colors disabled:opacity-50"
                     >{refreshing ? '更新中...' : '📈 相場更新'}</button>
                     <button
-                        onClick={() => router.push('/pos/purchase')}
-                        className="flex-1 sm:flex-none px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
-                    >💰 仕入れ</button>
-                    <button
                         onClick={() => router.push('/pos/sale')}
                         className="flex-1 sm:flex-none px-4 sm:px-6 py-3 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
                     >🛒 販売</button>

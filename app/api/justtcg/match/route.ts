@@ -1,0 +1,75 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { searchProducts } from '@/lib/pricecharting-api'
+
+export const dynamic = 'force-dynamic'
+
+// レート制限（IPごとに3秒間隔）
+const lastRequestMap = new Map<string, number>()
+const RATE_LIMIT_MS = 3_000
+
+export async function POST(request: NextRequest) {
+  try {
+    // レート制限
+    const clientIp = (request.headers.get('x-forwarded-for') || 'unknown').split(',')[0].trim()
+    const now = Date.now()
+    const last = lastRequestMap.get(clientIp) || 0
+    if (now - last < RATE_LIMIT_MS) {
+      return NextResponse.json(
+        { success: false, error: 'リクエストが多すぎます。少し待ってください。' },
+        { status: 429 }
+      )
+    }
+    lastRequestMap.set(clientIp, now)
+
+    const body = await request.json()
+    const { name, number: cardNumber } = body
+
+    if (!name) {
+      return NextResponse.json(
+        { success: false, error: 'name が必要です' },
+        { status: 400 }
+      )
+    }
+
+    // PriceCharting検索: 英語名 + "japanese"
+    const query = `${name} japanese`
+    const products = await searchProducts(query)
+
+    if (!products || products.length === 0) {
+      return NextResponse.json({ success: true, data: null, message: 'マッチなし' })
+    }
+
+    // カード番号でフィルタリング
+    let matched = products
+    if (cardNumber) {
+      // "115/080" -> "115" (スラッシュ前)
+      const num = cardNumber.split('/')[0]
+      const filtered = products.filter(p => {
+        const pName = p['product-name'] || ''
+        return pName.includes(`#${num}`) || pName.includes(`# ${num}`)
+      })
+      if (filtered.length > 0) matched = filtered
+    }
+
+    // 最もマッチ度が高い結果を返却
+    const best = matched[0]
+    const loosePrice = best['loose-price'] || null
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: best.id,
+        name: best['product-name'],
+        consoleName: best['console-name'],
+        loosePrice,
+        loosePriceDollars: loosePrice != null ? loosePrice / 100 : null,
+      },
+    })
+  } catch (error: any) {
+    console.error('JustTCG match error:', error)
+    return NextResponse.json(
+      { success: false, error: error.message || 'Match failed' },
+      { status: 500 }
+    )
+  }
+}

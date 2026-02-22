@@ -4,13 +4,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
-    { key: 'dashboard', icon: '📊', label: 'ダッシュボード', shortLabel: 'ホーム', href: '/pos' },
-    { key: 'catalog', icon: '📋', label: 'カタログ・在庫', shortLabel: '在庫', href: '/pos/catalog' },
-    { key: 'purchase', icon: '💰', label: '仕入れ登録', shortLabel: '仕入れ', href: '/pos/purchase' },
-    { key: 'sale', icon: '🛒', label: '販売登録', shortLabel: '販売', href: '/pos/sale' },
-    { key: 'checkout', icon: '📦', label: '持ち出し管理', shortLabel: '持出し', href: '/pos/checkout' },
-    { key: 'history', icon: '📜', label: '取引履歴', shortLabel: '履歴', href: '/pos/history' },
+    { key: 'dashboard', icon: '📊', label: 'ダッシュボード', shortLabel: 'ホーム', href: '/pos', mobile: true },
+    { key: 'catalog', icon: '📋', label: 'カタログ・在庫', shortLabel: '在庫', href: '/pos/catalog', mobile: true },
+    { key: 'sale', icon: '🛒', label: '販売登録', shortLabel: '販売', href: '/pos/sale', mobile: true },
+    { key: 'checkout', icon: '📦', label: '持ち出し管理', shortLabel: '持出し', href: '/pos/checkout', mobile: true },
+    { key: 'sources', icon: '🏢', label: '仕入先', shortLabel: '仕入先', href: '/pos/sources', mobile: false },
+    { key: 'history', icon: '📜', label: '取引履歴', shortLabel: '履歴', href: '/pos/history', mobile: true },
 ]
+
+const MOBILE_NAV = NAV_ITEMS.filter(i => i.mobile)
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
@@ -55,7 +57,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             {/* モバイル ボトムナビ */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 safe-area-pb">
                 <div className="flex justify-around items-center h-16">
-                    {NAV_ITEMS.map(item => {
+                    {MOBILE_NAV.map(item => {
                         const active = pathname === item.href || (item.href !== '/pos' && pathname.startsWith(item.href))
                         return (
                             <Link

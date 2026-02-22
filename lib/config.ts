@@ -22,3 +22,8 @@ export const CRON_SECRET = process.env.CRON_SECRET
  * PriceCharting APIトークン
  */
 export const PRICECHARTING_TOKEN = process.env.PRICECHARTING_TOKEN
+
+/**
+ * JustTCG APIキー
+ */
+export const JUSTTCG_API_KEY = process.env.JUSTTCG_API_KEY

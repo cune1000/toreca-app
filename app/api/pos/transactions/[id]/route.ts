@@ -102,19 +102,17 @@ async function recalculateInventory(inventoryId: string) {
         }
     }
 
-    // 影響のあるロットの remaining_qty を一括更新
-    const allLotIds = new Set([...Object.keys(lotSoldQty), ...Object.keys(lotCheckoutQty)])
-    for (const lotId of allLotIds) {
-        const { data: lot } = await supabase.from('pos_lots').select('quantity').eq('id', lotId).single()
-        if (lot) {
-            const sold = lotSoldQty[lotId] || 0
-            const checkedOut = lotCheckoutQty[lotId] || 0
-            const remaining = lot.quantity - sold - checkedOut
-            const { error: lotUpdateError } = await supabase.from('pos_lots').update({
-                remaining_qty: Math.max(0, remaining),
-            }).eq('id', lotId)
-            if (lotUpdateError) throw lotUpdateError
-        }
+    // このinventory_idに紐づく全ロットの remaining_qty を再計算
+    // （販売/checkoutがないロットも含む。数量編集時にlot.quantityが変わるケースに対応）
+    const { data: allLots } = await supabase.from('pos_lots').select('id, quantity').eq('inventory_id', inventoryId)
+    for (const lot of (allLots || [])) {
+        const sold = lotSoldQty[lot.id] || 0
+        const checkedOut = lotCheckoutQty[lot.id] || 0
+        const remaining = lot.quantity - sold - checkedOut
+        const { error: lotUpdateError } = await supabase.from('pos_lots').update({
+            remaining_qty: Math.max(0, remaining),
+        }).eq('id', lot.id)
+        if (lotUpdateError) throw lotUpdateError
     }
 
     // チェックアウトで持ち出されて在庫に戻っていない分を差し引く
@@ -237,7 +235,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             }
             if (updates.quantity !== undefined) {
                 lotUpdates.quantity = updates.quantity
-                // remaining_qty は recalculateInventory が処理済み
+                // remaining_qty の差分も同期（recalculateInventory は販売/checkout のないロットを更新しないため）
+                const { data: currentLot } = await supabase.from('pos_lots').select('quantity, remaining_qty').eq('id', tx.lot_id).single()
+                if (currentLot) {
+                    const qtyDiff = updates.quantity - currentLot.quantity
+                    lotUpdates.remaining_qty = Math.max(0, currentLot.remaining_qty + qtyDiff)
+                }
                 const newExpenses = updates.expenses ?? tx.expenses
                 lotUpdates.unit_expense = updates.quantity > 0 ? Math.round(newExpenses / updates.quantity) : 0
             }
@@ -314,12 +317,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
             .single()
 
         // LOT: 仕入れ取引に紐づくロットを削除（ロットから参照されているチェックアウトがないか確認）
+        let deletedLot: any = null
         if (tx.type === 'purchase' && tx.lot_id) {
-            // ロットを参照しているチェックアウトアイテムがある場合は削除不可
+            // ロットを参照しているアクティブなチェックアウトアイテムがある場合は削除不可
             const { data: lotCheckouts } = await supabase
                 .from('pos_checkout_items')
                 .select('id')
                 .eq('lot_id', tx.lot_id)
+                .in('status', ['pending', 'sold'])
                 .limit(1)
             if (lotCheckouts && lotCheckouts.length > 0) {
                 return NextResponse.json({
@@ -342,12 +347,18 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
                 }, { status: 400 })
             }
 
-            // ロットを削除
+            // ロットを保存（ロールバック用）してから削除
+            const { data: lotBackup } = await supabase
+                .from('pos_lots')
+                .select('*')
+                .eq('id', tx.lot_id)
+                .single()
             const { error: lotDelError } = await supabase
                 .from('pos_lots')
                 .delete()
                 .eq('id', tx.lot_id)
             if (lotDelError) throw lotDelError
+            deletedLot = lotBackup
         }
 
         // 取引を削除
@@ -363,6 +374,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
         // 在庫がマイナスになっていないかチェック
         if (result.quantity < 0) {
+            // ロールバック: 削除したロットを復元（仕入れ取引の場合）
+            if (tx.type === 'purchase' && tx.lot_id && deletedLot) {
+                await supabase.from('pos_lots').insert(deletedLot)
+            }
             // ロールバック: 取引を復元
             const { error: restoreError } = await supabase.from('pos_transactions').insert({
                 id: tx.id,

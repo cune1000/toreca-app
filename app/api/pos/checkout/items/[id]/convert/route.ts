@@ -6,6 +6,27 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// ロット番号を自動生成（L-YYYYMMDD-NNN）
+async function generateLotNumber(): Promise<string> {
+    const now = new Date()
+    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const today = jst.toISOString().split('T')[0].replace(/-/g, '')
+    const prefix = `L-${today}-`
+    const { data: latest } = await supabase
+        .from('pos_lots')
+        .select('lot_number')
+        .like('lot_number', `${prefix}%`)
+        .order('lot_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    let seq = 1
+    if (latest?.lot_number) {
+        const lastSeq = parseInt(latest.lot_number.replace(prefix, ''), 10)
+        if (!isNaN(lastSeq)) seq = lastSeq + 1
+    }
+    return `${prefix}${String(seq).padStart(3, '0')}`
+}
+
 // アイテム変換（状態変更 + 新conditionに入庫）
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -39,6 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json({ success: false, error: 'カタログ情報が見つかりません' }, { status: 400 })
         }
 
+        const isTargetLotMode = item.inventory?.catalog?.tracking_mode === 'lot'
         const totalExpenses = expenses || 0
         const unitCost = item.unit_cost
         const requestedQty = resolve_quantity && Number.isInteger(resolve_quantity) && resolve_quantity > 0
@@ -133,6 +155,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .single()
 
         if (txError) throw txError
+
+        // LOTモード: 変換先にロットを自動作成
+        let convertLotId: string | null = null
+        if (isTargetLotMode) {
+            const lotNumber = await generateLotNumber()
+            const unitExpense = quantity > 0 ? Math.round((originalExpenses + totalExpenses) / quantity) : 0
+            const { data: newLot, error: lotError } = await supabase
+                .from('pos_lots')
+                .insert({
+                    lot_number: lotNumber,
+                    source_id: null,
+                    inventory_id: targetInv.id,
+                    quantity,
+                    remaining_qty: quantity,
+                    unit_cost: unitCost,
+                    expenses: originalExpenses + totalExpenses,
+                    unit_expense: unitExpense,
+                    purchase_date: new Date().toISOString().split('T')[0],
+                    transaction_id: transaction?.id || null,
+                    notes: `持ち出し変換: ${item.inventory?.condition} → ${new_condition.trim()}`,
+                })
+                .select()
+                .single()
+            if (lotError) throw lotError
+            convertLotId = newLot?.id || null
+
+            // 取引にlot_idを記録
+            if (convertLotId) {
+                await supabase.from('pos_transactions').update({ lot_id: convertLotId }).eq('id', transaction.id)
+            }
+        }
 
         // 履歴記録
         const { error: historyError } = await supabase

@@ -18,12 +18,17 @@ export async function POST(request: NextRequest) {
 
         const { data: inventory, error: invError } = await supabase
             .from('pos_inventory')
-            .select('*')
+            .select('*, catalog:pos_catalogs(tracking_mode)')
             .eq('id', inventory_id)
             .single()
 
         if (invError || !inventory) {
             return NextResponse.json({ success: false, error: '在庫が見つかりません' }, { status: 404 })
+        }
+
+        // LOTモードの在庫は調整禁止（ロットのremaining_qtyとの整合性が崩れるため）
+        if (inventory.catalog?.tracking_mode === 'lot') {
+            return NextResponse.json({ success: false, error: 'LOTモードの在庫は直接調整できません。ロット経由で操作してください' }, { status: 400 })
         }
 
         const newQuantity = inventory.quantity + quantity_change
