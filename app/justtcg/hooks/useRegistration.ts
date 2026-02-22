@@ -44,12 +44,14 @@ export function useRegistration(
 
   const toggleAllFiltered = useCallback((filteredIds: string[]) => {
     setCheckedCards(prev => {
-      const allChecked = filteredIds.every(id => prev.has(id))
+      // R12-26: 登録済みカードを除外して選択
+      const unregistered = filteredIds.filter(id => !registeredRef.current[id])
+      const allChecked = unregistered.length > 0 && unregistered.every(id => prev.has(id))
       const next = new Set(prev)
       if (allChecked) {
-        filteredIds.forEach(id => next.delete(id))
+        unregistered.forEach(id => next.delete(id))
       } else {
-        filteredIds.forEach(id => next.add(id))
+        unregistered.forEach(id => next.add(id))
       }
       return next
     })
@@ -143,6 +145,7 @@ export function useRegistration(
   const handleBulkRegister = useCallback(async () => {
     if (bulkRunningRef.current) return
     bulkRunningRef.current = true
+    const capturedSetId = selectedSetRef.current?.id // R12-13: セットIDを捕捉
     try {
       const toRegister = cardsRef.current.filter(c => checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id])
       cancelBulkRef.current = false
@@ -159,7 +162,10 @@ export function useRegistration(
         else failed++
         setBulkProgress({ current: i + 1, total: toRegister.length, succeeded, failed })
       }
-      setBulkProgress(null)
+      // R12-13: セット切替後はクリアをスキップ（新セットのprogressを消さない）
+      if (selectedSetRef.current?.id === capturedSetId) {
+        setBulkProgress(null)
+      }
     } finally {
       bulkRunningRef.current = false
     }

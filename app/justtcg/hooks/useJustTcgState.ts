@@ -118,12 +118,15 @@ export function useJustTcgState() {
     setCards([])
     setSelectedCard(null)
     setSetFilterText('')
+    setSearch('') // R12-20: ゲーム切替時に検索テキストもクリア
+    setRarityFilter('') // R12-20
     setError('')
     setPcMatches({})
 
     fetch(`/api/justtcg/sets?game=${encodeURIComponent(selectedGame)}`, { signal: controller.signal })
       .then(r => r.json())
       .then(res => {
+        if (controller.signal.aborted) return // R12-09: レースコンディション防止
         if (res.success) {
           setSets(res.data || [])
           if (res.usage) setUsage(res.usage)
@@ -156,6 +159,7 @@ export function useJustTcgState() {
     fetch(`/api/justtcg/cards?set=${encodeURIComponent(selectedSetId)}&game=${encodeURIComponent(selectedGame)}`, { signal: controller.signal })
       .then(r => r.json())
       .then(res => {
+        if (controller.signal.aborted) return // R12-09: レースコンディション防止
         if (res.success) {
           setCards(res.data || [])
           if (res.usage) setUsage(res.usage)

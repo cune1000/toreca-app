@@ -246,12 +246,14 @@ export function getSetNameJa(id: string, fallbackName: string): string {
 }
 
 /**
- * セットIDからset_code（例: "SV10", "M3"）を抽出
+ * セットIDからset_code（例: "SV10", "M3", "SLD"）を抽出
  * "sv10-the-glory-of-team-rocket-pokemon-japan" → "SV10"
  * "m3-nihil-zero-pokemon-japan" → "M3"
+ * "sld-darkrai-starter-set-vstar-pokemon-japan" → "SLD"
+ * R12-22: 数字なしのコード（SLD, SK等）にも対応
  */
 export function extractSetCode(setId: string): string | null {
-  const match = setId.match(/^([a-z]+\d+[a-z]?)-/i)
+  const match = setId.match(/^([a-z]{1,5}\d*[a-z]?)-/i)
   return match ? match[1].toUpperCase() : null
 }
 

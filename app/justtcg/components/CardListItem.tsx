@@ -29,7 +29,7 @@ export default memo(function CardListItem({
   onToggleCheck,
 }: CardListItemProps) {
   const nm = getNmVariant(card)
-  const hasJapanese = card.variants.some(v => v.language === 'Japanese')
+  const hasJapanese = Array.isArray(card.variants) && card.variants.some(v => v.language === 'Japanese')
   const priceHistory = nm?.priceHistory ?? EMPTY_HISTORY
   const change7d = nm?.priceChange7d
   const price = nm?.price
@@ -38,7 +38,7 @@ export default memo(function CardListItem({
     <div
       role="option"
       aria-selected={selected}
-      tabIndex={0}
+      tabIndex={selected ? 0 : -1}
       className={`flex items-center gap-2 px-3 py-2.5 rounded-[var(--jtcg-radius)] cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--jtcg-ink-light)] ${
         selected
           ? 'bg-[rgba(45,90,155,0.08)] border-l-2 border-[var(--jtcg-ink)]'

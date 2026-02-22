@@ -54,8 +54,9 @@ export default memo(function RightPanel({
   useEffect(() => { setShowChart(false) }, [card?.id])
 
   // R11-17: w-80 固定でレイアウトジャンプ防止（プレースホルダー表示）
+  // R12-15: scrollable propを空状態にも適用し、DOM構造の一貫性を保つ
   if (!card) return (
-    <aside aria-label="カード詳細" className={`w-80 shrink-0 border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${className}`}>
+    <aside aria-label="カード詳細" className={`w-80 shrink-0 border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className}`}>
       <div className="flex items-center justify-center h-full">
         <p className="text-xs text-[var(--jtcg-text-muted)]">カードを選択してください</p>
       </div>
@@ -78,7 +79,7 @@ export default memo(function RightPanel({
         {/* ヘッダー */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold text-[var(--jtcg-ink)] leading-tight" style={{ fontFamily: 'var(--font-heading)' }}>
+            <h2 className="text-base font-bold text-[var(--jtcg-ink)] leading-tight break-words" style={{ fontFamily: 'var(--font-heading)' }}>
               {card.name}
             </h2>
             <div className="flex items-center gap-2 mt-1">
@@ -207,7 +208,7 @@ export default memo(function RightPanel({
                   disabled={pcLoading}
                   className="text-[10px] text-purple-600 hover:text-purple-800 underline disabled:opacity-50"
                 >
-                  再検索
+                  再試行
                 </button>
               </div>
             )}

@@ -180,8 +180,8 @@ export default function JustTcgExplorer() {
       {mobileFilterOpen && !card && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileFilterOpen(false)} />
-          {/* R11-03: flex レイアウトでヘッダー分を差し引き、コンテンツ切れを防止 */}
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[var(--jtcg-surface)] shadow-xl flex flex-col">
+          {/* R12-19: dialog role + aria-modal でスクリーンリーダー対応 */}
+          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[var(--jtcg-surface)] shadow-xl flex flex-col" role="dialog" aria-modal="true" aria-label="フィルター">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--jtcg-border)] shrink-0">
               <h2 className="text-sm font-bold text-[var(--jtcg-ink)]" style={{ fontFamily: 'var(--font-heading)' }}>
                 <Settings2 size={14} className="inline mr-1.5" />
@@ -200,7 +200,8 @@ export default function JustTcgExplorer() {
       {card && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={handleClosePanel} />
-          <div className="absolute bottom-0 left-0 right-0 max-h-[85dvh] bg-[var(--jtcg-surface)] rounded-t-2xl overflow-y-auto shadow-xl overscroll-contain" style={{ maxHeight: '85vh' }}>
+          {/* R12-19: dialog role でスクリーンリーダー対応 */}
+          <div className="absolute bottom-0 left-0 right-0 max-h-[85dvh] bg-[var(--jtcg-surface)] rounded-t-2xl overflow-y-auto shadow-xl overscroll-contain" style={{ maxHeight: '85vh' }} role="dialog" aria-modal="true" aria-label="カード詳細">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-2 mb-1" />
             <RightPanel
               card={card}

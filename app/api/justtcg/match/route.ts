@@ -22,15 +22,15 @@ export async function POST(request: NextRequest) {
     }
     lastRequestMap.set(clientIp, now)
 
-    // レート制限Mapのクリーンアップ（期限切れ削除 + 上限超過時は古い順に半分削除）
-    if (lastRequestMap.size > MAX_RATE_LIMIT_ENTRIES) {
+    // R12-03: レート制限Mapのクリーンアップ（10件超で毎回期限切れ削除、上限超過時は半分削除）
+    if (lastRequestMap.size > 10) {
       for (const [ip, ts] of lastRequestMap) {
         if (now - ts > RATE_LIMIT_MS * 10) lastRequestMap.delete(ip)
       }
-      if (lastRequestMap.size > MAX_RATE_LIMIT_ENTRIES) {
-        const sorted = [...lastRequestMap.entries()].sort((a, b) => a[1] - b[1])
-        sorted.slice(0, Math.floor(sorted.length / 2)).forEach(([ip]) => lastRequestMap.delete(ip))
-      }
+    }
+    if (lastRequestMap.size > MAX_RATE_LIMIT_ENTRIES) {
+      const sorted = [...lastRequestMap.entries()].sort((a, b) => a[1] - b[1])
+      sorted.slice(0, Math.floor(sorted.length / 2)).forEach(([ip]) => lastRequestMap.delete(ip))
     }
 
     let body: any
@@ -89,13 +89,21 @@ export async function POST(request: NextRequest) {
     try {
       const imgController = new AbortController()
       const imgTimeout = setTimeout(() => imgController.abort(), 5000)
-      const pageRes = await fetch(pricechartingUrl, { signal: imgController.signal, redirect: 'manual' })
+      // R12-28: redirect:'follow' + ドメイン検証（リダイレクト先の画像も取得可能に）
+      const pageRes = await fetch(pricechartingUrl, { signal: imgController.signal })
       clearTimeout(imgTimeout)
-      if (pageRes.ok && pageRes.status === 200) {
-        const html = await pageRes.text()
-        const imgMatch = html.match(/src=["'](https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^"']+)/)
-        if (imgMatch) {
-          imageUrl = imgMatch[1].replace(/\/\d+\.jpg/, '/1600.jpg')
+      const resHost = new URL(pageRes.url).hostname
+      if (pageRes.ok && resHost === 'www.pricecharting.com') {
+        // R12-12: Content-Type確認 + サイズ制限（メモリ防御）
+        const contentType = pageRes.headers.get('content-type') || ''
+        if (contentType.includes('text/html')) {
+          const html = await pageRes.text()
+          if (html.length <= 500_000) {
+            const imgMatch = html.match(/src=["'](https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^"']+)/)
+            if (imgMatch) {
+              imageUrl = imgMatch[1].replace(/\/\d+\.jpg/, '/1600.jpg')
+            }
+          }
         }
       }
     } catch (_e) {

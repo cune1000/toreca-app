@@ -186,6 +186,8 @@ export default memo(function CenterPanel({
           <div
             className="p-2"
             style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}
+            role="listbox"
+            aria-label="カード一覧"
           >
             {virtualizer.getVirtualItems().map(virtualRow => {
               const card = filteredCards[virtualRow.index]

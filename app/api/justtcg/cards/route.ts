@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         success: true,
         data: cached.data.data,
         total: cached.data.total,
+        usage: cached.data.usage || null, // R12-17: キャッシュからもusageを返却
         cached: true,
       }, {
         headers: { 'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800' },
@@ -67,16 +68,23 @@ export async function GET(request: NextRequest) {
 
     // 空データはキャッシュしない（API一時エラーの可能性）
     if (allCards.length > 0) {
-      cache.set(cacheKey, { data: responseData, at: now })
+      cache.set(cacheKey, { data: responseData, at: Date.now() }) // R12-07: ページネーション後の正確なタイムスタンプ
     }
 
-    // キャッシュサイズ制限（古いエントリを削除）
+    // R12-08: キャッシュサイズ制限（まず期限切れを一掃、それでも超過なら古い順に削除）
     if (cache.size > MAX_CACHE_ENTRIES) {
-      const oldest = [...cache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
-      if (oldest) cache.delete(oldest[0])
+      const currentTime = Date.now()
+      for (const [key, entry] of cache) {
+        if (currentTime - entry.at > CACHE_TTL) cache.delete(key)
+      }
+      while (cache.size > MAX_CACHE_ENTRIES) {
+        const oldest = [...cache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
+        if (oldest) cache.delete(oldest[0])
+        else break
+      }
     }
 
-    return NextResponse.json({ success: true, ...responseData, usage, cached: false }, {
+    return NextResponse.json({ success: true, ...responseData, cached: false }, { // R12-16: 冗長なusageを削除（responseDataに含有）
       headers: { 'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800' },
     })
   } catch (error: unknown) {
