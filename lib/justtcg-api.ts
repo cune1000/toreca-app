@@ -123,8 +123,8 @@ export async function getCards(setId: string, opts?: { offset?: number; limit?: 
     game: 'pokemon-japan',
     set: setId,
   }
-  if (opts?.offset) params.offset = String(opts.offset)
-  if (opts?.limit) params.limit = String(opts.limit)
+  if (opts?.offset != null) params.offset = String(opts.offset)
+  if (opts?.limit) params.limit = String(Math.min(opts.limit, 20))
 
   return fetchJustTcg<JustTcgCard[]>('/cards', params)
 }

@@ -25,10 +25,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, ...cached.data, cached: true })
     }
 
-    // 全カード取得（ページング）
+    // 全カード取得（ページング、Free Tierはlimit最大20）
     let allCards: any[] = []
     let offset = 0
-    const limit = 100
+    const limit = 20
     let usage: any = null
 
     while (true) {
