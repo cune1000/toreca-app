@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { getSetNameJa } from '@/lib/justtcg-set-names'
 
 interface JTSet {
   id: string
@@ -125,7 +126,7 @@ export default function JustTcgExplorer() {
   const filteredSets = useMemo(() => {
     if (!setFilterText) return sets
     const q = setFilterText.toLowerCase()
-    return sets.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
+    return sets.filter(s => getSetNameJa(s.id, s.name).toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
   }, [sets, setFilterText])
 
   // NM価格取得
@@ -218,10 +219,10 @@ export default function JustTcgExplorer() {
                   {filteredSets.slice(0, 20).map(s => (
                     <button
                       key={s.id}
-                      onClick={() => { setSelectedSetId(s.id); setSetFilterText(s.name) }}
+                      onClick={() => { setSelectedSetId(s.id); setSetFilterText(getSetNameJa(s.id, s.name)) }}
                       className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0"
                     >
-                      <span className="font-medium text-gray-800">{s.name}</span>
+                      <span className="font-medium text-gray-800">{getSetNameJa(s.id, s.name)}</span>
                       <span className="text-gray-400 ml-2">{s.cards_count}枚</span>
                       {s.release_date && <span className="text-gray-400 ml-2">{s.release_date}</span>}
                     </button>
@@ -234,14 +235,14 @@ export default function JustTcgExplorer() {
               onChange={e => {
                 setSelectedSetId(e.target.value)
                 const s = sets.find(s => s.id === e.target.value)
-                if (s) setSetFilterText(s.name)
+                if (s) setSetFilterText(getSetNameJa(s.id, s.name))
               }}
               className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 max-w-full sm:max-w-xs"
             >
               <option value="">セットを選択</option>
               {sets.map(s => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.cards_count}枚){s.release_date ? ` - ${s.release_date}` : ''}
+                  {getSetNameJa(s.id, s.name)} ({s.cards_count}枚){s.release_date ? ` - ${s.release_date}` : ''}
                 </option>
               ))}
             </select>
@@ -251,7 +252,7 @@ export default function JustTcgExplorer() {
           {selectedSet && (
             <div className="flex flex-col sm:flex-row gap-2 mt-2">
               <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="font-bold text-gray-700">{selectedSet.name}</span>
+                <span className="font-bold text-gray-700">{getSetNameJa(selectedSet.id, selectedSet.name)}</span>
                 <span>{selectedSet.cards_count}枚</span>
                 {selectedSet.release_date && <span>{selectedSet.release_date}</span>}
               </div>
