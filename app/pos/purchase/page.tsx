@@ -427,13 +427,13 @@ function PurchasePage() {
                         {/* 登録ボタン */}
                         <button
                             onClick={handleSubmit}
-                            disabled={priceInput === '' || !effectiveCondition || submitting}
-                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${priceInput !== '' && effectiveCondition && !submitting
+                            disabled={priceInput === '' || !effectiveCondition || quantity < 1 || submitting || (isLotMode && !selectedSource)}
+                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${priceInput !== '' && effectiveCondition && quantity >= 1 && !submitting && (!isLotMode || selectedSource)
                                 ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]'
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}
                         >
-                            {submitting ? '登録中...' : `💰 仕入れ登録（${formatPrice(total)}）`}
+                            {submitting ? '登録中...' : `💰 仕入れ登録（${quantity >= 1 ? formatPrice(total) : '¥0'}）`}
                         </button>
                     </div>
                 </div>

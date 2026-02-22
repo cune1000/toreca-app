@@ -6,7 +6,7 @@ import PosLayout from '@/components/pos/PosLayout'
 import PosSpinner from '@/components/pos/PosSpinner'
 import TransactionTypeBadge from '@/components/pos/TransactionTypeBadge'
 import { getStats, getTransactions, refreshMarketPrices, getCheckoutStats } from '@/lib/pos/api'
-import { formatPrice, getCondition } from '@/lib/pos/constants'
+import { formatPrice } from '@/lib/pos/constants'
 import type { PosStats, PosTransaction, PosCheckoutStats } from '@/lib/pos/types'
 
 export default function PosDashboard() {
@@ -21,7 +21,10 @@ export default function PosDashboard() {
         Promise.all([
             getStats().then(r => setStats(r.data)),
             getTransactions({ limit: 10 }).then(r => setRecent(r.data)),
-            getCheckoutStats().then(r => setCheckoutStats(r.data)).catch(() => {}),
+            getCheckoutStats().then(r => setCheckoutStats(r.data)).catch(err => {
+                // チェックアウト統計が取得できなくてもダッシュボードは表示する
+                console.error('checkout stats:', err)
+            }),
         ]).catch(console.error).finally(() => setLoading(false))
     }
 

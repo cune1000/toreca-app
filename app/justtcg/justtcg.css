@@ -1,0 +1,37 @@
+[data-page="justtcg"] {
+  --jtcg-bg: #FAFAF8;
+  --jtcg-surface: #FFFFFF;
+  --jtcg-ink: #1B3A6B;
+  --jtcg-ink-light: #2D5A9B;
+  --jtcg-accent: #D97706;
+  --jtcg-border: #E8E6E3;
+  --jtcg-border-light: #F0EEEB;
+  --jtcg-text: #1A1A1A;
+  --jtcg-text-secondary: #6B7280;
+  --jtcg-text-muted: #9CA3AF;
+  --jtcg-up: #059669;
+  --jtcg-down: #DC2626;
+  --jtcg-radius: 0.4rem;
+
+  --font-heading: var(--font-body-ja), var(--font-heading-en), serif;
+  --font-body: var(--font-body-ja), var(--font-body-en), sans-serif;
+  --font-price: var(--font-mono-price), 'Menlo', monospace;
+
+  font-family: var(--font-body);
+  background-color: var(--jtcg-bg);
+  color: var(--jtcg-text);
+}
+
+[data-page="justtcg"] * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--jtcg-border) transparent;
+}
+
+[data-page="justtcg"] *::-webkit-scrollbar {
+  width: 6px;
+}
+
+[data-page="justtcg"] *::-webkit-scrollbar-thumb {
+  background-color: var(--jtcg-border);
+  border-radius: 3px;
+}

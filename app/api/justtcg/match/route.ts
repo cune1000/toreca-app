@@ -55,6 +55,22 @@ export async function POST(request: NextRequest) {
     const best = matched[0]
     const loosePrice = best['loose-price'] || null
 
+    // PriceChartingページから画像URL取得
+    let imageUrl: string | null = null
+    const pricechartingUrl = `https://www.pricecharting.com/offers?product=${best.id}`
+    try {
+      const pageRes = await fetch(pricechartingUrl)
+      if (pageRes.ok) {
+        const html = await pageRes.text()
+        const imgMatch = html.match(/src=["'](https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^"']+)/)
+        if (imgMatch) {
+          imageUrl = imgMatch[1].replace(/\/\d+\.jpg/, '/1600.jpg')
+        }
+      }
+    } catch (_e) {
+      // 画像取得失敗は無視（価格データは返す）
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -63,6 +79,8 @@ export async function POST(request: NextRequest) {
         consoleName: best['console-name'],
         loosePrice,
         loosePriceDollars: loosePrice != null ? loosePrice / 100 : null,
+        imageUrl,
+        pricechartingUrl,
       },
     })
   } catch (error: any) {

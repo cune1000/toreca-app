@@ -22,6 +22,12 @@ export interface Card {
   pricecharting_id?: string | null
   pricecharting_name?: string | null
   set_code?: string | null
+  name_en?: string | null
+  set_name_en?: string | null
+  release_year?: number | null
+  justtcg_id?: string | null
+  tcgplayer_id?: string | null
+  pricecharting_url?: string | null
   created_at?: string
   updated_at?: string
 }

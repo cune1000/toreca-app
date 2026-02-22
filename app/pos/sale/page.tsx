@@ -43,7 +43,7 @@ function SalePage() {
             .finally(() => setLoading(false))
     }
 
-    useEffect(() => { loadInventory() }, [])
+    useEffect(() => { loadInventory() }, [catalogIdParam])
 
     const filtered = useMemo(() => inventory
         .map(inv => ({ ...inv, cond: getCondition(inv.condition) }))
@@ -51,12 +51,12 @@ function SalePage() {
         [inventory, search])
 
     // カタログIDでグループ化
-    const grouped = filtered.reduce((acc, inv) => {
+    const grouped = useMemo(() => filtered.reduce((acc, inv) => {
         const key = inv.catalog_id || inv.id
         if (!acc[key]) acc[key] = { items: [], catalog: inv.catalog }
         acc[key].items.push(inv)
         return acc
-    }, {} as Record<string, { items: typeof filtered; catalog: any }>)
+    }, {} as Record<string, { items: typeof filtered; catalog: any }>), [filtered])
 
     const isLotMode = selectedInv?.catalog?.tracking_mode === 'lot'
 
@@ -353,13 +353,13 @@ function SalePage() {
                         {/* 登録ボタン */}
                         <button
                             onClick={handleSubmit}
-                            disabled={unitPrice === '' || quantity > maxQuantity || submitting || (isLotMode && !selectedLot)}
-                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${unitPrice !== '' && quantity <= maxQuantity && !submitting && (!isLotMode || selectedLot)
+                            disabled={unitPrice === '' || quantity < 1 || quantity > maxQuantity || submitting || (isLotMode && !selectedLot)}
+                            className={`w-full py-4 rounded-xl text-base font-bold transition-colors ${unitPrice !== '' && quantity >= 1 && quantity <= maxQuantity && !submitting && (!isLotMode || selectedLot)
                                 ? 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]'
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                 }`}
                         >
-                            {submitting ? '登録中...' : `🛒 販売登録（利益 ${profit ? formatPrice(profit.netTotal) : '¥0'}）`}
+                            {submitting ? '登録中...' : `🛒 販売登録（利益 ${profit && quantity >= 1 ? formatPrice(profit.netTotal) : '¥0'}）`}
                         </button>
                     </div>
                 </div>

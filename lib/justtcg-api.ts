@@ -105,11 +105,11 @@ async function fetchJustTcg<T>(path: string, params?: Record<string, string>): P
 }
 
 /**
- * pokemon-japan のセット一覧を取得
+ * 指定ゲームのセット一覧を取得
  */
-export async function getSets() {
+export async function getSets(game: string = 'pokemon-japan') {
   return fetchJustTcg<JustTcgSet[]>('/sets', {
-    game: 'pokemon-japan',
+    game,
     orderBy: 'release_date',
     order: 'desc',
   })
@@ -118,9 +118,9 @@ export async function getSets() {
 /**
  * 指定セットのカード一覧を取得
  */
-export async function getCards(setId: string, opts?: { offset?: number; limit?: number }) {
+export async function getCards(setId: string, opts?: { offset?: number; limit?: number; game?: string }) {
   const params: Record<string, string> = {
-    game: 'pokemon-japan',
+    game: opts?.game || 'pokemon-japan',
     set: setId,
     orderBy: 'price',
     order: 'desc',

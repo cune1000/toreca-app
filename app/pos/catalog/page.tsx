@@ -22,7 +22,7 @@ function CatalogPage() {
     const [inventory, setInventory] = useState<PosInventory[]>([])
     const [inventoryLoaded, setInventoryLoaded] = useState(false)
     const [search, setSearch] = useState('')
-    const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'nostock'>(filterParam === 'instock' ? 'instock' : filterParam === 'nostock' ? 'nostock' : 'all')
+    const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'nostock' | 'noprice'>(filterParam === 'instock' ? 'instock' : filterParam === 'nostock' ? 'nostock' : filterParam === 'noprice' ? 'noprice' : 'all')
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [showApiSearch, setShowApiSearch] = useState(false)
@@ -40,12 +40,12 @@ function CatalogPage() {
 
     const [loadError, setLoadError] = useState('')
 
-    const load = async () => {
+    const load = async (reloadInventory = false) => {
         setLoadError('')
         try {
             const catRes = await getCatalogs({ search })
             setCatalogs(catRes.data)
-            if (!inventoryLoaded) {
+            if (!inventoryLoaded || reloadInventory) {
                 const invRes = await getInventory()
                 setInventory(invRes.data)
                 setInventoryLoaded(true)
@@ -56,7 +56,8 @@ function CatalogPage() {
 
     useEffect(() => {
         if (search === '') {
-            load()
+            // 検索クリア時は在庫も再取得（他画面での変更を反映）
+            load(inventoryLoaded)
         } else {
             const timer = setTimeout(() => { load() }, 300)
             return () => clearTimeout(timer)
@@ -74,16 +75,35 @@ function CatalogPage() {
             const totalQty = items.reduce((s, i) => s + i.quantity, 0)
             const totalCost = items.reduce((s, i) => s + i.avg_purchase_price * i.quantity, 0)
             const avgCost = totalQty > 0 ? Math.round(totalCost / totalQty) : 0
-            const sellPrice = cat.fixed_price || 0
-            const estimatedProfit = sellPrice > 0 ? (sellPrice * totalQty) - totalCost : 0
-            return { ...cat, inventoryItems: items, totalQty, totalCost, avgCost, estimatedProfit }
+
+            // 予想販売価格（predicted_price >> market_price >> fixed_price）
+            const activeItems = items.filter(i => i.quantity > 0)
+            const hasPredicted = activeItems.some(i => i.predicted_price != null)
+            const hasMarket = activeItems.some(i => i.market_price != null)
+            const priceSource: 'predicted' | 'market' | 'fixed' | 'none' =
+                hasPredicted ? 'predicted' : hasMarket ? 'market' : cat.fixed_price ? 'fixed' : 'none'
+
+            let predictedSaleTotal = 0
+            for (const inv of activeItems) {
+                const price = inv.predicted_price ?? inv.market_price ?? cat.fixed_price ?? 0
+                predictedSaleTotal += price * inv.quantity
+            }
+            const effectivePrice = totalQty > 0 ? Math.round(predictedSaleTotal / totalQty) : (cat.fixed_price || 0)
+            const estimatedProfit = predictedSaleTotal > 0 ? predictedSaleTotal - totalCost : (cat.fixed_price ? cat.fixed_price * totalQty - totalCost : 0)
+
+            return { ...cat, inventoryItems: items, totalQty, totalCost, avgCost, effectivePrice, priceSource, estimatedProfit }
         })
     }, [catalogs, inventory])
+
+    const noPriceCount = useMemo(() =>
+        catalogWithStock.filter(c => c.totalQty > 0 && c.priceSource === 'none').length
+    , [catalogWithStock])
 
     const filtered = useMemo(() => {
         let items = catalogWithStock
         if (stockFilter === 'instock') items = items.filter(c => c.totalQty > 0)
         if (stockFilter === 'nostock') items = items.filter(c => c.totalQty === 0)
+        if (stockFilter === 'noprice') items = items.filter(c => c.totalQty > 0 && c.priceSource === 'none')
         return items
     }, [catalogWithStock, stockFilter])
 
@@ -266,12 +286,23 @@ function CatalogPage() {
                         { key: 'all' as const, label: 'すべて' },
                         { key: 'instock' as const, label: '在庫あり' },
                         { key: 'nostock' as const, label: '在庫なし' },
+                        { key: 'noprice' as const, label: '価格未設定' },
                     ].map(f => (
                         <button
                             key={f.key}
                             onClick={() => setStockFilter(f.key)}
-                            className={`px-3 md:px-4 py-2 rounded-md text-sm font-bold transition-colors ${stockFilter === f.key ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700'}`}
-                        >{f.label}</button>
+                            className={`px-3 md:px-4 py-2 rounded-md text-sm font-bold transition-colors ${stockFilter === f.key
+                                ? f.key === 'noprice' ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white'
+                                : f.key === 'noprice' ? 'text-amber-600 hover:text-amber-700' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            {f.label}
+                            {f.key === 'noprice' && noPriceCount > 0 && (
+                                <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${stockFilter === 'noprice' ? 'bg-white/30' : 'bg-amber-100 text-amber-700'}`}>
+                                    {noPriceCount}
+                                </span>
+                            )}
+                        </button>
                     ))}
                 </div>
             </div>
@@ -296,7 +327,7 @@ function CatalogPage() {
                                     <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">在庫数</th>
                                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3.5">状態別在庫</th>
                                     <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">平均仕入</th>
-                                    <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">販売価格</th>
+                                    <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3.5">予想販売価格</th>
                                     <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3.5">操作</th>
                                 </tr>
                             </thead>
@@ -331,7 +362,27 @@ function CatalogPage() {
                                             ) : <span className="text-sm text-gray-300">-</span>}
                                         </td>
                                         <td className="text-right text-sm font-medium text-gray-700 px-4">{cat.totalQty > 0 ? formatPrice(cat.avgCost) : <span className="text-gray-300">-</span>}</td>
-                                        <td className="text-right text-sm font-medium text-gray-700 px-4">{cat.fixed_price ? formatPrice(cat.fixed_price) : <span className="text-gray-300">-</span>}</td>
+                                        <td className="text-right px-4">
+                                            {cat.effectivePrice > 0 ? (
+                                                <div>
+                                                    <span className="text-sm font-medium text-gray-700">{formatPrice(cat.effectivePrice)}</span>
+                                                    {cat.priceSource !== 'fixed' && (
+                                                        <span className={`block text-[10px] mt-0.5 ${cat.priceSource === 'predicted' ? 'text-purple-500' : 'text-blue-500'}`}>
+                                                            {cat.priceSource === 'predicted' ? '予想価格' : '相場価格'}
+                                                        </span>
+                                                    )}
+                                                    {cat.totalQty > 0 && cat.estimatedProfit !== 0 && (
+                                                        <span className={`block text-[10px] mt-0.5 font-bold ${cat.estimatedProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                            利益 {cat.estimatedProfit > 0 ? '+' : ''}{formatPrice(cat.estimatedProfit)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : cat.totalQty > 0 ? (
+                                                <span className="text-xs font-bold text-amber-500">未設定</span>
+                                            ) : (
+                                                <span className="text-gray-300">-</span>
+                                            )}
+                                        </td>
                                         <td className="px-4 text-center" onClick={e => e.stopPropagation()}>
                                             <div className="flex items-center gap-1.5 justify-center">
                                                 <button onClick={() => router.push(`/pos/purchase?catalog_id=${cat.id}`)} className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">💰 仕入</button>
@@ -371,7 +422,18 @@ function CatalogPage() {
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                         <p className="text-lg font-bold text-gray-900">{cat.totalQty > 0 ? cat.totalQty : '-'}</p>
-                                        {cat.totalQty > 0 && <p className="text-xs text-gray-400">{formatPrice(cat.avgCost)}</p>}
+                                        {cat.totalQty > 0 && (
+                                            <>
+                                                <p className="text-xs text-gray-400">{formatPrice(cat.avgCost)}</p>
+                                                {cat.effectivePrice > 0 ? (
+                                                    <p className={`text-xs font-bold ${cat.priceSource === 'predicted' ? 'text-purple-600' : cat.priceSource === 'market' ? 'text-blue-600' : 'text-green-600'}`}>
+                                                        {formatPrice(cat.effectivePrice)}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-[10px] font-bold text-amber-500 mt-0.5">価格未設定</p>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100" onClick={e => e.stopPropagation()}>

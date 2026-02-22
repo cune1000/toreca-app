@@ -244,3 +244,23 @@ export const SET_NAME_JA: Record<string, string> = {
 export function getSetNameJa(id: string, fallbackName: string): string {
   return SET_NAME_JA[id] || fallbackName
 }
+
+/**
+ * セットIDからset_code（例: "SV10", "M3"）を抽出
+ * "sv10-the-glory-of-team-rocket-pokemon-japan" → "SV10"
+ * "m3-nihil-zero-pokemon-japan" → "M3"
+ */
+export function extractSetCode(setId: string): string | null {
+  const match = setId.match(/^([a-z]+\d+[a-z]?)-/i)
+  return match ? match[1].toUpperCase() : null
+}
+
+/**
+ * release_dateから年を抽出
+ * "2026-01-23" → 2026
+ */
+export function extractReleaseYear(releaseDate: string | null): number | null {
+  if (!releaseDate) return null
+  const year = parseInt(releaseDate.substring(0, 4))
+  return isNaN(year) ? null : year
+}

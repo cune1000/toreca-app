@@ -3,7 +3,7 @@ import { getCards } from '@/lib/justtcg-api'
 
 export const dynamic = 'force-dynamic'
 
-// インメモリキャッシュ（1時間、セットIDごと）
+// インメモリキャッシュ（1時間、game:setIdごと）
 const cache = new Map<string, { data: any; at: number }>()
 const CACHE_TTL = 60 * 60 * 1000
 
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const setId = searchParams.get('set')
+    const game = searchParams.get('game') || 'pokemon-japan'
 
     if (!setId) {
       return NextResponse.json(
@@ -19,8 +20,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const cacheKey = `${game}:${setId}`
     const now = Date.now()
-    const cached = cache.get(setId)
+    const cached = cache.get(cacheKey)
     if (cached && now - cached.at < CACHE_TTL) {
       return NextResponse.json({ success: true, ...cached.data, cached: true })
     }
@@ -32,7 +34,7 @@ export async function GET(request: NextRequest) {
     let usage: any = null
 
     while (true) {
-      const result = await getCards(setId, { offset, limit })
+      const result = await getCards(setId, { offset, limit, game })
       allCards = allCards.concat(result.data)
       usage = result.usage
 
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
 
     const responseData = { data: allCards, total: allCards.length, usage }
-    cache.set(setId, { data: responseData, at: now })
+    cache.set(cacheKey, { data: responseData, at: now })
 
     return NextResponse.json({ success: true, ...responseData, cached: false })
   } catch (error: any) {

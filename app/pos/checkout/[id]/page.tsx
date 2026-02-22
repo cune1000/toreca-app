@@ -37,6 +37,8 @@ export default function CheckoutFolderPage({ params }: { params: Promise<{ id: s
     const [undoing, setUndoing] = useState<string | null>(null)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [bulkProcessing, setBulkProcessing] = useState(false)
+    const [bulkSellQueue, setBulkSellQueue] = useState<PosCheckoutItem[]>([])
+    const [bulkConvertQueue, setBulkConvertQueue] = useState<PosCheckoutItem[]>([])
 
     const loadFolder = () => {
         setLoading(true)
@@ -63,14 +65,22 @@ export default function CheckoutFolderPage({ params }: { params: Promise<{ id: s
             alert('未解決のアイテムがあるためクローズできません')
             return
         }
-        await updateCheckoutFolder(folder.id, { status: 'closed' })
-        loadFolder()
+        try {
+            await updateCheckoutFolder(folder.id, { status: 'closed' })
+            loadFolder()
+        } catch (err) {
+            alert(getErrorMessage(err))
+        }
     }
 
     const handleReopen = async () => {
         if (!folder) return
-        await updateCheckoutFolder(folder.id, { status: 'open' })
-        loadFolder()
+        try {
+            await updateCheckoutFolder(folder.id, { status: 'open' })
+            loadFolder()
+        } catch (err) {
+            alert(getErrorMessage(err))
+        }
     }
 
     const handleDelete = async () => {
@@ -145,14 +155,43 @@ export default function CheckoutFolderPage({ params }: { params: Promise<{ id: s
     }
 
     const handleBulkSell = () => {
-        // 一括売却は全アイテム同じ単価で処理 — 最初の1つをモーダルで開く
         const items = folder?.items.filter(i => selectedIds.has(i.id)) || []
-        if (items.length > 0) setSellItem(items[0])
+        if (items.length > 0) {
+            setBulkSellQueue(items.slice(1))
+            setSellItem(items[0])
+        }
     }
 
     const handleBulkConvert = () => {
         const items = folder?.items.filter(i => selectedIds.has(i.id)) || []
-        if (items.length > 0) setConvertItem(items[0])
+        if (items.length > 0) {
+            setBulkConvertQueue(items.slice(1))
+            setConvertItem(items[0])
+        }
+    }
+
+    const handleSellComplete = () => {
+        if (bulkSellQueue.length > 0) {
+            const nextItem = bulkSellQueue[0]
+            setBulkSellQueue(prev => prev.slice(1))
+            setSellItem(nextItem)
+        } else {
+            setSellItem(null)
+            setSelectedIds(new Set())
+            loadFolder()
+        }
+    }
+
+    const handleConvertComplete = () => {
+        if (bulkConvertQueue.length > 0) {
+            const nextItem = bulkConvertQueue[0]
+            setBulkConvertQueue(prev => prev.slice(1))
+            setConvertItem(nextItem)
+        } else {
+            setConvertItem(null)
+            setSelectedIds(new Set())
+            loadFolder()
+        }
     }
 
     if (loading) return <PosLayout><PosSpinner /></PosLayout>
@@ -452,16 +491,18 @@ export default function CheckoutFolderPage({ params }: { params: Promise<{ id: s
             )}
             {sellItem && (
                 <CheckoutSellModal
+                    key={sellItem.id}
                     item={sellItem}
-                    onClose={() => setSellItem(null)}
-                    onSold={() => { setSellItem(null); loadFolder() }}
+                    onClose={() => { setSellItem(null); setBulkSellQueue([]); if (bulkSellQueue.length > 0) loadFolder() }}
+                    onSold={bulkSellQueue.length > 0 ? handleSellComplete : () => { setSellItem(null); loadFolder() }}
                 />
             )}
             {convertItem && (
                 <CheckoutConvertModal
+                    key={convertItem.id}
                     item={convertItem}
-                    onClose={() => setConvertItem(null)}
-                    onConverted={() => { setConvertItem(null); loadFolder() }}
+                    onClose={() => { setConvertItem(null); setBulkConvertQueue([]); if (bulkConvertQueue.length > 0) loadFolder() }}
+                    onConverted={bulkConvertQueue.length > 0 ? handleConvertComplete : () => { setConvertItem(null); loadFolder() }}
                 />
             )}
         </PosLayout>
