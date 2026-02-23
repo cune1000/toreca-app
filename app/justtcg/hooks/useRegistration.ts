@@ -53,7 +53,7 @@ export function useRegistration(
         if (controller.signal.aborted || !json.success) return
         const map: Record<string, boolean> = {}
         for (const id of json.registeredIds) map[id] = true
-        setRegistered(prev => ({ ...prev, ...map }))
+        setRegistered(map)
       })
       .catch(e => {
         if (e.name !== 'AbortError') console.warn('Registration check failed:', e)
@@ -206,10 +206,10 @@ export function useRegistration(
       let failed = 0
       setBulkProgress({ current: 0, total: toRegister.length, succeeded: 0, failed: 0 })
       for (let i = 0; i < toRegister.length; i++) {
-        if (cancelBulkRef.current) break
+        if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
         // レート制限対策: 2件目以降は5.5秒待機（サーバー側5秒制限）
         if (i > 0) await new Promise(r => setTimeout(r, 5500))
-        if (cancelBulkRef.current) break
+        if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
         const ok = await handleRegister(toRegister[i])
         if (ok) succeeded++
         else failed++
@@ -221,6 +221,7 @@ export function useRegistration(
       }
     } finally {
       bulkRunningRef.current = false
+      setBulkProgress(null)
     }
   }, [handleRegister])
 

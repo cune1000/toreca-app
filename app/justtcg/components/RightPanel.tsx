@@ -68,8 +68,9 @@ export default memo(function RightPanel({
   )
 
   // R13-FE06: variants フィルタをメモ化（card切替時のみ再計算）
-  const japaneseVariants = useMemo(() => card.variants.filter(v => v.language === 'Japanese'), [card.variants])
-  const otherVariants = useMemo(() => card.variants.filter(v => v.language !== 'Japanese'), [card.variants])
+  const variants = card.variants ?? []
+  const japaneseVariants = useMemo(() => variants.filter(v => v.language === 'Japanese'), [variants])
+  const otherVariants = useMemo(() => variants.filter(v => v.language !== 'Japanese'), [variants])
   const nm = getNmVariant(card)
   const priceHistory = nm?.priceHistory ?? EMPTY_HISTORY
 

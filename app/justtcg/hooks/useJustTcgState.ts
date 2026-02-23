@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, startTransition } from 'react'
 import { getSetNameJa } from '@/lib/justtcg-set-names'
 import type { SortKey } from '../lib/constants'
 
@@ -255,7 +255,7 @@ export function useJustTcgState() {
 
   // R12-01: フィルタ変更で selectedCard がリストから消えたらクリア
   useEffect(() => {
-    if (selectedCard && filteredCards.length > 0 && !filteredCards.some(c => c.id === selectedCard.id)) {
+    if (selectedCard && !filteredCards.some(c => c.id === selectedCard.id)) {
       setSelectedCard(null)
     }
   }, [filteredCards, selectedCard])
@@ -321,17 +321,18 @@ export function useJustTcgState() {
         }
         return
       }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       // セット切替後のstale writeを防止
       if (selectedSetIdRef.current === capturedSetId) {
         setPcMatches(prev => ({ ...prev, [card.id]: json.success ? json.data : null }))
       }
-      // Gemini で日本語名を自動抽出（fire-and-forget）
+      // Gemini で日本語名を自動抽出（fire-and-forget、startTransitionで低優先度バッチ化）
       if (json.success && json.data?.imageUrl && setJaNameRef.current) {
         const cardId = card.id
         extractJaName(json.data.imageUrl).then(name => {
           if (name && setJaNameRef.current && selectedSetIdRef.current === capturedSetId) {
-            setJaNameRef.current(cardId, name)
+            startTransition(() => { setJaNameRef.current!(cardId, name) })
           }
         })
       }
@@ -408,6 +409,8 @@ export function useJustTcgState() {
               setPcMatches(prev => ({ ...prev, [card.id]: null }))
             }
             failed++
+          } else if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`)
           } else {
             const json = await res.json()
             const match: PCMatch | null = json.success ? json.data : null
@@ -417,12 +420,12 @@ export function useJustTcgState() {
 
             if (match) {
               succeeded++
-              // Gemini で日本語名抽出（fire-and-forget）
+              // Gemini で日本語名抽出（fire-and-forget、startTransitionで低優先度バッチ化）
               if (match.imageUrl && setJaNameRef.current) {
                 const cardId = card.id
                 extractJaName(match.imageUrl).then(name => {
                   if (name && setJaNameRef.current && selectedSetIdRef.current === capturedSetId) {
-                    setJaNameRef.current(cardId, name)
+                    startTransition(() => { setJaNameRef.current!(cardId, name) })
                   }
                 })
               }
