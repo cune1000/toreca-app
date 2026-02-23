@@ -1,33 +1,40 @@
 // チャートサイト用型定義
-// 独立時にAPI仕様としてそのまま使える
+// 海外相場（PriceCharting）ベース
 
 export interface ChartCard {
     id: string
     name: string
     image_url: string
     category: string
-    subcategory?: string
     rarity: string
     card_number?: string
-    set_name?: string
-    avg_price: number
-    price_change_24h: number     // %
-    price_change_7d: number      // %
-    price_change_30d: number     // %
-    purchase_price_avg?: number  // 買取平均
+    // 海外相場（メイン）
+    loose_price_jpy: number
+    loose_price_usd: number       // ペニー単位
+    graded_price_jpy?: number
+    graded_price_usd?: number     // ペニー単位
+    // 変動率（表示中のpriceTypeに応じた値）
+    price_change_24h: number
+    price_change_7d: number
+    price_change_30d: number
+    // 表示用
+    display_price: number         // ランキングのpriceTypeに応じたJPY価格
+    display_price_usd: number     // 同USD（ペニー）
 }
 
 export interface CardDetail extends ChartCard {
-    illustrator?: string
-    regulation?: string
+    pricecharting_id?: string | null
+    pricecharting_url?: string | null
     high_price: number
     low_price: number
 }
 
 export interface PricePoint {
     date: string       // YYYY-MM-DD
-    avg_price: number
-    purchase_avg?: number
+    loose_price_jpy: number
+    loose_price_usd: number
+    graded_price_jpy: number
+    graded_price_usd: number
 }
 
 export interface PurchaseShopPrice {
@@ -44,8 +51,8 @@ export interface RankingDef {
     icon: string
     category: string
     color: string
-    dataSource: 'sale' | 'purchase' | 'psa' | 'box' | 'condition_a'
-    sortBy: 'change_pct_desc' | 'change_pct_asc' | 'change_yen_desc' | 'change_yen_asc' | 'price_desc'
+    priceType: 'loose' | 'graded'
+    sortBy: 'change_pct_desc' | 'change_pct_asc' | 'price_desc'
     comingSoon?: boolean
 }
 

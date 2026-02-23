@@ -2,18 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Share2 } from 'lucide-react'
+import { ArrowLeft, Share2, ExternalLink } from 'lucide-react'
 import ChartLayoutComponent from '@/components/chart/ChartLayout'
 import PriceGraph from '@/components/chart/PriceGraph'
-import PurchasePriceTable from '@/components/chart/PurchasePriceTable'
 import AffiliateButtons from '@/components/chart/AffiliateButtons'
 import PriceChangeIndicator from '@/components/chart/PriceChangeIndicator'
-import ShinsokuLink from '@/components/chart/ShinsokuLink'
-import { getCardDetail, getPriceHistory, getPurchasePrices } from '@/lib/chart/queries'
+import { getCardDetail, getPriceHistory } from '@/lib/chart/queries'
 import { getAffiliateLinks } from '@/lib/chart/affiliate'
-import { formatPrice } from '@/lib/chart/format'
-import { CardDetail, PricePoint, PurchaseShopPrice } from '@/lib/chart/types'
-import { supabase } from '@/lib/supabase'
+import { formatPrice, formatUsd } from '@/lib/chart/format'
+import { CardDetail, PricePoint } from '@/lib/chart/types'
 
 interface Props {
     params: Promise<{ id: string }>
@@ -22,9 +19,6 @@ interface Props {
 export default function CardDetailPage({ params }: Props) {
     const [card, setCard] = useState<CardDetail | null>(null)
     const [priceData, setPriceData] = useState<Record<string, PricePoint[]>>({})
-    const [purchasePrices, setPurchasePrices] = useState<PurchaseShopPrice[]>([])
-    const [tab, setTab] = useState<'chart' | 'purchase' | 'shinsoku'>('chart')
-    const [purchaseLinks, setPurchaseLinks] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [cardId, setCardId] = useState<string>('')
 
@@ -38,13 +32,12 @@ export default function CardDetailPage({ params }: Props) {
         async function fetchData() {
             setLoading(true)
 
-            const [cardData, history30, history90, history1y, historyAll, purchases] = await Promise.all([
+            const [cardData, history30, history90, history1y, historyAll] = await Promise.all([
                 getCardDetail(cardId),
                 getPriceHistory(cardId, '30d'),
                 getPriceHistory(cardId, '90d'),
                 getPriceHistory(cardId, '1y'),
                 getPriceHistory(cardId, 'all'),
-                getPurchasePrices(cardId),
             ])
 
             setCard(cardData)
@@ -54,26 +47,11 @@ export default function CardDetailPage({ params }: Props) {
                 '1y': history1y,
                 'all': historyAll,
             })
-            setPurchasePrices(purchases)
-            fetchPurchaseLinks()
             setLoading(false)
         }
 
         fetchData()
     }, [cardId])
-
-    const fetchPurchaseLinks = async () => {
-        if (!cardId) return
-        try {
-            const res = await fetch(`/api/purchase-links?card_id=${cardId}`)
-            const json = await res.json()
-            if (json.success) {
-                setPurchaseLinks(json.data || [])
-            }
-        } catch (err) {
-            console.error('Failed to fetch purchase links:', err)
-        }
-    }
 
     if (loading) {
         return (
@@ -99,9 +77,7 @@ export default function CardDetailPage({ params }: Props) {
         )
     }
 
-    const affiliateLinks = getAffiliateLinks(card.name, card.rarity, card.avg_price)
-    const spread = card.avg_price - (card.purchase_price_avg || 0)
-    const spreadPct = card.avg_price > 0 ? ((spread / card.avg_price) * 100) : 0
+    const affiliateLinks = getAffiliateLinks(card.name, card.rarity, card.display_price)
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -166,11 +142,16 @@ export default function CardDetailPage({ params }: Props) {
                                 <p className="text-xs text-gray-400 mt-1">{card.category}</p>
                             )}
 
-                            {/* 現在価格 */}
+                            {/* 現在価格（素体） */}
                             <div className="mt-3">
                                 <p className="text-2xl font-bold text-gray-900">
-                                    {formatPrice(card.avg_price)}
+                                    {formatPrice(card.loose_price_jpy)}
                                 </p>
+                                {card.loose_price_usd > 0 && (
+                                    <p className="text-xs text-gray-400">
+                                        {formatUsd(card.loose_price_usd)}
+                                    </p>
+                                )}
                                 <div className="flex items-center gap-3 mt-0.5">
                                     <div className="flex items-center gap-1">
                                         <span className="text-[10px] text-gray-400">24h</span>
@@ -192,10 +173,13 @@ export default function CardDetailPage({ params }: Props) {
                     {/* 価格サマリーカード */}
                     <div className="grid grid-cols-3 gap-2 mt-4">
                         <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
-                            <p className="text-[10px] text-gray-400">買取平均</p>
+                            <p className="text-[10px] text-gray-400">PSA10価格</p>
                             <p className="text-sm font-bold text-green-600">
-                                {card.purchase_price_avg ? formatPrice(card.purchase_price_avg) : '-'}
+                                {card.graded_price_jpy ? formatPrice(card.graded_price_jpy) : '-'}
                             </p>
+                            {card.graded_price_usd && card.graded_price_usd > 0 && (
+                                <p className="text-[9px] text-gray-400">{formatUsd(card.graded_price_usd)}</p>
+                            )}
                         </div>
                         <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
                             <p className="text-[10px] text-gray-400">最高値</p>
@@ -212,86 +196,33 @@ export default function CardDetailPage({ params }: Props) {
                     </div>
                 </div>
 
-                {/* タブナビ */}
-                <div className="bg-white border-t border-b border-gray-100 px-4 mt-1">
-                    <div className="flex">
-                        {[
-                            { key: 'chart' as const, label: '📊 チャート' },
-                            { key: 'purchase' as const, label: '🏪 買取価格' },
-                            { key: 'shinsoku' as const, label: `🔗 紐付け${purchaseLinks.length > 0 ? ' ✅' : ''}` },
-                        ].map(t => (
-                            <button
-                                key={t.key}
-                                onClick={() => setTab(t.key)}
-                                className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${tab === t.key
-                                    ? 'border-gray-800 text-gray-800'
-                                    : 'border-transparent text-gray-400 hover:text-gray-600'
-                                    }`}
-                            >
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
                 <div className="px-4 py-4">
-                    {/* チャートタブ */}
-                    {tab === 'chart' && (
-                        <>
-                            <PriceGraph
-                                data={priceData}
-                                onPeriodChange={() => { }}
-                            />
+                    {/* 価格チャート */}
+                    <PriceGraph
+                        data={priceData}
+                        onPeriodChange={() => { }}
+                    />
 
-                            {/* スプレッド */}
-                            {card.purchase_price_avg && card.purchase_price_avg > 0 && (
-                                <div className="mt-3 bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-sm">
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-xs text-gray-500">販売 - 買取 スプレッド</p>
-                                        <p className="text-sm font-bold text-amber-600">
-                                            {formatPrice(spread)}
-                                            <span className="text-[10px] text-gray-400 ml-1">
-                                                ({spreadPct.toFixed(1)}%)
-                                            </span>
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </>
+                    {/* PriceChartingリンク */}
+                    {card.pricecharting_id && (
+                        <div className="mt-3">
+                            <a
+                                href={card.pricecharting_url || `https://www.pricecharting.com/game/${card.pricecharting_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5
+                                    text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                            >
+                                <ExternalLink size={14} />
+                                PriceChartingで詳細を見る
+                            </a>
+                        </div>
                     )}
 
-                    {/* 買取価格タブ */}
-                    {tab === 'purchase' && (
-                        <>
-                            <h3 className="text-sm font-bold text-gray-700 mb-3">
-                                店舗別 買取価格
-                            </h3>
-                            <PurchasePriceTable prices={purchasePrices} />
-                        </>
-                    )}
-
-                    {/* シンソク紐付けタブ */}
-                    {tab === 'shinsoku' && (
-                        <>
-                            <h3 className="text-sm font-bold text-gray-700 mb-3">
-                                🔗 シンソク買取 紐付け
-                            </h3>
-                            <p className="text-xs text-gray-400 mb-3">
-                                シンソクの商品と紐付けると、買取価格を自動追跡します
-                            </p>
-                            <ShinsokuLink
-                                cardId={cardId}
-                                cardName={card.name}
-                                links={purchaseLinks.filter((l: any) => l.shop?.name === 'シンソク（郵送買取）')}
-                                onLinksChanged={() => fetchPurchaseLinks()}
-                            />
-                        </>
-                    )}
-
-                    {/* アフィリエイトリンク（常に表示） */}
+                    {/* アフィリエイトリンク */}
                     <div className="mt-6">
                         <h3 className="text-sm font-bold text-gray-700 mb-3">
-                            🛒 この商品を探す
+                            この商品を探す
                         </h3>
                         <AffiliateButtons links={affiliateLinks} />
                     </div>
@@ -303,7 +234,7 @@ export default function CardDetailPage({ params }: Props) {
 
                     {/* カード基本情報 */}
                     <div className="mt-6 bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                        <h3 className="text-sm font-bold text-gray-700 mb-3">📋 カード情報</h3>
+                        <h3 className="text-sm font-bold text-gray-700 mb-3">カード情報</h3>
                         <div className="space-y-2 text-sm">
                             {[
                                 ['カード名', card.name],

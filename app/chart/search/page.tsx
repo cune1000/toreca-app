@@ -7,7 +7,7 @@ import ChartLayoutComponent from '@/components/chart/ChartLayout'
 import SearchBox from '@/components/chart/SearchBox'
 import CategoryTabs from '@/components/chart/CategoryTabs'
 import { searchCards } from '@/lib/chart/queries'
-import { formatPrice } from '@/lib/chart/format'
+import { formatPrice, formatUsd } from '@/lib/chart/format'
 import { ChartCard } from '@/lib/chart/types'
 import PriceChangeIndicator from '@/components/chart/PriceChangeIndicator'
 
@@ -76,8 +76,13 @@ function SearchContent() {
                                     </div>
                                     <div className="text-right shrink-0">
                                         <p className="text-sm font-bold text-gray-900">
-                                            {card.avg_price > 0 ? formatPrice(card.avg_price) : '-'}
+                                            {card.display_price > 0 ? formatPrice(card.display_price) : '-'}
                                         </p>
+                                        {card.display_price_usd > 0 && (
+                                            <p className="text-[10px] text-gray-400">
+                                                {formatUsd(card.display_price_usd)}
+                                            </p>
+                                        )}
                                         {card.price_change_24h !== 0 && (
                                             <PriceChangeIndicator value={card.price_change_24h} />
                                         )}

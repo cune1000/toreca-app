@@ -5,7 +5,7 @@ import {
     AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { PricePoint } from '@/lib/chart/types'
-import { formatPrice, formatDate } from '@/lib/chart/format'
+import { formatPrice, formatDate, formatUsd } from '@/lib/chart/format'
 
 const PERIODS = [
     { key: '30d', label: '30日' },
@@ -27,9 +27,17 @@ function CustomTooltip({ active, payload }: any) {
         <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
             <p className="text-gray-500 mb-1">{d?.date}</p>
             {payload.map((p: any, i: number) => (
-                <p key={i} className="font-bold" style={{ color: p.color }}>
-                    {p.name}: {formatPrice(p.value || 0)}
-                </p>
+                <div key={i}>
+                    <p className="font-bold" style={{ color: p.color }}>
+                        {p.name}: {formatPrice(p.value || 0)}
+                    </p>
+                    {p.dataKey === 'loose_price_jpy' && d?.loose_price_usd > 0 && (
+                        <p className="text-gray-400 text-[10px]">({formatUsd(d.loose_price_usd)})</p>
+                    )}
+                    {p.dataKey === 'graded_price_jpy' && d?.graded_price_usd > 0 && (
+                        <p className="text-gray-400 text-[10px]">({formatUsd(d.graded_price_usd)})</p>
+                    )}
+                </div>
             ))}
         </div>
     )
@@ -37,7 +45,7 @@ function CustomTooltip({ active, payload }: any) {
 
 export default function PriceGraph({ data, onPeriodChange, initialPeriod = '30d' }: Props) {
     const [period, setPeriod] = useState(initialPeriod)
-    const [showPurchase, setShowPurchase] = useState(true)
+    const [showGraded, setShowGraded] = useState(true)
 
     const chartData = data[period] || []
 
@@ -74,24 +82,24 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '30d'
                 ))}
             </div>
 
-            {/* 販売/買取の表示切り替え */}
+            {/* 素体/PSA10の表示切り替え */}
             <div className="flex items-center gap-4 mb-2 text-xs">
                 <label className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-full bg-red-400" />
-                    <span className="text-gray-600">販売価格</span>
+                    <span className="text-gray-600">素体価格</span>
                 </label>
                 <label
                     className="flex items-center gap-1.5 cursor-pointer"
-                    onClick={() => setShowPurchase(!showPurchase)}
+                    onClick={() => setShowGraded(!showGraded)}
                 >
                     <div
-                        className={`w-3 h-3 rounded-full border-2 transition-colors ${showPurchase
+                        className={`w-3 h-3 rounded-full border-2 transition-colors ${showGraded
                                 ? 'bg-emerald-400 border-emerald-400'
                                 : 'bg-white border-gray-300'
                             }`}
                     />
-                    <span className={showPurchase ? 'text-gray-600' : 'text-gray-400'}>
-                        買取価格
+                    <span className={showGraded ? 'text-gray-600' : 'text-gray-400'}>
+                        PSA10
                     </span>
                 </label>
             </div>
@@ -102,11 +110,11 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '30d'
                     <ResponsiveContainer width="100%" height={240}>
                         <AreaChart data={formattedData}>
                             <defs>
-                                <linearGradient id="gradSale" x1="0" y1="0" x2="0" y2="1">
+                                <linearGradient id="gradLoose" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stopColor="#ef4444" stopOpacity={0.15} />
                                     <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
                                 </linearGradient>
-                                <linearGradient id="gradPurchase" x1="0" y1="0" x2="0" y2="1">
+                                <linearGradient id="gradGraded" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stopColor="#10b981" stopOpacity={0.1} />
                                     <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                                 </linearGradient>
@@ -129,22 +137,22 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '30d'
                             <Tooltip content={<CustomTooltip />} />
                             <Area
                                 type="monotone"
-                                dataKey="avg_price"
+                                dataKey="loose_price_jpy"
                                 stroke="#ef4444"
                                 strokeWidth={2}
-                                fill="url(#gradSale)"
-                                name="販売価格"
+                                fill="url(#gradLoose)"
+                                name="素体価格"
                                 dot={false}
                                 activeDot={{ r: 4, fill: '#ef4444' }}
                             />
-                            {showPurchase && (
+                            {showGraded && (
                                 <Area
                                     type="monotone"
-                                    dataKey="purchase_avg"
+                                    dataKey="graded_price_jpy"
                                     stroke="#10b981"
                                     strokeWidth={1.5}
-                                    fill="url(#gradPurchase)"
-                                    name="買取価格"
+                                    fill="url(#gradGraded)"
+                                    name="PSA10"
                                     dot={false}
                                     activeDot={{ r: 4, fill: '#10b981' }}
                                     strokeDasharray="4 2"

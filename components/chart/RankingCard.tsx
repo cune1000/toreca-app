@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ChartCard } from '@/lib/chart/types'
-import { formatPrice, formatChange } from '@/lib/chart/format'
+import { formatPrice, formatChange, formatUsd } from '@/lib/chart/format'
 
 interface Props {
     card: ChartCard
@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default function RankingCard({ card, rank, color }: Props) {
-    const change = card.price_change_24h
+    const change = card.price_change_30d
     const isUp = change > 0
 
     return (
@@ -57,8 +57,13 @@ export default function RankingCard({ card, rank, color }: Props) {
                     )}
                 </div>
                 <p className="text-sm font-bold text-gray-900 mt-1.5">
-                    {formatPrice(card.avg_price)}
+                    {formatPrice(card.display_price)}
                 </p>
+                {card.display_price_usd > 0 && (
+                    <p className="text-[10px] text-gray-400">
+                        {formatUsd(card.display_price_usd)}
+                    </p>
+                )}
                 {change !== 0 && (
                     <p className={`text-xs font-bold mt-0.5 ${isUp ? 'text-red-500' : 'text-blue-500'}`}>
                         {isUp ? '▲' : '▼'} {formatChange(Math.abs(change))}

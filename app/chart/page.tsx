@@ -41,8 +41,7 @@ export default function ChartTopPage() {
             rankings.map(async (r) => {
                 try {
                     const cards = await getRanking({
-                        dataSource: r.dataSource,
-                        sortBy: r.sortBy,
+                        type: r.id,
                         category,
                         limit: 10,
                     })

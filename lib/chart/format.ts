@@ -21,6 +21,19 @@ export function formatChangeYen(value: number): string {
     return `${sign}¥${Math.abs(value).toLocaleString()}`
 }
 
+export function formatUsd(pennies: number): string {
+    const dollars = pennies / 100
+    return `$${dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+export function formatUsdCompact(pennies: number): string {
+    const dollars = pennies / 100
+    if (dollars >= 1000) {
+        return `$${(dollars / 1000).toFixed(1)}k`
+    }
+    return formatUsd(pennies)
+}
+
 export function formatRelativeTime(dateStr: string): string {
     const date = new Date(dateStr)
     const now = new Date()

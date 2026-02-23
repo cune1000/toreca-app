@@ -31,8 +31,7 @@ export default function CategoryPage({ params }: Props) {
                 activeRankings.map(async (r) => {
                     try {
                         const cards = await getRanking({
-                            dataSource: r.dataSource,
-                            sortBy: r.sortBy,
+                            type: r.id,
                             category: slug,
                             limit: 10,
                         })

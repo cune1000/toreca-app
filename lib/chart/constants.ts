@@ -2,49 +2,60 @@ import { RankingDef, Category } from './types'
 
 export const ALL_RANKINGS: RankingDef[] = [
     {
-        id: 'sale_up_pct',
-        label: '販売価格 上昇率',
+        id: 'loose_up_pct',
+        label: '素体 上昇率',
         icon: '📈',
-        category: '販売',
+        category: '素体',
         color: '#ef4444',
-        dataSource: 'sale',
-        sortBy: 'change_pct_desc'
+        priceType: 'loose',
+        sortBy: 'change_pct_desc',
     },
     {
-        id: 'sale_down_pct',
-        label: '販売価格 下落率',
+        id: 'loose_down_pct',
+        label: '素体 下落率',
         icon: '📉',
-        category: '販売',
+        category: '素体',
         color: '#3b82f6',
-        dataSource: 'sale',
-        sortBy: 'change_pct_asc'
+        priceType: 'loose',
+        sortBy: 'change_pct_asc',
     },
     {
-        id: 'sale_up_yen',
-        label: '販売価格 上昇金額',
-        icon: '💹',
-        category: '販売',
-        color: '#f97316',
-        dataSource: 'sale',
-        sortBy: 'change_yen_desc'
+        id: 'graded_up_pct',
+        label: 'PSA10 上昇率',
+        icon: '⭐',
+        category: 'PSA10',
+        color: '#eab308',
+        priceType: 'graded',
+        sortBy: 'change_pct_desc',
     },
     {
-        id: 'sale_down_yen',
-        label: '販売価格 下落金額',
-        icon: '💸',
-        category: '販売',
-        color: '#6366f1',
-        dataSource: 'sale',
-        sortBy: 'change_yen_asc'
+        id: 'graded_down_pct',
+        label: 'PSA10 下落率',
+        icon: '🌙',
+        category: 'PSA10',
+        color: '#a855f7',
+        priceType: 'graded',
+        sortBy: 'change_pct_asc',
     },
+    {
+        id: 'high_price_loose',
+        label: '高額（素体）',
+        icon: '👑',
+        category: 'その他',
+        color: '#f59e0b',
+        priceType: 'loose',
+        sortBy: 'price_desc',
+    },
+    // Coming Soon
     {
         id: 'purchase_up_pct',
         label: '買取価格 上昇率',
         icon: '🔥',
         category: '買取',
         color: '#dc2626',
-        dataSource: 'purchase',
-        sortBy: 'change_pct_desc'
+        priceType: 'loose',
+        sortBy: 'change_pct_desc',
+        comingSoon: true,
     },
     {
         id: 'purchase_down_pct',
@@ -52,79 +63,31 @@ export const ALL_RANKINGS: RankingDef[] = [
         icon: '❄️',
         category: '買取',
         color: '#2563eb',
-        dataSource: 'purchase',
-        sortBy: 'change_pct_asc'
-    },
-    {
-        id: 'psa_up_pct',
-        label: 'PSA鑑定品 上昇率',
-        icon: '⭐',
-        category: 'PSA',
-        color: '#eab308',
-        dataSource: 'psa',
-        sortBy: 'change_pct_desc',
-        comingSoon: true
-    },
-    {
-        id: 'psa_down_pct',
-        label: 'PSA鑑定品 下落率',
-        icon: '🌙',
-        category: 'PSA',
-        color: '#a855f7',
-        dataSource: 'psa',
+        priceType: 'loose',
         sortBy: 'change_pct_asc',
-        comingSoon: true
+        comingSoon: true,
     },
     {
-        id: 'box_up_pct',
-        label: 'BOX 上昇率',
-        icon: '📦',
-        category: 'BOX',
-        color: '#22c55e',
-        dataSource: 'box',
-        sortBy: 'change_pct_desc',
-        comingSoon: true
-    },
-    {
-        id: 'box_down_pct',
-        label: 'BOX 下落率',
-        icon: '📭',
-        category: 'BOX',
-        color: '#14b8a6',
-        dataSource: 'box',
-        sortBy: 'change_pct_asc',
-        comingSoon: true
-    },
-    {
-        id: 'condition_a_up',
-        label: '美品(A) 上昇率',
-        icon: '✨',
-        category: '状態別',
-        color: '#ec4899',
-        dataSource: 'condition_a',
-        sortBy: 'change_pct_desc',
-        comingSoon: true
-    },
-    {
-        id: 'high_price',
-        label: '高額ランキング',
-        icon: '👑',
+        id: 'weekly_up_loose',
+        label: '週間上昇率（素体）',
+        icon: '💹',
         category: 'その他',
-        color: '#f59e0b',
-        dataSource: 'sale',
-        sortBy: 'price_desc'
+        color: '#22c55e',
+        priceType: 'loose',
+        sortBy: 'change_pct_desc',
+        comingSoon: true,
     },
 ]
 
 export const DEFAULT_VISIBLE_RANKINGS = [
-    'sale_up_pct',
-    'sale_down_pct',
-    'purchase_up_pct',
-    'purchase_down_pct',
-    'high_price',
+    'loose_up_pct',
+    'loose_down_pct',
+    'graded_up_pct',
+    'graded_down_pct',
+    'high_price_loose',
 ]
 
-export const RANKING_STORAGE_KEY = 'chart_rankings_v1'
+export const RANKING_STORAGE_KEY = 'chart_rankings_v2'
 
 export const CATEGORIES: Category[] = [
     { slug: 'all', name: '全体' },
