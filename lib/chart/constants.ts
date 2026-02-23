@@ -46,7 +46,6 @@ export const ALL_RANKINGS: RankingDef[] = [
         priceType: 'loose',
         sortBy: 'price_desc',
     },
-    // Coming Soon
     {
         id: 'purchase_up_pct',
         label: '買取価格 上昇率',
@@ -55,7 +54,6 @@ export const ALL_RANKINGS: RankingDef[] = [
         color: '#dc2626',
         priceType: 'loose',
         sortBy: 'change_pct_desc',
-        comingSoon: true,
     },
     {
         id: 'purchase_down_pct',
@@ -65,8 +63,8 @@ export const ALL_RANKINGS: RankingDef[] = [
         color: '#2563eb',
         priceType: 'loose',
         sortBy: 'change_pct_asc',
-        comingSoon: true,
     },
+    // Coming Soon
     {
         id: 'weekly_up_loose',
         label: '週間上昇率（素体）',
@@ -85,9 +83,11 @@ export const DEFAULT_VISIBLE_RANKINGS = [
     'graded_up_pct',
     'graded_down_pct',
     'high_price_loose',
+    'purchase_up_pct',
+    'purchase_down_pct',
 ]
 
-export const RANKING_STORAGE_KEY = 'chart_rankings_v2'
+export const RANKING_STORAGE_KEY = 'chart_rankings_v3'
 
 export const CATEGORIES: Category[] = [
     { slug: 'all', name: '全体' },
