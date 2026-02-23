@@ -28,7 +28,7 @@ export const SET_NAME_JA: Record<string, string> = {
   'svm-generations-start-decks-pokemon-japan': 'ジェネレーションスタートデッキ',
   'sv8-super-electric-breaker-pokemon-japan': '超電ブレイカー',
   'sv-p-promotional-cards-pokemon-japan': 'プロモカード',
-  'sv7a-paradise-dragona-pokemon-japan': 'パラダイスドラゴナ',
+  'sv7a-paradise-dragona-pokemon-japan': '楽園ドラゴーナ',
   'sv7-stellar-miracle-pokemon-japan': 'ステラミラクル',
   'sv-stellar-miracle-deck-build-box-pokemon-japan': 'ステラミラクル デッキビルドBOX',
   'sv6a-night-wanderer-pokemon-japan': 'ナイトワンダラー',
