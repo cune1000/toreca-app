@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ゲームに応じた category_large_id を取得
+    // ゲームに応じた category_large_id を取得（マージ判定にも使うため先に実行）
     const GAME_CATEGORY_MAP: Record<string, string> = {
       'pokemon-japan': 'ポケモンカード',
       'pokemon': 'ポケモンカード',
@@ -177,13 +177,60 @@ export async function POST(request: NextRequest) {
       rarityId = rarityRow?.id || null
     }
 
-    // INSERT
+    // 名前+型番+カテゴリで既存カードを検索（別ソースから登録済みの場合マージ）
+    const cardNumber = str(card_number, 50)
+    if (cardNumber && category?.id) {
+      let mergeQuery = supabase
+        .from('cards')
+        .select('id, name')
+        .eq('name', trimmedName)
+        .eq('card_number', cardNumber)
+        .eq('category_large_id', category.id)
+        .is('justtcg_id', null) // JustTCG未紐付けのカードのみ
+      const { data: mergeTarget } = await mergeQuery.maybeSingle()
+
+      if (mergeTarget) {
+        // 既存カードにJustTCGデータを追記（UPDATE）
+        const updateFields: Record<string, unknown> = {
+          justtcg_id: trimmedJusttcgId,
+          name_en: str(name_en, 200),
+          rarity: str(rarity, 50),
+          set_code: str(set_code, 100),
+          set_name_en: str(set_name_en, 200),
+          release_year: safeReleaseYear,
+          pricecharting_id: str(pricecharting_id, 100),
+          pricecharting_name: str(pricecharting_name, 200),
+          pricecharting_url: url(pricecharting_url),
+        }
+        // 既存値がない場合のみ上書き
+        if (rarityId) updateFields.rarity_id = rarityId
+        if (url(image_url)) updateFields.image_url = url(image_url)
+
+        const { data: merged, error: mergeError } = await supabase
+          .from('cards')
+          .update(updateFields)
+          .eq('id', mergeTarget.id)
+          .select()
+          .single()
+
+        if (mergeError) {
+          console.error('Card merge error:', mergeError)
+          return NextResponse.json(
+            { success: false, error: mergeError.message },
+            { status: 500 }
+          )
+        }
+        return NextResponse.json({ success: true, data: merged, merged: true })
+      }
+    }
+
+    // INSERT（既存カードが見つからない場合）
     const { data: card, error } = await supabase
       .from('cards')
       .insert({
         name: trimmedName, // R13-API10: trimmed
         name_en: str(name_en, 200),
-        card_number: str(card_number, 50),
+        card_number: cardNumber,
         rarity: str(rarity, 50),
         rarity_id: rarityId,
         set_code: str(set_code, 100),
