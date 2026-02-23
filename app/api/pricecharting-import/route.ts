@@ -58,7 +58,13 @@ async function fetchSetCode(slug: string): Promise<string | null> {
     if (!res.ok) { setCodeCache.set(slug, null); return null }
     const html = await res.text()
     const match = html.match(/Set Code:\s*([^<"]+)/)
-    const code = match ? match[1].trim() : null
+    let code = match ? match[1].trim() : null
+    // サニタイズ: セットコードは英数字+ハイフンのみ（HTML属性ゴミ混入を防止）
+    if (code && !/^[A-Za-z0-9\-]+$/.test(code)) {
+      // HTML属性が混入した場合、最初のスペースまたは引用符で切る
+      const clean = code.match(/^([A-Za-z0-9\-]+)/)
+      code = clean ? clean[1] : null
+    }
     setCodeCache.set(slug, code)
     return code
   } catch {

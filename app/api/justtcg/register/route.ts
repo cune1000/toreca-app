@@ -205,53 +205,82 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: updated, updated: true })
     }
 
-    // 名前+型番+カテゴリで既存カードを検索（別ソースから登録済みの場合マージ）
+    // pricecharting_id でマージ対象を検索（PCインポート済みカードとの紐付け）
+    const pcId = str(pricecharting_id, 100)
     const cardNumber = str(card_number, 50)
-    if (cardNumber && category?.id) {
-      let mergeQuery = supabase
+    let mergeTarget: { id: string; name: string } | null = null
+
+    if (pcId) {
+      const { data: pcMerge } = await supabase
+        .from('cards')
+        .select('id, name')
+        .eq('pricecharting_id', pcId)
+        .is('justtcg_id', null) // JustTCG未紐付けのカードのみ
+        .maybeSingle()
+      if (pcMerge) mergeTarget = pcMerge
+    }
+
+    // 名前+型番+カテゴリで既存カードを検索（別ソースから登録済みの場合マージ）
+    if (!mergeTarget && cardNumber && category?.id) {
+      const { data: nameMerge } = await supabase
         .from('cards')
         .select('id, name')
         .eq('name', trimmedName)
         .eq('card_number', cardNumber)
         .eq('category_large_id', category.id)
         .is('justtcg_id', null) // JustTCG未紐付けのカードのみ
-      const { data: mergeTarget } = await mergeQuery.maybeSingle()
+        .maybeSingle()
+      if (nameMerge) mergeTarget = nameMerge
+    }
 
-      if (mergeTarget) {
-        // 既存カードにJustTCGデータを追記（UPDATE）
-        // nullで既存値を消さないよう、値がある場合のみセット
-        const updateFields: Record<string, unknown> = {
-          justtcg_id: trimmedJusttcgId,
-        }
-        if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
-        if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
-        if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
-        if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
-        if (safeReleaseYear) updateFields.release_year = safeReleaseYear
-        if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
-        if (str(pricecharting_id, 100)) updateFields.pricecharting_id = str(pricecharting_id, 100)
-        if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
-        if (url(pricecharting_url)) updateFields.pricecharting_url = url(pricecharting_url)
-        if (category?.id) updateFields.category_large_id = category.id
-        if (rarityId) updateFields.rarity_id = rarityId
-        if (url(image_url)) updateFields.image_url = url(image_url)
+    // 型番+カテゴリのみで検索（名前が微妙に異なる場合の緩和マージ — 1件のみマッチ時）
+    if (!mergeTarget && cardNumber && category?.id) {
+      const { data: looseMerge } = await supabase
+        .from('cards')
+        .select('id, name')
+        .eq('card_number', cardNumber)
+        .eq('category_large_id', category.id)
+        .is('justtcg_id', null)
+        .limit(2)
+      // 1件のみヒットした場合にのみマージ（複数あれば曖昧なのでスキップ）
+      if (looseMerge && looseMerge.length === 1) mergeTarget = looseMerge[0]
+    }
 
-        const { data: merged, error: mergeError } = await supabase
-          .from('cards')
-          .update(updateFields)
-          .eq('id', mergeTarget.id)
-          .select()
-          .single()
-
-        if (mergeError) {
-          console.error('Card merge error:', mergeError)
-          return NextResponse.json(
-            { success: false, error: mergeError.message },
-            { status: 500 }
-          )
-        }
-        return NextResponse.json({ success: true, data: merged, merged: true })
+    if (mergeTarget) {
+      // 既存カードにJustTCGデータを追記（UPDATE）
+      // nullで既存値を消さないよう、値がある場合のみセット
+      const updateFields: Record<string, unknown> = {
+        name: trimmedName, // 日本語名を最新に更新
+        justtcg_id: trimmedJusttcgId,
       }
+      if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
+      if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
+      if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
+      if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
+      if (safeReleaseYear) updateFields.release_year = safeReleaseYear
+      if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
+      if (pcId) updateFields.pricecharting_id = pcId
+      if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
+      if (url(pricecharting_url)) updateFields.pricecharting_url = url(pricecharting_url)
+      if (category?.id) updateFields.category_large_id = category.id
+      if (rarityId) updateFields.rarity_id = rarityId
+      if (url(image_url)) updateFields.image_url = url(image_url)
+
+      const { data: merged, error: mergeError } = await supabase
+        .from('cards')
+        .update(updateFields)
+        .eq('id', mergeTarget.id)
+        .select()
+        .single()
+
+      if (mergeError) {
+        console.error('Card merge error:', mergeError)
+        return NextResponse.json(
+          { success: false, error: mergeError.message },
+          { status: 500 }
+        )
+      }
+      return NextResponse.json({ success: true, data: merged, merged: true })
     }
 
     // INSERT（既存カードが見つからない場合）
