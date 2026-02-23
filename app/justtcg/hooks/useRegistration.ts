@@ -82,14 +82,12 @@ export function useRegistration(
 
   const toggleAllFiltered = useCallback((filteredIds: string[]) => {
     setCheckedCards(prev => {
-      // R12-26: 登録済みカードを除外して選択
-      const unregistered = filteredIds.filter(id => !registeredRef.current[id])
-      const allChecked = unregistered.length > 0 && unregistered.every(id => prev.has(id))
+      const allChecked = filteredIds.length > 0 && filteredIds.every(id => prev.has(id))
       const next = new Set(prev)
       if (allChecked) {
-        unregistered.forEach(id => next.delete(id))
+        filteredIds.forEach(id => next.delete(id))
       } else {
-        unregistered.forEach(id => next.add(id))
+        filteredIds.forEach(id => next.add(id))
       }
       return next
     })

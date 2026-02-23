@@ -72,11 +72,9 @@ export default memo(function CenterPanel({
 
   // 全選択チェック（最大2000件の every() をメモ化）
   const filteredIds = useMemo(() => filteredCards.map(c => c.id), [filteredCards])
-  // R13-FE01: 登録済みカードを除外して全選択状態を判定
   const allChecked = useMemo(() => {
-    const unregistered = filteredIds.filter(id => !registered[id])
-    return unregistered.length > 0 && unregistered.every(id => checkedCards.has(id))
-  }, [filteredIds, checkedCards, registered])
+    return filteredIds.length > 0 && filteredIds.every(id => checkedCards.has(id))
+  }, [filteredIds, checkedCards])
 
   return (
     <main className={`flex flex-col overflow-hidden ${className}`}>

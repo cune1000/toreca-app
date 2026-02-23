@@ -43,23 +43,22 @@ export default memo(function CardListItem({
         selected
           ? 'bg-[rgba(45,90,155,0.08)] border-l-2 border-[var(--jtcg-ink)]'
           : 'border-l-2 border-transparent hover:bg-gray-50/80'
-      } ${isRegistered ? 'opacity-40' : ''}`}
+      } ${isRegistered ? 'opacity-60' : ''}`}
       onClick={() => onSelect(card)}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(card) } }}
     >
       {showRegistration && (
-        <div className="shrink-0" onClick={e => e.stopPropagation()}>
-          {isRegistered ? (
+        <div className="shrink-0 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+          <label className="flex items-center justify-center w-8 h-8 -m-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isChecked}
+              onChange={() => onToggleCheck(card.id)}
+              className="rounded w-3.5 h-3.5 accent-[var(--jtcg-ink)]"
+            />
+          </label>
+          {isRegistered && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-bold">済</span>
-          ) : (
-            <label className="flex items-center justify-center w-8 h-8 -m-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isChecked}
-                onChange={() => onToggleCheck(card.id)}
-                className="rounded w-3.5 h-3.5 accent-[var(--jtcg-ink)]"
-              />
-            </label>
           )}
         </div>
       )}
