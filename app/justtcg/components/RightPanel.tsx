@@ -226,42 +226,45 @@ export default memo(function RightPanel({
             )}
 
             {/* 収録弾名・日本語名入力 + 登録ボタン */}
-            {isRegistered ? (
-              <p className="text-xs text-green-600 font-bold py-2 text-center">登録完了</p>
-            ) : (
-              <div className="space-y-2">
-                <div>
-                  <label className="text-[10px] text-[var(--jtcg-text-muted)] mb-0.5 block">収録弾名</label>
-                  <input
-                    type="text"
-                    value={expansionName || ''}
-                    onChange={e => onExpansionChange?.(e.target.value)}
-                    placeholder="収録弾名..."
-                    aria-label="収録弾名"
-                    className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
-                  />
-                </div>
+            <div className="space-y-2">
+              {isRegistered && (
+                <p className="text-xs text-green-600 font-bold py-1 text-center">登録済み</p>
+              )}
+              <div>
+                <label className="text-[10px] text-[var(--jtcg-text-muted)] mb-0.5 block">収録弾名</label>
                 <input
                   type="text"
-                  value={jaName || ''}
-                  onChange={e => onJaNameChange?.(e.target.value)}
-                  placeholder="日本語名を入力..."
-                  aria-label="日本語名"
-                  className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
+                  value={expansionName || ''}
+                  onChange={e => onExpansionChange?.(e.target.value)}
+                  placeholder="収録弾名..."
+                  aria-label="収録弾名"
+                  className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
                 />
-                <button
-                  onClick={() => onRegister?.()}
-                  disabled={isRegistering || !jaName?.trim()}
-                  className="w-full text-xs px-3 py-2.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isRegistering ? '登録中...' : '登録'}
-                </button>
-                {registerError && <p className="text-xs text-red-500" role="alert">{registerError}</p>}
-                {pcMatch === undefined && (
-                  <p className="text-[10px] text-amber-600">PC検索未実施（画像なしで登録されます）</p>
-                )}
               </div>
-            )}
+              <input
+                type="text"
+                value={jaName || ''}
+                onChange={e => onJaNameChange?.(e.target.value)}
+                placeholder="日本語名を入力..."
+                aria-label="日本語名"
+                className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
+              />
+              <button
+                onClick={() => onRegister?.()}
+                disabled={isRegistering || !jaName?.trim()}
+                className={`w-full text-xs px-3 py-2.5 rounded-[var(--jtcg-radius)] font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  isRegistered
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-[var(--jtcg-ink)] text-white'
+                }`}
+              >
+                {isRegistering ? '処理中...' : isRegistered ? '上書き更新' : '登録'}
+              </button>
+              {registerError && <p className="text-xs text-red-500" role="alert">{registerError}</p>}
+              {pcMatch === undefined && !isRegistered && (
+                <p className="text-[10px] text-amber-600">PC検索未実施（画像なしで登録されます）</p>
+              )}
+            </div>
           </div>
         )}
       </div>
