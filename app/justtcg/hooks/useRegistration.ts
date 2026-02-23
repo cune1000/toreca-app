@@ -18,6 +18,9 @@ export function useRegistration(
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; succeeded: number; failed: number } | null>(null)
   const cancelBulkRef = useRef(false)
 
+  // 収録弾名オーバーライド（セット単位で編集可能）
+  const [expansionOverride, setExpansionOverride] = useState('')
+
   // セット切替時にステートをリセット（registeredは保持しない — 別セットのIDなので無意味）
   const prevSetId = useRef(selectedSet?.id)
   useEffect(() => {
@@ -30,6 +33,7 @@ export function useRegistration(
       setRegistered({})
       setRegisterError({})
       setBulkProgress(null)
+      setExpansionOverride('')
     }
   }, [selectedSet?.id])
 
@@ -70,6 +74,14 @@ export function useRegistration(
   selectedSetRef.current = selectedSet
   const selectedGameRef = useRef(selectedGame)
   selectedGameRef.current = selectedGame
+  const expansionOverrideRef = useRef(expansionOverride)
+  expansionOverrideRef.current = expansionOverride
+
+  // デフォルト収録弾名（マッピング or セット名）
+  const defaultExpansion = useMemo(
+    () => selectedSet ? getSetNameJa(selectedSet.id, selectedSet.name) : '',
+    [selectedSet],
+  )
 
   /** カード1件を登録。成功（or 既に登録済み）なら true を返す */
   const handleRegister = useCallback(async (card: JTCard): Promise<boolean> => {
@@ -78,6 +90,8 @@ export function useRegistration(
       setRegisterError(prev => ({ ...prev, [card.id]: '日本語名を入力してください' }))
       return false
     }
+    // R14-02: セット切替ガード（fetch中にセット切替されたらstale write防止）
+    const capturedSetId = selectedSetRef.current?.id
     setRegistering(prev => ({ ...prev, [card.id]: true }))
     setRegisterError(prev => ({ ...prev, [card.id]: '' }))
 
@@ -98,16 +112,23 @@ export function useRegistration(
           set_code: setCode,
           set_name_en: currentSet?.name || card.set_name,
           release_year: releaseYear,
-          expansion: currentSet ? getSetNameJa(currentSet.id, currentSet.name) : card.set_name,
+          expansion: expansionOverrideRef.current || (currentSet ? getSetNameJa(currentSet.id, currentSet.name) : card.set_name),
           image_url: pc?.imageUrl || null,
           justtcg_id: card.id,
-          tcgplayer_id: card.variants?.[0]?.id || null,
+          tcgplayer_id: null, // R13-INT06: JustTCG variant IDはTCGPlayer IDではない
           pricecharting_id: pc?.id ? String(pc.id) : null,
+          pricecharting_name: pc?.name || card.name, // PC名優先、なければJustTCG英語名
           pricecharting_url: pc?.pricechartingUrl || null,
           game: selectedGameRef.current,
         }),
       })
+      // R14-16: 非JSONレスポンス対策
+      if (!res.ok && res.status !== 409) {
+        throw new Error(`HTTP ${res.status}`)
+      }
       const json = await res.json()
+      // R14-02: セット切替後のstale write防止
+      if (selectedSetRef.current?.id !== capturedSetId) return false
       if (json.success) {
         setRegistered(prev => ({ ...prev, [card.id]: true }))
         setCheckedCards(prev => {
@@ -125,11 +146,14 @@ export function useRegistration(
         return false
       }
     } catch (e: unknown) {
+      if (selectedSetRef.current?.id !== capturedSetId) return false
       const message = e instanceof Error ? e.message : '登録エラー'
       setRegisterError(prev => ({ ...prev, [card.id]: message }))
       return false
     } finally {
-      setRegistering(prev => ({ ...prev, [card.id]: false }))
+      if (selectedSetRef.current?.id === capturedSetId) {
+        setRegistering(prev => ({ ...prev, [card.id]: false }))
+      }
     }
   }, [])
 
@@ -147,7 +171,12 @@ export function useRegistration(
     bulkRunningRef.current = true
     const capturedSetId = selectedSetRef.current?.id // R12-13: セットIDを捕捉
     try {
-      const toRegister = cardsRef.current.filter(c => checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id])
+      // R13-INT07: jaNameが未入力のカードもスキップ（日本語名なし登録防止）
+      const toRegister = cardsRef.current.filter(c =>
+        checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id] && jaNamesRef.current[c.id]?.trim()
+      )
+      // R14-03: 空配列の早期リターン（UIチラつき防止）
+      if (toRegister.length === 0) return
       cancelBulkRef.current = false
       let succeeded = 0
       let failed = 0
@@ -189,6 +218,9 @@ export function useRegistration(
     checkedCount,
     readyCount,
     bulkProgress,
+    expansionOverride,
+    defaultExpansion,
+    setExpansionOverride,
     toggleCheck,
     toggleAllFiltered,
     setJaName,

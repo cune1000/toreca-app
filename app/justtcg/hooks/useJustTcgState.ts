@@ -73,7 +73,8 @@ export function isValidPrice(p: unknown): p is number {
 export function formatUpdated(ts: number | null) {
   if (ts == null) return '-'
   const d = new Date(ts * 1000)
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  // R13-FE09: JST タイムゾーンを明示
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
 // === フック ===
@@ -94,7 +95,7 @@ export function useJustTcgState() {
 
   // フィルタ
   const [search, setSearch] = useState('')
-  const [rarityFilter, setRarityFilter] = useState('')
+  const [rarityFilter, setRarityFilter] = useState<Set<string>>(new Set())
   const [setFilterText, setSetFilterText] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('price')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
@@ -105,6 +106,20 @@ export function useJustTcgState() {
   const [pcLoading, setPcLoading] = useState<Record<string, boolean>>({})
   const pcLoadingRef = useRef(pcLoading)
   pcLoadingRef.current = pcLoading
+  const pcMatchesRef = useRef(pcMatches)
+  pcMatchesRef.current = pcMatches
+
+  // 一括PC検索
+  const [bulkPcProgress, setBulkPcProgress] = useState<{
+    current: number; total: number; succeeded: number; failed: number
+  } | null>(null)
+  const cancelBulkPcRef = useRef(false)
+  const bulkPcRunningRef = useRef(false)
+
+  // Gemini日本語名連携用（useRegistrationのsetJaNameを注入）
+  const setJaNameRef = useRef<((cardId: string, name: string) => void) | null>(null)
+  // R14-05: checkedCards注入用（useRegistrationのcheckedCardsをref経由で参照）
+  const checkedCardsExtRef = useRef<Set<string>>(new Set())
 
   // 登録モード
   const [showRegistration, setShowRegistration] = useState(false)
@@ -119,12 +134,15 @@ export function useJustTcgState() {
     setSelectedCard(null)
     setSetFilterText('')
     setSearch('') // R12-20: ゲーム切替時に検索テキストもクリア
-    setRarityFilter('') // R12-20
+    setRarityFilter(new Set()) // R12-20
     setError('')
     setPcMatches({})
+    setPcLoading({}) // R14-01: ゲーム切替時にpcLoadingもリセット
+    setBulkPcProgress(null)
+    cancelBulkPcRef.current = true
 
     fetch(`/api/justtcg/sets?game=${encodeURIComponent(selectedGame)}`, { signal: controller.signal })
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(res => {
         if (controller.signal.aborted) return // R12-09: レースコンディション防止
         if (res.success) {
@@ -146,18 +164,20 @@ export function useJustTcgState() {
 
   // カード取得（セット変更時）— AbortController でレースコンディション防止
   useEffect(() => {
-    if (!selectedSetId) { setCards([]); return }
+    if (!selectedSetId) { setCards([]); setLoadingCards(false); return } // R13-INT10: loadingCards確実にリセット
     const controller = new AbortController()
     setLoadingCards(true)
     setSearch('')
-    setRarityFilter('')
+    setRarityFilter(new Set())
     setSelectedCard(null)
     setError('') // R12-06: 前セットのエラーをクリア
     setPcMatches({})
     setPcLoading({})
+    setBulkPcProgress(null)
+    cancelBulkPcRef.current = true
 
     fetch(`/api/justtcg/cards?set=${encodeURIComponent(selectedSetId)}&game=${encodeURIComponent(selectedGame)}`, { signal: controller.signal })
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(res => {
         if (controller.signal.aborted) return // R12-09: レースコンディション防止
         if (res.success) {
@@ -197,20 +217,22 @@ export function useJustTcgState() {
         c.number.toLowerCase().includes(q)
       )
     }
-    if (rarityFilter) {
-      list = list.filter(c => c.rarity === rarityFilter)
+    if (rarityFilter.size > 0) {
+      list = list.filter(c => rarityFilter.has(c.rarity))
     }
     if (japaneseOnly) {
       list = list.filter(c => Array.isArray(c.variants) && c.variants.some(v => v.language === 'Japanese'))
     }
 
     // ソート（price含む全モード）
+    // R14-17: 昇順時は価格なしを末尾、降順時は価格なしを末尾にする
+    const noValueFallback = sortOrder === 'asc' ? Infinity : -Infinity
     list = [...list].sort((a, b) => {
       let va: number | string = 0, vb: number | string = 0
 
       if (sortBy === 'price') {
-        va = getNmVariant(a)?.price ?? -Infinity
-        vb = getNmVariant(b)?.price ?? -Infinity
+        va = getNmVariant(a)?.price ?? noValueFallback
+        vb = getNmVariant(b)?.price ?? noValueFallback
       } else if (sortBy === 'number') {
         va = a.number; vb = b.number
         return sortOrder === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
@@ -218,11 +240,11 @@ export function useJustTcgState() {
         va = a.name; vb = b.name
         return sortOrder === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
       } else if (sortBy === 'change7d') {
-        va = getNmVariant(a)?.priceChange7d ?? -Infinity
-        vb = getNmVariant(b)?.priceChange7d ?? -Infinity
+        va = getNmVariant(a)?.priceChange7d ?? noValueFallback
+        vb = getNmVariant(b)?.priceChange7d ?? noValueFallback
       } else if (sortBy === 'change30d') {
-        va = getNmVariant(a)?.priceChange30d ?? -Infinity
-        vb = getNmVariant(b)?.priceChange30d ?? -Infinity
+        va = getNmVariant(a)?.priceChange30d ?? noValueFallback
+        vb = getNmVariant(b)?.priceChange30d ?? noValueFallback
       }
 
       return sortOrder === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number)
@@ -266,6 +288,22 @@ export function useJustTcgState() {
   const selectedSetIdRef = useRef(selectedSetId)
   selectedSetIdRef.current = selectedSetId
 
+  /** Gemini で画像から日本語名を抽出 */
+  const extractJaName = useCallback(async (imageUrl: string): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/justtcg/extract-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl }),
+      })
+      if (!res.ok) return null
+      const json = await res.json()
+      return json.success ? json.name : null
+    } catch {
+      return null
+    }
+  }, [])
+
   const handlePcMatch = useCallback(async (card: JTCard) => {
     if (pcLoadingRef.current[card.id]) return
     const capturedSetId = selectedSetIdRef.current
@@ -276,10 +314,26 @@ export function useJustTcgState() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current }),
       })
+      // R13-INT12: 429レート制限をユーザーフレンドリーに処理
+      if (res.status === 429) {
+        if (selectedSetIdRef.current === capturedSetId) {
+          setPcMatches(prev => ({ ...prev, [card.id]: null }))
+        }
+        return
+      }
       const json = await res.json()
       // セット切替後のstale writeを防止
       if (selectedSetIdRef.current === capturedSetId) {
         setPcMatches(prev => ({ ...prev, [card.id]: json.success ? json.data : null }))
+      }
+      // Gemini で日本語名を自動抽出（fire-and-forget）
+      if (json.success && json.data?.imageUrl && setJaNameRef.current) {
+        const cardId = card.id
+        extractJaName(json.data.imageUrl).then(name => {
+          if (name && setJaNameRef.current && selectedSetIdRef.current === capturedSetId) {
+            setJaNameRef.current(cardId, name)
+          }
+        })
       }
     } catch {
       if (selectedSetIdRef.current === capturedSetId) {
@@ -291,6 +345,118 @@ export function useJustTcgState() {
         setPcLoading(prev => ({ ...prev, [card.id]: false }))
       }
     }
+  }, [extractJaName])
+
+  // setJaName 注入（page.tsxから呼ばれる）
+  const injectSetJaName = useCallback((fn: (cardId: string, name: string) => void) => {
+    setJaNameRef.current = fn
+  }, [])
+
+  // 一括PC検索 — refs
+  const cardsRef = useRef(cards)
+  cardsRef.current = cards
+  const filteredCardsRef = useRef(filteredCards)
+  filteredCardsRef.current = filteredCards
+
+  const handleBulkPcSearch = useCallback(async (mode: 'checked' | 'filtered') => {
+    if (bulkPcRunningRef.current) return
+    bulkPcRunningRef.current = true
+    const capturedSetId = selectedSetIdRef.current
+
+    try {
+      // 対象カード決定（R14-05: checkedCardsはref経由で参照、deps不要）
+      let targets: JTCard[]
+      if (mode === 'checked') {
+        const checked = checkedCardsExtRef.current
+        targets = cardsRef.current.filter(c => checked.has(c.id))
+      } else {
+        targets = filteredCardsRef.current
+      }
+
+      // 既にpcMatchesに結果があるカードをスキップ
+      const snap = pcMatchesRef.current
+      targets = targets.filter(c => snap[c.id] === undefined)
+
+      if (targets.length === 0) {
+        bulkPcRunningRef.current = false
+        return
+      }
+
+      cancelBulkPcRef.current = false
+      let succeeded = 0
+      let failed = 0
+      setBulkPcProgress({ current: 0, total: targets.length, succeeded: 0, failed: 0 })
+
+      for (let i = 0; i < targets.length; i++) {
+        if (cancelBulkPcRef.current || selectedSetIdRef.current !== capturedSetId) break
+
+        // 2件目以降は3.5秒待機（サーバー側3秒レート制限 + マージン）
+        if (i > 0) await new Promise(r => setTimeout(r, 3500))
+        if (cancelBulkPcRef.current || selectedSetIdRef.current !== capturedSetId) break
+
+        const card = targets[i]
+        try {
+          setPcLoading(prev => ({ ...prev, [card.id]: true }))
+          const res = await fetch('/api/justtcg/match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current }),
+          })
+
+          if (res.status === 429) {
+            if (selectedSetIdRef.current === capturedSetId) {
+              setPcMatches(prev => ({ ...prev, [card.id]: null }))
+            }
+            failed++
+          } else {
+            const json = await res.json()
+            const match: PCMatch | null = json.success ? json.data : null
+            if (selectedSetIdRef.current === capturedSetId) {
+              setPcMatches(prev => ({ ...prev, [card.id]: match }))
+            }
+
+            if (match) {
+              succeeded++
+              // Gemini で日本語名抽出（fire-and-forget）
+              if (match.imageUrl && setJaNameRef.current) {
+                const cardId = card.id
+                extractJaName(match.imageUrl).then(name => {
+                  if (name && setJaNameRef.current && selectedSetIdRef.current === capturedSetId) {
+                    setJaNameRef.current(cardId, name)
+                  }
+                })
+              }
+            } else {
+              failed++
+            }
+          }
+        } catch {
+          if (selectedSetIdRef.current === capturedSetId) {
+            setPcMatches(prev => ({ ...prev, [card.id]: null }))
+          }
+          failed++
+        } finally {
+          if (selectedSetIdRef.current === capturedSetId) {
+            setPcLoading(prev => ({ ...prev, [card.id]: false }))
+          }
+        }
+
+        if (selectedSetIdRef.current === capturedSetId) {
+          setBulkPcProgress({ current: i + 1, total: targets.length, succeeded, failed })
+        }
+      }
+
+      // 完了後クリア
+      if (selectedSetIdRef.current === capturedSetId) {
+        setBulkPcProgress(null)
+      }
+    } finally {
+      bulkPcRunningRef.current = false
+    }
+  }, [extractJaName])
+
+  const cancelBulkPcSearch = useCallback(() => {
+    cancelBulkPcRef.current = true
   }, [])
 
   // アクション
@@ -298,10 +464,8 @@ export function useJustTcgState() {
   setsRef.current = sets
   const selectSet = useCallback((setId: string) => {
     setSelectedSetId(setId)
-    if (setId) {
-      const s = setsRef.current.find(s => s.id === setId)
-      if (s) setSetFilterText(getSetNameJa(s.id, s.name))
-    }
+    // R13-INT02: セット選択時にフィルタテキストをクリア（上書きするとfilteredSetsが1件になり使いにくい）
+    if (setId) setSetFilterText('')
   }, [])
 
   const selectCard = useCallback((card: JTCard | null) => {
@@ -316,6 +480,17 @@ export function useJustTcgState() {
   const clearError = useCallback(() => setError(''), [])
   const toggleRegistration = useCallback(() => setShowRegistration(p => !p), [])
 
+  // レアリティフィルタ操作（memo安定なコールバック）
+  const toggleRarity = useCallback((rarity: string) => {
+    setRarityFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(rarity)) next.delete(rarity)
+      else next.add(rarity)
+      return next
+    })
+  }, [])
+  const clearRarityFilter = useCallback(() => setRarityFilter(new Set()), [])
+
   return {
     selectedGame, sets, selectedSetId, cards, selectedCard, usage,
     loadingSets, loadingCards, error,
@@ -323,11 +498,14 @@ export function useJustTcgState() {
     pcMatches, pcLoading, showRegistration,
     filteredCards, filteredSets, rarities, stats,
     selectedSet,
+    bulkPcProgress,
 
     setSelectedGame, selectSet, selectCard,
-    setSearch, setRarityFilter, setSetFilterText,
+    setSearch, toggleRarity, clearRarityFilter, setSetFilterText,
     setSortBy, setSortOrder, setJapaneseOnly,
-    handlePcMatch,
+    handlePcMatch, handleBulkPcSearch, cancelBulkPcSearch,
+    injectSetJaName,
+    injectCheckedCards: checkedCardsExtRef,
     clearError,
     toggleRegistration,
   }

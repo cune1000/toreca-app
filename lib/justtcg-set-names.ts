@@ -4,7 +4,7 @@
  */
 export const SET_NAME_JA: Record<string, string> = {
   // === M (Mega) 時代 ===
-  'm3-nihil-zero-pokemon-japan': 'M3: ニヒルゼロ',
+  'm3-nihil-zero-pokemon-japan': 'M3: ムニキスゼロ',
   'mp1-start-deck-100-corocoro-comic-pokemon-japan': 'MP1: スタートデッキ100 コロコロコミックver.',
   'start-deck-100-battle-collection-pokemon-japan': 'スタートデッキ100 バトルコレクション',
   'm2a-high-class-pack-mega-dream-ex-pokemon-japan': 'M2a: ハイクラスパック MEGAドリームex',
@@ -85,7 +85,7 @@ export const SET_NAME_JA: Record<string, string> = {
   's9-star-birth-pokemon-japan': 'S9: スターバース',
   's8b-vmax-climax-pokemon-japan': 'S8b: VMAXクライマックス',
   's8a-25th-anniversary-collection-pokemon-japan': 'S8a: 25thアニバーサリーコレクション',
-  's8a-g-25th-anniversary-golden-box-pokemon-japan': 's8a-G: 25thアニバーサリー ゴールデンBOX',
+  's8a-g-25th-anniversary-golden-box-pokemon-japan': 'S8a-G: 25thアニバーサリー ゴールデンBOX',
   's8-fusion-arts-pokemon-japan': 'S8: フュージョンアーツ',
   's7d-skyscraping-perfection-pokemon-japan': 'S7D: 摩天パーフェクト',
   's7r-blue-sky-stream-pokemon-japan': 'S7R: 蒼空ストリーム',
@@ -125,7 +125,7 @@ export const SET_NAME_JA: Record<string, string> = {
   'sll-lucario-starter-set-vstar-pokemon-japan': 'sLL: ルカリオ スターターセットVSTAR',
   'sk-vstar-premium-trainer-box-pokemon-japan': 'sK: VSTARプレミアムトレーナーBOX',
   'sj-zacian-zamazenta-vs-eternatus-special-deck-set-pokemon-japan': 'sJ: ザシアン&ザマゼンタ vs ムゲンダイナ スペシャルデッキセット',
-  's8a-p-promo-card-pack-25th-anniversary-edition-pokemon-japan': 's8a-P: プロモカードパック 25thアニバーサリーedition',
+  's8a-p-promo-card-pack-25th-anniversary-edition-pokemon-japan': 'S8a-P: プロモカードパック 25thアニバーサリーedition',
   'sef-venusaur-starter-set-vmax-pokemon-japan': 'sEF: フシギバナ スターターセットVMAX',
   'sek-blastoise-starter-set-vmax-pokemon-japan': 'sEK: カメックス スターターセットVMAX',
   'sh-sword-shield-family-pokemon-card-game-pokemon-japan': 'sH: ソード&シールド ファミリーポケモンカードゲーム',
@@ -163,7 +163,7 @@ export const SET_NAME_JA: Record<string, string> = {
   'sm5m-ultra-moon-pokemon-japan': 'SM5M: ウルトラムーン',
   'sm5s-ultra-sun-pokemon-japan': 'SM5S: ウルトラサン',
   'sm4-gx-battle-boost-pokemon-japan': 'SM4+: GXバトルブースト',
-  'sm4a-ultradimensional-beasts-pokemon-japan': 'SM4A: ウルトラビースト',
+  'sm4a-ultradimensional-beasts-pokemon-japan': 'SM4A: 超次元の暴獣',
   'sm4s-awakened-heroes-pokemon-japan': 'SM4S: 覚醒の勇者',
   'sm3-shining-legends-pokemon-japan': 'SM3+: ひかる伝説',
   'sm3h-to-have-seen-the-battle-rainbow-pokemon-japan': 'SM3H: 闘う虹を見たか',
@@ -171,7 +171,7 @@ export const SET_NAME_JA: Record<string, string> = {
   'sm2-facing-a-new-trial-pokemon-japan': 'SM2+: 新たなる試練の向こう',
   'sm2k-islands-await-you-pokemon-japan': 'SM2K: キミを待つ島々',
   'sm2l-alolan-moonlight-pokemon-japan': 'SM2L: アローラの月光',
-  'sm1-enhanced-expansion-pack-sun-moon-pokemon-japan': 'sm1+: 強化拡張パック サン&ムーン',
+  'sm1-enhanced-expansion-pack-sun-moon-pokemon-japan': 'SM1+: 強化拡張パック サン&ムーン',
   'sm1s-collection-sun-pokemon-japan': 'SM1S: コレクション サン',
   'sm1m-collection-moon-pokemon-japan': 'SM1M: コレクション ムーン',
   'sm-the-best-of-xy-pokemon-japan': 'SM: THE BEST OF XY',
@@ -201,7 +201,7 @@ export const SET_NAME_JA: Record<string, string> = {
   'cp1-magma-gang-vs-aqua-gang-double-crisis-pokemon-japan': 'CP1: マグマ団 vs アクア団 ダブルクライシス',
   'xy11-br-cruel-traitor-pokemon-japan': 'XY11-Br: 冷酷の反逆者',
   'xy11-bb-fever-burst-fighter-pokemon-japan': 'XY11-Bb: 爆熱の闘士',
-  'xy10-awakening-psychic-king-pokemon-japan': 'XY10: 覚醒の勇者',
+  'xy10-awakening-psychic-king-pokemon-japan': 'XY10: めざめる超王',
   'xy9-rage-of-the-broken-heavens-pokemon-japan': 'XY9: 破天の怒り',
   'xy8-br-red-flash-pokemon-japan': 'XY8-Br: レッドフラッシュ',
   'xy8-bb-blue-shock-pokemon-japan': 'XY8-Bb: ブルーショック',
@@ -250,19 +250,31 @@ export function getSetNameJa(id: string, fallbackName: string): string {
  * "sv10-the-glory-of-team-rocket-pokemon-japan" → "SV10"
  * "m3-nihil-zero-pokemon-japan" → "M3"
  * "sld-darkrai-starter-set-vstar-pokemon-japan" → "SLD"
+ * "sv-p-promotional-cards-pokemon-japan" → "SV-P"
  * R12-22: 数字なしのコード（SLD, SK等）にも対応
+ * R14-13: プロモ（-P）やサブセット（-Br, -Bb, -G等）のハイフン入りコードにも対応
+ * R14-14: 偽陽性防止（最大4文字 + 英語単語除外）
  */
 export function extractSetCode(setId: string): string | null {
-  const match = setId.match(/^([a-z]{1,5}\d*[a-z]?)-/i)
+  // ハイフン入りサブコード（-P, -Br, -Bb, -G 等）を含むパターンを先に試行
+  const subMatch = setId.match(/^([a-z]{1,4}\d*[a-z]?-[a-z]{1,2})-/i)
+  if (subMatch) return subMatch[1].toUpperCase()
+  // 通常パターン（最大4文字のプレフィックス + 任意の数字 + 任意の末尾英字1文字）
+  const match = setId.match(/^([a-z]{1,4}\d+[a-z]?)-/i)
+    || setId.match(/^(s[a-z]{0,3}\d*[a-z]?)-/i) // S/SV/SM/SJ/SK等のS系
+    || setId.match(/^(m\d+|cp\d+|xy\d*|dp\d*|bw\d*|wcs\d*)-/i) // 既知のプレフィックス
   return match ? match[1].toUpperCase() : null
 }
 
 /**
  * release_dateから年を抽出
  * "2026-01-23" → 2026
+ * R14-18: ISO日付の先頭4桁を明示的に抽出し、範囲検証
  */
 export function extractReleaseYear(releaseDate: string | null): number | null {
   if (!releaseDate) return null
-  const year = parseInt(releaseDate.substring(0, 4))
-  return isNaN(year) ? null : year
+  const m = releaseDate.match(/^(\d{4})-/)
+  if (!m) return null
+  const year = parseInt(m[1])
+  return (year >= 1996 && year <= 2100) ? year : null
 }

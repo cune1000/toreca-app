@@ -21,11 +21,15 @@ export async function POST(request: NextRequest) {
     }
     lastRegisterMap.set(clientIp, now)
 
-    // 古いエントリのクリーンアップ
+    // R13-API14: 古いエントリのクリーンアップ + 上限超過時の半分削除
     if (lastRegisterMap.size > 50) {
       for (const [ip, ts] of lastRegisterMap) {
         if (now - ts > REGISTER_RATE_MS * 10) lastRegisterMap.delete(ip)
       }
+    }
+    if (lastRegisterMap.size > 200) {
+      const sorted = [...lastRegisterMap.entries()].sort((a, b) => a[1] - b[1])
+      sorted.slice(0, Math.floor(sorted.length / 2)).forEach(([ip]) => lastRegisterMap.delete(ip))
     }
 
     let body: any
@@ -47,6 +51,7 @@ export async function POST(request: NextRequest) {
       justtcg_id,
       tcgplayer_id,
       pricecharting_id,
+      pricecharting_name,
       pricecharting_url,
       game,
     } = body
@@ -58,8 +63,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // R13-API10: 前後空白のトリム
+    const trimmedName = name.trim()
+    const trimmedJusttcgId = justtcg_id.trim()
+    if (!trimmedName || !trimmedJusttcgId) {
+      return NextResponse.json(
+        { success: false, error: 'name と justtcg_id は空にできません' },
+        { status: 400 }
+      )
+    }
+
     // 入力長制限
-    if (name.length > 200 || justtcg_id.length > 200) {
+    if (trimmedName.length > 200 || trimmedJusttcgId.length > 200) {
       return NextResponse.json(
         { success: false, error: '入力が長すぎます' },
         { status: 400 }
@@ -81,11 +96,20 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient()
 
     // 重複チェック: justtcg_id
-    const { data: existing } = await supabase
+    const { data: existing, error: dupCheckError } = await supabase
       .from('cards')
       .select('id, name')
-      .eq('justtcg_id', justtcg_id)
+      .eq('justtcg_id', trimmedJusttcgId)
       .maybeSingle()
+
+    // R13-API12: Supabaseエラーハンドリング
+    if (dupCheckError) {
+      console.error('Duplicate check error:', dupCheckError)
+      return NextResponse.json(
+        { success: false, error: '重複チェックに失敗しました' },
+        { status: 500 }
+      )
+    }
 
     if (existing) {
       return NextResponse.json(
@@ -107,32 +131,39 @@ export async function POST(request: NextRequest) {
     const validGame = typeof game === 'string' && game in GAME_CATEGORY_MAP ? game : 'pokemon-japan'
     const categoryName = GAME_CATEGORY_MAP[validGame]
 
-    const { data: category } = await supabase
+    // R13-API13: カテゴリクエリエラーハンドリング
+    const { data: category, error: catError } = await supabase
       .from('category_large')
       .select('id')
       .eq('name', categoryName)
       .maybeSingle()
 
-    if (!category) {
+    if (catError) {
+      console.error('Category query error:', catError)
+    } else if (!category) {
       console.warn(`Category not found for game: ${validGame} (name: ${categoryName})`)
     }
+
+    // R13-API06: release_year NaN/Infinity ガード
+    const safeReleaseYear = typeof release_year === 'number' && Number.isFinite(release_year) ? release_year : null
 
     // INSERT
     const { data: card, error } = await supabase
       .from('cards')
       .insert({
-        name,
+        name: trimmedName, // R13-API10: trimmed
         name_en: str(name_en, 200),
         card_number: str(card_number, 50),
         rarity: str(rarity, 50),
         set_code: str(set_code, 100),
         set_name_en: str(set_name_en, 200),
-        release_year: typeof release_year === 'number' ? release_year : null,
+        release_year: safeReleaseYear,
         expansion: str(expansion, 200),
         image_url: url(image_url),
-        justtcg_id,
+        justtcg_id: trimmedJusttcgId, // R13-API10: trimmed
         tcgplayer_id: str(tcgplayer_id, 100),
         pricecharting_id: str(pricecharting_id, 100),
+        pricecharting_name: str(pricecharting_name, 200),
         pricecharting_url: url(pricecharting_url),
         category_large_id: category?.id || null,
       })
@@ -151,10 +182,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: card })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Registration failed'
     console.error('JustTCG register error:', error)
+    // R13-API16: 内部エラー詳細をクライアントに漏らさない
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: '登録処理に失敗しました' },
       { status: 500 }
     )
   }

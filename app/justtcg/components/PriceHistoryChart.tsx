@@ -30,7 +30,7 @@ export default memo(function PriceHistoryChart({ data }: PriceHistoryChartProps)
 
   const chartData = validData.map(d => ({
     price: d.p,
-    date: new Date(d.t * 1000).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' }),
+    date: new Date(d.t * 1000).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'short', day: 'numeric' }),
   }))
 
   const avg = validData.reduce((s, d) => s + d.p, 0) / validData.length

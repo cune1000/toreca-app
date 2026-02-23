@@ -13,18 +13,30 @@ export async function getProduct(id: string): Promise<PriceChartingProduct> {
   }
 
   const url = `${BASE_URL}/product?t=${PRICECHARTING_TOKEN}&id=${encodeURIComponent(id)}`
-  const res = await fetch(url)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000) // R13: 8秒タイムアウト
+  try {
+    const res = await fetch(url, { signal: controller.signal })
 
-  if (!res.ok) {
-    throw new Error(`PriceCharting API error: ${res.status} ${res.statusText}`)
+    if (!res.ok) {
+      throw new Error(`PriceCharting API error: ${res.status} ${res.statusText}`)
+    }
+
+    // R13: Content-Type確認（HTML返却時のjsonパースエラー防止）
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      throw new Error(`PriceCharting API: unexpected content-type: ${ct}`)
+    }
+
+    const data = await res.json()
+    if (data.status === 'error') {
+      throw new Error(`PriceCharting API error: ${data.message || 'Unknown error'}`)
+    }
+
+    return data
+  } finally {
+    clearTimeout(timeout)
   }
-
-  const data = await res.json()
-  if (data.status === 'error') {
-    throw new Error(`PriceCharting API error: ${data.message || 'Unknown error'}`)
-  }
-
-  return data
 }
 
 /**
@@ -38,18 +50,31 @@ export async function searchProducts(query: string): Promise<PriceChartingProduc
   }
 
   const url = `${BASE_URL}/products?t=${PRICECHARTING_TOKEN}&q=${encodeURIComponent(query)}`
-  const res = await fetch(url)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000) // R13: 8秒タイムアウト
+  try {
+    const res = await fetch(url, { signal: controller.signal })
 
-  if (!res.ok) {
-    throw new Error(`PriceCharting API error: ${res.status} ${res.statusText}`)
+    if (!res.ok) {
+      throw new Error(`PriceCharting API error: ${res.status} ${res.statusText}`)
+    }
+
+    // R13: Content-Type確認
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      throw new Error(`PriceCharting API: unexpected content-type: ${ct}`)
+    }
+
+    const data = await res.json()
+    if (data.status === 'error') {
+      throw new Error(`PriceCharting API error: ${data.message || 'Unknown error'}`)
+    }
+
+    // R13: Array.isArray ガード
+    return Array.isArray(data.products) ? data.products : []
+  } finally {
+    clearTimeout(timeout)
   }
-
-  const data = await res.json()
-  if (data.status === 'error') {
-    throw new Error(`PriceCharting API error: ${data.message || 'Unknown error'}`)
-  }
-
-  return data.products || []
 }
 
 /**

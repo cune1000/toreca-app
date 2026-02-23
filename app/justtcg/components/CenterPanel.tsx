@@ -17,11 +17,12 @@ interface CenterPanelProps {
   hasSelectedSet: boolean
   totalSets: number
   rarities: string[]
-  rarityFilter: string
+  rarityFilter: Set<string>
   showRegistration: boolean
   // State setters
   setSearch: (v: string) => void
-  setRarityFilter: (v: string) => void
+  toggleRarity: (rarity: string) => void
+  clearRarityFilter: () => void
   onSelectCard: (card: JTCard | null) => void
   // Registration data
   checkedCards: Set<string>
@@ -34,6 +35,11 @@ interface CenterPanelProps {
   toggleAllFiltered: (filteredIds: string[]) => void
   handleBulkRegister: () => void
   cancelBulkRegister: () => void
+  // Bulk PC search
+  bulkPcProgress: { current: number; total: number; succeeded: number; failed: number } | null
+  handleBulkPcSearchChecked: () => void
+  handleBulkPcSearchFiltered: () => void
+  cancelBulkPcSearch: () => void
   className?: string
 }
 
@@ -43,9 +49,10 @@ export default memo(function CenterPanel({
   filteredCards, totalCards, selectedCardId, search,
   loadingSets, loadingCards, hasSelectedSet, totalSets,
   rarities, rarityFilter, showRegistration,
-  setSearch, setRarityFilter, onSelectCard,
+  setSearch, toggleRarity, clearRarityFilter, onSelectCard,
   checkedCards, registered, checkedCount, readyCount, bulkProgress,
   toggleCheck, toggleAllFiltered, handleBulkRegister, cancelBulkRegister,
+  bulkPcProgress, handleBulkPcSearchChecked, handleBulkPcSearchFiltered, cancelBulkPcSearch,
   className = '',
 }: CenterPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -55,15 +62,19 @@ export default memo(function CenterPanel({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
+    paddingStart: 8, // R14-06: p-2相当のパディング
+    paddingEnd: 8,
   })
 
   const showList = !loadingSets && hasSelectedSet && !loadingCards && filteredCards.length > 0
 
   // 全選択チェック（最大2000件の every() をメモ化）
   const filteredIds = useMemo(() => filteredCards.map(c => c.id), [filteredCards])
-  const allChecked = useMemo(() =>
-    filteredIds.length > 0 && filteredIds.every(id => checkedCards.has(id))
-  , [filteredIds, checkedCards])
+  // R13-FE01: 登録済みカードを除外して全選択状態を判定
+  const allChecked = useMemo(() => {
+    const unregistered = filteredIds.filter(id => !registered[id])
+    return unregistered.length > 0 && unregistered.every(id => checkedCards.has(id))
+  }, [filteredIds, checkedCards, registered])
 
   return (
     <main className={`flex flex-col overflow-hidden ${className}`}>
@@ -90,9 +101,9 @@ export default memo(function CenterPanel({
             <>
               <span className="text-[var(--jtcg-border)]">|</span>
               <button
-                onClick={() => setRarityFilter('')}
+                onClick={clearRarityFilter}
                 className={`px-2 py-0.5 rounded-full transition-colors ${
-                  !rarityFilter ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
+                  rarityFilter.size === 0 ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
                 }`}
               >
                 All
@@ -100,9 +111,10 @@ export default memo(function CenterPanel({
               {rarities.map(r => (
                 <button
                   key={r}
-                  onClick={() => setRarityFilter(rarityFilter === r ? '' : r)}
+                  onClick={() => toggleRarity(r)}
+                  aria-pressed={rarityFilter.has(r)}
                   className={`px-2 py-0.5 rounded-full transition-colors ${
-                    rarityFilter === r ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
+                    rarityFilter.has(r) ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
                   }`}
                 >
                   {r}
@@ -112,50 +124,92 @@ export default memo(function CenterPanel({
           )}
         </div>
 
-        {/* 登録ツールバー */}
-        {showRegistration && filteredCards.length > 0 && (
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--jtcg-border)]">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => toggleAllFiltered(filteredIds)}
-                className="text-[10px] px-2 py-1 rounded-[var(--jtcg-radius)] bg-gray-100 hover:bg-gray-200 text-[var(--jtcg-text-secondary)]"
-              >
-                {allChecked ? '全解除' : '全選択'}
-              </button>
-              {checkedCount > 0 && (
-                <span className="text-xs text-[var(--jtcg-text-secondary)]">
-                  {checkedCount}件選択
-                </span>
-              )}
-            </div>
-            {checkedCount > 0 && (
-              <div className="flex items-center gap-2">
-                {bulkProgress && (
-                  <span className="text-[10px] text-[var(--jtcg-text-secondary)] tabular-nums">
-                    {bulkProgress.current}/{bulkProgress.total}
-                    {bulkProgress.failed > 0 && (
-                      <span className="text-red-500 ml-1">({bulkProgress.failed}失敗)</span>
-                    )}
-                  </span>
-                )}
-                {bulkProgress ? (
-                  <button
-                    onClick={cancelBulkRegister}
-                    className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-red-100 text-red-700 font-bold hover:bg-red-200"
-                  >
-                    中止
-                  </button>
+        {/* 登録ツールバー（R14-08: bulk進行中はfilteredCards=0でも表示） */}
+        {showRegistration && (filteredCards.length > 0 || bulkPcProgress || bulkProgress) && (
+          <div className="mt-2 pt-2 border-t border-[var(--jtcg-border)] space-y-2">
+            {/* 一括PC検索 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                {bulkPcProgress ? (
+                  <>
+                    <span className="text-[10px] text-purple-600 tabular-nums" style={{ fontFamily: 'var(--font-price)' }}>
+                      PC: {bulkPcProgress.current}/{bulkPcProgress.total}
+                      {bulkPcProgress.failed > 0 && <span className="text-red-500 ml-1">({bulkPcProgress.failed}失敗)</span>}
+                    </span>
+                    <button
+                      onClick={cancelBulkPcSearch}
+                      className="text-[10px] px-2 py-0.5 rounded-[var(--jtcg-radius)] bg-red-100 text-red-700 font-bold hover:bg-red-200"
+                    >
+                      PC中止
+                    </button>
+                  </>
                 ) : (
-                  <button
-                    onClick={handleBulkRegister}
-                    disabled={readyCount === 0}
-                    className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {`${readyCount}件を一括登録`}
-                  </button>
+                  <>
+                    {checkedCount > 0 && (
+                      <button
+                        onClick={handleBulkPcSearchChecked}
+                        disabled={!!bulkProgress}
+                        className="text-[10px] px-2 py-1 rounded-[var(--jtcg-radius)] bg-purple-50 text-purple-700 font-bold hover:bg-purple-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        選択分PC検索
+                      </button>
+                    )}
+                    <button
+                      onClick={handleBulkPcSearchFiltered}
+                      disabled={!!bulkProgress}
+                      className="text-[10px] px-2 py-1 rounded-[var(--jtcg-radius)] bg-purple-50 text-purple-700 font-bold hover:bg-purple-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      表示中全PC検索
+                    </button>
+                  </>
                 )}
               </div>
-            )}
+            </div>
+
+            {/* 選択・一括登録 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleAllFiltered(filteredIds)}
+                  className="text-[10px] px-2 py-1 rounded-[var(--jtcg-radius)] bg-gray-100 hover:bg-gray-200 text-[var(--jtcg-text-secondary)]"
+                >
+                  {allChecked ? '全解除' : '全選択'}
+                </button>
+                {checkedCount > 0 && (
+                  <span className="text-xs text-[var(--jtcg-text-secondary)]">
+                    {checkedCount}件選択
+                  </span>
+                )}
+              </div>
+              {checkedCount > 0 && (
+                <div className="flex items-center gap-2">
+                  {bulkProgress && (
+                    <span className="text-[10px] text-[var(--jtcg-text-secondary)] tabular-nums">
+                      {bulkProgress.current}/{bulkProgress.total}
+                      {bulkProgress.failed > 0 && (
+                        <span className="text-red-500 ml-1">({bulkProgress.failed}失敗)</span>
+                      )}
+                    </span>
+                  )}
+                  {bulkProgress ? (
+                    <button
+                      onClick={cancelBulkRegister}
+                      className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-red-100 text-red-700 font-bold hover:bg-red-200"
+                    >
+                      中止
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleBulkRegister}
+                      disabled={readyCount === 0 || !!bulkPcProgress}
+                      className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {`${readyCount}件を一括登録`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -184,9 +238,9 @@ export default memo(function CenterPanel({
           </div>
         ) : showList ? (
           <div
-            className="p-2"
+            className="px-2"
             style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}
-            role="listbox"
+            role="list"
             aria-label="カード一覧"
           >
             {virtualizer.getVirtualItems().map(virtualRow => {
@@ -194,6 +248,7 @@ export default memo(function CenterPanel({
               return (
                 <div
                   key={card.id}
+                  role="presentation"
                   style={{
                     position: 'absolute',
                     top: 0,

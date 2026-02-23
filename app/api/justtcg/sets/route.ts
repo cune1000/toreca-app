@@ -51,10 +51,10 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'public, max-age=1800, stale-while-revalidate=3600' },
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch sets'
     console.error('JustTCG sets error:', error)
+    // R13-API16: 内部エラー詳細をクライアントに漏らさない
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: 'セット取得に失敗しました' },
       { status: 500 }
     )
   }

@@ -15,6 +15,16 @@ export default function JustTcgExplorer() {
   const reg = useRegistration(state.cards, state.selectedSet, state.selectedGame, state.pcMatches)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
 
+  // Gemini日本語名連携: useJustTcgState → useRegistration.setJaName を注入
+  useEffect(() => {
+    state.injectSetJaName(reg.setJaName)
+  }, [state.injectSetJaName, reg.setJaName])
+
+  // R14-05: checkedCards を ref 経由で注入（deps汚染防止）
+  useEffect(() => {
+    state.injectCheckedCards.current = reg.checkedCards
+  }, [state.injectCheckedCards, reg.checkedCards])
+
   const gameName = GAME_OPTIONS.find(g => g.id === state.selectedGame)?.short || 'JustTCG'
   const card = state.selectedCard
   const hasCards = state.cards.length > 0
@@ -27,10 +37,12 @@ export default function JustTcgExplorer() {
 
   // モバイルオーバーレイのスクロールロック
   const isOverlayOpen = mobileFilterOpen || !!card
+  // R13-FE02: 元のoverflow値を保存して復元（他のスクリプトとの干渉防止）
   useEffect(() => {
     if (isOverlayOpen) {
+      const prev = document.body.style.overflow
       document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = '' }
+      return () => { document.body.style.overflow = prev }
     }
   }, [isOverlayOpen])
 
@@ -50,7 +62,22 @@ export default function JustTcgExplorer() {
   const handleClosePanel = useCallback(() => state.selectCard(null), [state.selectCard])
   const handlePcMatch = useCallback(() => { if (card) state.handlePcMatch(card) }, [card, state.handlePcMatch])
   const handleJaNameChange = useCallback((v: string) => { if (card) reg.setJaName(card.id, v) }, [card, reg.setJaName])
+  const handleExpansionChange = useCallback((v: string) => { reg.setExpansionOverride(v) }, [reg.setExpansionOverride])
   const handleRegister = useCallback(() => { if (card) reg.handleRegister(card) }, [card, reg.handleRegister])
+
+  // 一括PC検索用の安定コールバック（R14-05: checkedCardsはref注入済みなのでdeps不要）
+  const handleBulkPcSearchChecked = useCallback(() => {
+    state.handleBulkPcSearch('checked')
+  }, [state.handleBulkPcSearch])
+  const handleBulkPcSearchFiltered = useCallback(() => {
+    state.handleBulkPcSearch('filtered')
+  }, [state.handleBulkPcSearch])
+
+  // R14-07: モバイルドロワーでセット選択時にドロワーを閉じる
+  const handleSelectSet = useCallback((id: string) => {
+    state.selectSet(id)
+    setMobileFilterOpen(false)
+  }, [state.selectSet])
 
   // LeftPanel共通props（デスクトップ・モバイル両方で使用）
   const leftPanelProps = {
@@ -60,7 +87,7 @@ export default function JustTcgExplorer() {
     setSetFilterText: state.setSetFilterText,
     filteredSets: state.filteredSets,
     selectedSetId: state.selectedSetId,
-    selectSet: state.selectSet,
+    selectSet: handleSelectSet,
     loadingSets: state.loadingSets,
     sortBy: state.sortBy,
     setSortBy: state.setSortBy,
@@ -140,7 +167,8 @@ export default function JustTcgExplorer() {
           totalSets={state.sets.length}
           rarities={state.rarities}
           rarityFilter={state.rarityFilter}
-          setRarityFilter={state.setRarityFilter}
+          toggleRarity={state.toggleRarity}
+          clearRarityFilter={state.clearRarityFilter}
           showRegistration={state.showRegistration}
           onSelectCard={handleSelectCard}
           checkedCards={reg.checkedCards}
@@ -152,6 +180,10 @@ export default function JustTcgExplorer() {
           toggleAllFiltered={reg.toggleAllFiltered}
           handleBulkRegister={reg.handleBulkRegister}
           cancelBulkRegister={reg.cancelBulkRegister}
+          bulkPcProgress={state.bulkPcProgress}
+          handleBulkPcSearchChecked={handleBulkPcSearchChecked}
+          handleBulkPcSearchFiltered={handleBulkPcSearchFiltered}
+          cancelBulkPcSearch={state.cancelBulkPcSearch}
           className="flex-1 min-w-0"
         />
         {/* R11-17: カードがある場合のみ右パネルを表示（セット選択時に自然に出現） */}
@@ -167,6 +199,8 @@ export default function JustTcgExplorer() {
               onPcMatch={handlePcMatch}
               jaName={card ? reg.jaNames[card.id] : ''}
               onJaNameChange={handleJaNameChange}
+              expansionName={reg.expansionOverride || reg.defaultExpansion}
+              onExpansionChange={handleExpansionChange}
               isRegistered={card ? !!reg.registered[card.id] : false}
               isRegistering={card ? !!reg.registering[card.id] : false}
               registerError={card ? reg.registerError[card.id] : ''}
@@ -215,6 +249,8 @@ export default function JustTcgExplorer() {
               onPcMatch={handlePcMatch}
               jaName={reg.jaNames[card.id] || ''}
               onJaNameChange={handleJaNameChange}
+              expansionName={reg.expansionOverride || reg.defaultExpansion}
+              onExpansionChange={handleExpansionChange}
               isRegistered={!!reg.registered[card.id]}
               isRegistering={!!reg.registering[card.id]}
               registerError={reg.registerError[card.id] || ''}

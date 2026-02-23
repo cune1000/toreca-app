@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import { X, ChevronDown, ChevronUp, Search as SearchIcon, ExternalLink } from 'lucide-react'
 import RarityBadge from './RarityBadge'
 import VariantRow from './VariantRow'
@@ -23,6 +23,8 @@ interface RightPanelProps {
   onPcMatch?: () => void
   jaName?: string
   onJaNameChange?: (v: string) => void
+  expansionName?: string
+  onExpansionChange?: (v: string) => void
   isRegistered?: boolean
   isRegistering?: boolean
   registerError?: string
@@ -42,6 +44,8 @@ export default memo(function RightPanel({
   onPcMatch,
   jaName,
   onJaNameChange,
+  expansionName,
+  onExpansionChange,
   isRegistered,
   isRegistering,
   registerError,
@@ -56,24 +60,25 @@ export default memo(function RightPanel({
   // R11-17: w-80 固定でレイアウトジャンプ防止（プレースホルダー表示）
   // R12-15: scrollable propを空状態にも適用し、DOM構造の一貫性を保つ
   if (!card) return (
-    <aside aria-label="カード詳細" className={`w-80 shrink-0 border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className}`}>
+    <aside aria-label="カード詳細" className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-80 shrink-0'}`}>
       <div className="flex items-center justify-center h-full">
         <p className="text-xs text-[var(--jtcg-text-muted)]">カードを選択してください</p>
       </div>
     </aside>
   )
 
-  const japaneseVariants = card.variants.filter(v => v.language === 'Japanese')
-  const otherVariants = card.variants.filter(v => v.language !== 'Japanese')
+  // R13-FE06: variants フィルタをメモ化（card切替時のみ再計算）
+  const japaneseVariants = useMemo(() => card.variants.filter(v => v.language === 'Japanese'), [card.variants])
+  const otherVariants = useMemo(() => card.variants.filter(v => v.language !== 'Japanese'), [card.variants])
   const nm = getNmVariant(card)
   const priceHistory = nm?.priceHistory ?? EMPTY_HISTORY
 
   return (
     <aside
       aria-label="カード詳細"
-      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} w-80 shrink-0 transition-opacity duration-200 ease-in-out ${
+      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-80 shrink-0'} transition-opacity duration-200 ease-in-out ${
         open ? 'opacity-100' : 'opacity-0 overflow-hidden pointer-events-none'
-      } ${className}`}
+      }`}
     >
       <div className="p-4 space-y-4">
         {/* ヘッダー */}
@@ -208,16 +213,27 @@ export default memo(function RightPanel({
                   disabled={pcLoading}
                   className="text-[10px] text-purple-600 hover:text-purple-800 underline disabled:opacity-50"
                 >
-                  再試行
+                  {pcLoading ? '検索中...' : '再試行'}
                 </button>
               </div>
             )}
 
-            {/* 日本語名入力 + 登録ボタン */}
+            {/* 収録弾名・日本語名入力 + 登録ボタン */}
             {isRegistered ? (
               <p className="text-xs text-green-600 font-bold py-2 text-center">登録完了</p>
             ) : (
               <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] text-[var(--jtcg-text-muted)] mb-0.5 block">収録弾名</label>
+                  <input
+                    type="text"
+                    value={expansionName || ''}
+                    onChange={e => onExpansionChange?.(e.target.value)}
+                    placeholder="収録弾名..."
+                    aria-label="収録弾名"
+                    className="w-full border border-[var(--jtcg-border)] rounded-[var(--jtcg-radius)] px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
+                  />
+                </div>
                 <input
                   type="text"
                   value={jaName || ''}

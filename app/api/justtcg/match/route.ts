@@ -56,6 +56,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // R13-API05: cardNumber検証（文字列のみ許可）
+    if (cardNumber != null && typeof cardNumber !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'number は文字列で指定してください' },
+        { status: 400 }
+      )
+    }
+
     // ゲームに応じて "japanese" を付加（日本版ゲームのみ）
     const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world']
     const validGame = typeof game === 'string' && JAPANESE_GAMES.concat(['pokemon']).includes(game) ? game : 'pokemon-japan'
@@ -72,16 +80,20 @@ export async function POST(request: NextRequest) {
     if (cardNumber) {
       // "115/080" -> "115" (スラッシュ前)
       const num = cardNumber.split('/')[0]
+      // R13-INT04: 単語境界で正確にマッチ（#1が#10,#100等に誤マッチしない）
+      const numRegex = new RegExp(`#\\s?${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\D|$)`)
       const filtered = products.filter(p => {
         const pName = p['product-name'] || ''
-        return pName.includes(`#${num}`) || pName.includes(`# ${num}`)
+        return numRegex.test(pName)
       })
       if (filtered.length > 0) matched = filtered
     }
 
     // 最もマッチ度が高い結果を返却
     const best = matched[0]
-    const loosePrice = best['loose-price'] ?? null
+    // R13-INT05: price=0はデータなしとして扱う（PriceChartingが0を返す場合がある）
+    const rawPrice = best['loose-price']
+    const loosePrice = (typeof rawPrice === 'number' && rawPrice > 0) ? rawPrice : null
 
     // PriceChartingページから画像URL取得（5秒タイムアウト）
     let imageUrl: string | null = null
@@ -123,10 +135,10 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Match failed'
     console.error('JustTCG match error:', error)
+    // R13-API16: 内部エラー詳細をクライアントに漏らさない
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: 'マッチング処理に失敗しました' },
       { status: 500 }
     )
   }

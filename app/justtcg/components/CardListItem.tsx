@@ -36,8 +36,8 @@ export default memo(function CardListItem({
 
   return (
     <div
-      role="option"
-      aria-selected={selected}
+      role="listitem"
+      aria-label={`${card.name} #${card.number}${isValidPrice(price) ? ` $${price!.toFixed(2)}` : ''}`}
       tabIndex={selected ? 0 : -1}
       className={`flex items-center gap-2 px-3 py-2.5 rounded-[var(--jtcg-radius)] cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--jtcg-ink-light)] ${
         selected

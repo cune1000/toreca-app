@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
     const gameParam = searchParams.get('game') || 'pokemon-japan'
     const game = VALID_GAMES.has(gameParam) ? gameParam : 'pokemon-japan'
 
-    if (!setId || typeof setId !== 'string' || setId.length > 200) {
+    // R13-API17: setId形式検証（英数字・ハイフン・アンダースコアのみ）
+    if (!setId || typeof setId !== 'string' || setId.length > 200 || !/^[\w-]+$/.test(setId)) {
       return NextResponse.json(
         { success: false, error: 'set パラメータが不正です' },
         { status: 400 }
@@ -48,26 +49,35 @@ export async function GET(request: NextRequest) {
     let pages = 0
     const paginationStart = Date.now()
 
+    let partial = false // R13-API08: 部分取得フラグ
     while (pages < MAX_PAGES) {
       // R11-02: 全体タイムアウトチェック（大量セットでVercel関数タイムアウトを防止）
       if (Date.now() - paginationStart > PAGINATION_TIMEOUT) {
         console.warn(`JustTCG cards pagination timeout: ${pages} pages fetched for ${cacheKey}`)
+        partial = true
         break
       }
-      const result = await getCards(setId, { offset, limit, game })
-      if (!Array.isArray(result.data) || result.data.length === 0) break
-      allCards = allCards.concat(result.data)
-      usage = result.usage
-      pages++
+      // R13-INT11: ページネーション内try-catch（1ページの失敗で全体が壊れない）
+      try {
+        const result = await getCards(setId, { offset, limit, game })
+        if (!Array.isArray(result.data) || result.data.length === 0) break
+        allCards = allCards.concat(result.data)
+        usage = result.usage
+        pages++
 
-      if (!result.meta.hasMore) break
-      offset += limit
+        if (!result.meta.hasMore) break
+        offset += limit
+      } catch (pageError) {
+        console.warn(`JustTCG cards page ${pages} error for ${cacheKey}:`, pageError)
+        partial = true
+        break
+      }
     }
 
     const responseData = { data: allCards, total: allCards.length, usage }
 
-    // 空データはキャッシュしない（API一時エラーの可能性）
-    if (allCards.length > 0) {
+    // R13-API08: 空データ・部分取得はキャッシュしない（次回の完全取得を優先）
+    if (allCards.length > 0 && !partial) {
       cache.set(cacheKey, { data: responseData, at: Date.now() }) // R12-07: ページネーション後の正確なタイムスタンプ
     }
 
@@ -88,10 +98,10 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800' },
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch cards'
     console.error('JustTCG cards error:', error)
+    // R13-API16: 内部エラー詳細をクライアントに漏らさない
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: 'カード取得に失敗しました' },
       { status: 500 }
     )
   }

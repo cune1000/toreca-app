@@ -88,6 +88,12 @@ async function fetchJustTcg<T>(path: string, params?: Record<string, string>): P
       throw new Error(`JustTCG API error: ${res.status} ${res.statusText}`)
     }
 
+    // R13: Content-Type確認（メンテナンスページ等のHTML返却防止）
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      throw new Error(`JustTCG API: unexpected content-type: ${ct}`)
+    }
+
     const json = await res.json()
     if (json.error) {
       throw new Error(`JustTCG API error: ${json.error} (${json.code})`)
@@ -95,7 +101,7 @@ async function fetchJustTcg<T>(path: string, params?: Record<string, string>): P
 
     const md: JustTcgMetadata = json._metadata || {}
     return {
-      data: json.data,
+      data: json.data ?? ([] as unknown as T), // R13: null/undefinedガード
       meta: json.meta || { total: 0, limit: 0, offset: 0, hasMore: false },
       usage: {
         dailyUsed: md.apiDailyRequestsUsed ?? 0,
