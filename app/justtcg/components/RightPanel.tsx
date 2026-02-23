@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useMemo, useRef, memo } from 'react'
 import { X, ChevronDown, ChevronUp, Search as SearchIcon, ExternalLink } from 'lucide-react'
 import RarityBadge from './RarityBadge'
 import VariantRow from './VariantRow'
@@ -54,8 +54,19 @@ export default memo(function RightPanel({
 }: RightPanelProps) {
   const [showChart, setShowChart] = useState(false)
 
-  // UI-05: カード切替時にチャートを閉じる
-  useEffect(() => { setShowChart(false) }, [card?.id])
+  // UI-05: カード切替時にチャートを閉じる（エフェクト内setStateを排除 — 直接算出）
+  const cardId = card?.id ?? null
+  const prevCardIdRef = useRef(cardId)
+  if (cardId !== prevCardIdRef.current) {
+    prevCardIdRef.current = cardId
+    if (showChart) setShowChart(false)
+  }
+
+  // FIX: 全てのHooksは早期returnの前に呼ぶ（Reactのルール）
+  // variants を useMemo で安定化（card.variants が falsy の場合の空配列生成を防止）
+  const variants = useMemo(() => card?.variants ?? [], [card?.variants])
+  const japaneseVariants = useMemo(() => variants.filter(v => v.language === 'Japanese'), [variants])
+  const otherVariants = useMemo(() => variants.filter(v => v.language !== 'Japanese'), [variants])
 
   // R11-17: w-80 固定でレイアウトジャンプ防止（プレースホルダー表示）
   // R12-15: scrollable propを空状態にも適用し、DOM構造の一貫性を保つ
@@ -66,11 +77,6 @@ export default memo(function RightPanel({
       </div>
     </aside>
   )
-
-  // R13-FE06: variants フィルタをメモ化（card切替時のみ再計算）
-  const variants = card.variants ?? []
-  const japaneseVariants = useMemo(() => variants.filter(v => v.language === 'Japanese'), [variants])
-  const otherVariants = useMemo(() => variants.filter(v => v.language !== 'Japanese'), [variants])
   const nm = getNmVariant(card)
   const priceHistory = nm?.priceHistory ?? EMPTY_HISTORY
 
