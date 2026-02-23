@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // 重複チェック: justtcg_id
+    // justtcg_id 既存チェック（後でUPDATE or INSERT判定に使用）
     const { data: existing, error: dupCheckError } = await supabase
       .from('cards')
       .select('id, name')
@@ -127,14 +127,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (existing) {
-      return NextResponse.json(
-        { success: false, error: `既に登録済みです: ${existing.name}`, existingId: existing.id },
-        { status: 409 }
-      )
-    }
-
-    // ゲームに応じた category_large_id を取得（マージ判定にも使うため先に実行）
+    // ゲームに応じた category_large_id を取得
     const GAME_CATEGORY_MAP: Record<string, string> = {
       'pokemon-japan': 'ポケモンカード',
       'pokemon': 'ポケモンカード',
@@ -175,6 +168,42 @@ export async function POST(request: NextRequest) {
         .eq('name', jaRarity)
         .maybeSingle()
       rarityId = rarityRow?.id || null
+    }
+
+    // justtcg_id が既に登録済み → 既存カードを最新データで上書きUPDATE
+    if (existing) {
+      const updateFields: Record<string, unknown> = {
+        name: trimmedName,
+        name_en: str(name_en, 200),
+        card_number: str(card_number, 50),
+        rarity: str(rarity, 50),
+        set_code: str(set_code, 100),
+        set_name_en: str(set_name_en, 200),
+        release_year: safeReleaseYear,
+        expansion: str(expansion, 200),
+        pricecharting_id: str(pricecharting_id, 100),
+        pricecharting_name: str(pricecharting_name, 200),
+        pricecharting_url: url(pricecharting_url),
+        category_large_id: category?.id || null,
+      }
+      if (rarityId) updateFields.rarity_id = rarityId
+      if (url(image_url)) updateFields.image_url = url(image_url)
+
+      const { data: updated, error: updateError } = await supabase
+        .from('cards')
+        .update(updateFields)
+        .eq('id', existing.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        console.error('Card update error:', updateError)
+        return NextResponse.json(
+          { success: false, error: updateError.message },
+          { status: 500 }
+        )
+      }
+      return NextResponse.json({ success: true, data: updated, updated: true })
     }
 
     // 名前+型番+カテゴリで既存カードを検索（別ソースから登録済みの場合マージ）
