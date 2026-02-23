@@ -27,6 +27,11 @@ export interface CardDetail extends ChartCard {
     pricecharting_url?: string | null
     high_price: number
     low_price: number
+    // 買取価格（条件別最高値）
+    purchase_loose_best?: number
+    purchase_psa10_best?: number
+    // 店舗別買取一覧
+    purchase_prices: PurchaseShopPrice[]
 }
 
 export interface PricePoint {
@@ -40,8 +45,8 @@ export interface PricePoint {
 export interface PurchaseShopPrice {
     shop_name: string
     shop_icon?: string
+    condition: string   // '素体', 'PSA10', '未開封' etc.
     price: number
-    change_pct?: number
     updated_at: string
 }
 

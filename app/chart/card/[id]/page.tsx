@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Share2, ExternalLink } from 'lucide-react'
 import ChartLayoutComponent from '@/components/chart/ChartLayout'
 import PriceGraph from '@/components/chart/PriceGraph'
+import PurchasePriceTable from '@/components/chart/PurchasePriceTable'
 import AffiliateButtons from '@/components/chart/AffiliateButtons'
 import PriceChangeIndicator from '@/components/chart/PriceChangeIndicator'
 import { getCardDetail, getPriceHistory } from '@/lib/chart/queries'
@@ -171,9 +172,9 @@ export default function CardDetailPage({ params }: Props) {
                     </div>
 
                     {/* 価格サマリーカード */}
-                    <div className="grid grid-cols-3 gap-2 mt-4">
+                    <div className="grid grid-cols-2 gap-2 mt-4">
                         <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
-                            <p className="text-[10px] text-gray-400">PSA10価格</p>
+                            <p className="text-[10px] text-gray-400">PSA10 海外相場</p>
                             <p className="text-sm font-bold text-green-600">
                                 {card.graded_price_jpy ? formatPrice(card.graded_price_jpy) : '-'}
                             </p>
@@ -182,18 +183,32 @@ export default function CardDetailPage({ params }: Props) {
                             )}
                         </div>
                         <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
-                            <p className="text-[10px] text-gray-400">最高値</p>
-                            <p className="text-sm font-bold text-red-500">
-                                {card.high_price ? formatPrice(card.high_price) : '-'}
-                            </p>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
-                            <p className="text-[10px] text-gray-400">最安値</p>
-                            <p className="text-sm font-bold text-blue-500">
-                                {card.low_price ? formatPrice(card.low_price) : '-'}
+                            <p className="text-[10px] text-gray-400">最高値 / 最安値</p>
+                            <p className="text-sm font-bold">
+                                <span className="text-red-500">{card.high_price ? formatPrice(card.high_price) : '-'}</span>
+                                <span className="text-gray-300 mx-1">/</span>
+                                <span className="text-blue-500">{card.low_price ? formatPrice(card.low_price) : '-'}</span>
                             </p>
                         </div>
                     </div>
+
+                    {/* 買取価格サマリー */}
+                    {(card.purchase_loose_best || card.purchase_psa10_best) && (
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="bg-blue-50 rounded-lg px-3 py-2 text-center">
+                                <p className="text-[10px] text-blue-400">買取最高値（素体）</p>
+                                <p className="text-sm font-bold text-blue-600">
+                                    {card.purchase_loose_best ? formatPrice(card.purchase_loose_best) : '-'}
+                                </p>
+                            </div>
+                            <div className="bg-purple-50 rounded-lg px-3 py-2 text-center">
+                                <p className="text-[10px] text-purple-400">買取最高値（PSA10）</p>
+                                <p className="text-sm font-bold text-purple-600">
+                                    {card.purchase_psa10_best ? formatPrice(card.purchase_psa10_best) : '-'}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="px-4 py-4">
@@ -202,6 +217,16 @@ export default function CardDetailPage({ params }: Props) {
                         data={priceData}
                         onPeriodChange={() => { }}
                     />
+
+                    {/* 店舗別買取価格一覧 */}
+                    {card.purchase_prices && card.purchase_prices.length > 0 && (
+                        <div className="mt-6">
+                            <h3 className="text-sm font-bold text-gray-700 mb-3">
+                                店舗別 買取価格
+                            </h3>
+                            <PurchasePriceTable prices={card.purchase_prices} />
+                        </div>
+                    )}
 
                     {/* PriceChartingリンク */}
                     {card.pricecharting_id && (

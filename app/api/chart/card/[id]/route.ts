@@ -63,6 +63,63 @@ export async function GET(
         .order('loose_price_jpy', { ascending: true })
         .limit(1)
 
+    // 買取価格（店舗別・条件別）
+    const { data: purchaseData } = await supabase
+        .from('purchase_prices')
+        .select('price, condition, created_at, shop:shop_id(name, icon), link:link_id(label)')
+        .eq('card_id', id)
+        .gt('price', 0)
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+    // 店舗×条件ごとに最新価格だけ取得
+    const shopCondMap = new Map<string, {
+        shop_name: string
+        shop_icon?: string
+        condition: string
+        price: number
+        updated_at: string
+    }>()
+
+    let purchaseLooseBest = 0
+    let purchasePsa10Best = 0
+
+    for (const row of purchaseData || []) {
+        const shopName = (row as any).shop?.name || '不明'
+        const label = (row as any).link?.label || ''
+        // condition を決定: link.label > purchase_prices.condition > デフォルト
+        const condition = label.includes('PSA10') || label.includes('PSA')
+            ? 'PSA10'
+            : label.includes('未開封')
+                ? '未開封'
+                : row.condition === 'PSA10' || row.condition === 'psa10' || row.condition === 'psa'
+                    ? 'PSA10'
+                    : row.condition === '未開封' || row.condition === 'sealed'
+                        ? '未開封'
+                        : '素体'
+
+        const key = `${shopName}::${condition}`
+        if (shopCondMap.has(key)) continue // 最新のみ
+
+        shopCondMap.set(key, {
+            shop_name: shopName,
+            shop_icon: (row as any).shop?.icon || undefined,
+            condition,
+            price: row.price,
+            updated_at: row.created_at,
+        })
+
+        // 条件別の最高値を記録
+        if (condition === 'PSA10') {
+            purchasePsa10Best = Math.max(purchasePsa10Best, row.price)
+        } else if (condition === '素体') {
+            purchaseLooseBest = Math.max(purchaseLooseBest, row.price)
+        }
+    }
+
+    const purchasePrices = Array.from(shopCondMap.values())
+        .sort((a, b) => b.price - a.price)
+
     const result = {
         id: (card as any).id,
         name: (card as any).name,
@@ -83,6 +140,9 @@ export async function GET(
         display_price_usd: latest?.loose_price_usd || 0,
         high_price: maxPrice?.[0]?.loose_price_jpy || 0,
         low_price: minPrice?.[0]?.loose_price_jpy || 0,
+        purchase_loose_best: purchaseLooseBest || undefined,
+        purchase_psa10_best: purchasePsa10Best || undefined,
+        purchase_prices: purchasePrices,
     }
 
     return NextResponse.json(result, {
