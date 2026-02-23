@@ -134,7 +134,7 @@ export function useJustTcgState() {
     setSelectedCard(null)
     setSetFilterText('')
     setSearch('') // R12-20: ゲーム切替時に検索テキストもクリア
-    setRarityFilter(new Set()) // R12-20
+    setRarityFilter(prev => prev.size === 0 ? prev : new Set()) // R12-20
     setError('')
     setPcMatches({})
     setPcLoading({}) // R14-01: ゲーム切替時にpcLoadingもリセット
@@ -168,7 +168,7 @@ export function useJustTcgState() {
     const controller = new AbortController()
     setLoadingCards(true)
     setSearch('')
-    setRarityFilter(new Set())
+    setRarityFilter(prev => prev.size === 0 ? prev : new Set())
     setSelectedCard(null)
     setError('') // R12-06: 前セットのエラーをクリア
     setPcMatches({})
@@ -489,7 +489,7 @@ export function useJustTcgState() {
       return next
     })
   }, [])
-  const clearRarityFilter = useCallback(() => setRarityFilter(new Set()), [])
+  const clearRarityFilter = useCallback(() => setRarityFilter(prev => prev.size === 0 ? prev : new Set()), [])
 
   return {
     selectedGame, sets, selectedSetId, cards, selectedCard, usage,

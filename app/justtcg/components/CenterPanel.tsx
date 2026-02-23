@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useMemo, memo } from 'react'
+import { useRef, useMemo, useCallback, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search, Package } from 'lucide-react'
 import CardListItem from './CardListItem'
@@ -56,14 +56,14 @@ export default memo(function CenterPanel({
   className = '',
 }: CenterPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const getScrollElement = useCallback(() => scrollRef.current, [])
+  const estimateSize = useCallback(() => ROW_HEIGHT, [])
 
   const virtualizer = useVirtualizer({
     count: filteredCards.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    getScrollElement,
+    estimateSize,
     overscan: 10,
-    paddingStart: 8, // R14-06: p-2相当のパディング
-    paddingEnd: 8,
   })
 
   const showList = !loadingSets && hasSelectedSet && !loadingCards && filteredCards.length > 0
@@ -238,7 +238,7 @@ export default memo(function CenterPanel({
           </div>
         ) : showList ? (
           <div
-            className="px-2"
+            className="px-2 py-2"
             style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}
             role="list"
             aria-label="カード一覧"
