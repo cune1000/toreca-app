@@ -77,6 +77,34 @@ export function formatUpdated(ts: number | null) {
   return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
+// カード名の括弧内パターン名 → 日本語マッピング
+const PATTERN_NAME_JA: Record<string, string> = {
+  'Master Ball Pattern': 'マスターボールミラー',
+  'Poke Ball Pattern': 'モンスターボールミラー',
+  'Energy Symbol Pattern': 'エネルギーシンボルミラー',
+  'Friend Ball Pattern': 'フレンドボールミラー',
+  'Team Rocket Pattern': 'ロケット団ミラー',
+  'Nest Ball Pattern': 'ネストボールミラー',
+  'Premier Ball Pattern': 'プレミアボールミラー',
+  'Luxury Ball Pattern': 'ゴージャスボールミラー',
+  'Timer Ball Pattern': 'タイマーボールミラー',
+  'Dusk Ball Pattern': 'ダークボールミラー',
+  'Heal Ball Pattern': 'ヒールボールミラー',
+  'Quick Ball Pattern': 'クイックボールミラー',
+  'Dive Ball Pattern': 'ダイブボールミラー',
+  'Ultra Ball Pattern': 'ハイパーボールミラー',
+  'Great Ball Pattern': 'スーパーボールミラー',
+}
+
+/** 英語カード名に (Pattern) がある場合、日本語名にパターンサフィックスを付与 */
+function appendVariantSuffix(englishName: string, jaName: string): string {
+  const m = englishName.match(/\(([^)]+)\)/)
+  if (!m) return jaName
+  const patternEn = m[1].trim()
+  const patternJa = PATTERN_NAME_JA[patternEn] || patternEn
+  return `${jaName}（${patternJa}）`
+}
+
 // === フック ===
 
 export function useJustTcgState() {
@@ -330,9 +358,11 @@ export function useJustTcgState() {
       // Gemini で日本語名を自動抽出（fire-and-forget、startTransitionで低優先度バッチ化）
       if (json.success && json.data?.imageUrl && setJaNameRef.current) {
         const cardId = card.id
+        const cardName = card.name
         extractJaName(json.data.imageUrl).then(name => {
           if (name && setJaNameRef.current && selectedSetIdRef.current === capturedSetId) {
-            startTransition(() => { setJaNameRef.current!(cardId, name) })
+            const finalName = appendVariantSuffix(cardName, name)
+            startTransition(() => { setJaNameRef.current!(cardId, finalName) })
           }
         })
       }
@@ -423,9 +453,11 @@ export function useJustTcgState() {
               // Gemini で日本語名抽出（fire-and-forget、startTransitionで低優先度バッチ化）
               if (match.imageUrl && setJaNameRef.current) {
                 const cardId = card.id
+                const cardName = card.name
                 extractJaName(match.imageUrl).then(name => {
                   if (name && setJaNameRef.current && selectedSetIdRef.current === capturedSetId) {
-                    startTransition(() => { setJaNameRef.current!(cardId, name) })
+                    const finalName = appendVariantSuffix(cardName, name)
+                    startTransition(() => { setJaNameRef.current!(cardId, finalName) })
                   }
                 })
               }

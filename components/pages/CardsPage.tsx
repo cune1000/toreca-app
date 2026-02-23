@@ -932,7 +932,10 @@ export default function CardsPage({
                         {card.pricecharting_id && (
                           <span title="PriceCharting" className="cursor-default text-xs font-bold text-blue-600">PC</span>
                         )}
-                        {!(cardSaleUrls[card.id]?.length) && !card.pricecharting_id && <span className="text-gray-300 text-xs">−</span>}
+                        {card.justtcg_id && (
+                          <span title="JustTCG" className="cursor-default text-xs font-bold text-emerald-600">JT</span>
+                        )}
+                        {!(cardSaleUrls[card.id]?.length) && !card.pricecharting_id && !card.justtcg_id && <span className="text-gray-300 text-xs">−</span>}
                       </div>
                     </td>
                     <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>

@@ -3,6 +3,22 @@ import { createServiceClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
+// JustTCG英語レアリティ名 → 日本語略称マッピング
+const RARITY_EN_TO_JA: Record<string, string> = {
+  'Common': 'C',
+  'Uncommon': 'U',
+  'Rare': 'R',
+  'Holo Rare': 'R',
+  'Double Rare': 'RR',
+  'Triple Rare': 'RRR',
+  'Secret Rare': 'SR',
+  'Ultra Rare': 'UR',
+  'Illustration Rare': 'AR',
+  'Special Art Rare': 'SAR',
+  'Hyper Rare': 'HR',
+  'Promo': 'PR',
+}
+
 // レート制限（IPごとに5秒間隔）
 const lastRegisterMap = new Map<string, number>()
 const REGISTER_RATE_MS = 5_000
@@ -147,6 +163,20 @@ export async function POST(request: NextRequest) {
     // R13-API06: release_year NaN/Infinity ガード
     const safeReleaseYear = typeof release_year === 'number' && Number.isFinite(release_year) ? release_year : null
 
+    // rarity_id 自動ルックアップ（英語名→日本語略称→raritiesテーブル）
+    let rarityId: string | null = null
+    const rarityStr = str(rarity, 50)
+    if (rarityStr && category?.id) {
+      const jaRarity = RARITY_EN_TO_JA[rarityStr] || rarityStr
+      const { data: rarityRow } = await supabase
+        .from('rarities')
+        .select('id')
+        .eq('large_id', category.id)
+        .eq('name', jaRarity)
+        .maybeSingle()
+      rarityId = rarityRow?.id || null
+    }
+
     // INSERT
     const { data: card, error } = await supabase
       .from('cards')
@@ -155,6 +185,7 @@ export async function POST(request: NextRequest) {
         name_en: str(name_en, 200),
         card_number: str(card_number, 50),
         rarity: str(rarity, 50),
+        rarity_id: rarityId,
         set_code: str(set_code, 100),
         set_name_en: str(set_name_en, 200),
         release_year: safeReleaseYear,
