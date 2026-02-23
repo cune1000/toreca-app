@@ -171,21 +171,20 @@ export async function POST(request: NextRequest) {
     }
 
     // justtcg_id が既に登録済み → 既存カードを最新データで上書きUPDATE
+    // nullで既存値を消さないよう、値がある場合のみセット
     if (existing) {
-      const updateFields: Record<string, unknown> = {
-        name: trimmedName,
-        name_en: str(name_en, 200),
-        card_number: str(card_number, 50),
-        rarity: str(rarity, 50),
-        set_code: str(set_code, 100),
-        set_name_en: str(set_name_en, 200),
-        release_year: safeReleaseYear,
-        expansion: str(expansion, 200),
-        pricecharting_id: str(pricecharting_id, 100),
-        pricecharting_name: str(pricecharting_name, 200),
-        pricecharting_url: url(pricecharting_url),
-        category_large_id: category?.id || null,
-      }
+      const updateFields: Record<string, unknown> = { name: trimmedName }
+      if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
+      if (str(card_number, 50)) updateFields.card_number = str(card_number, 50)
+      if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
+      if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
+      if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
+      if (safeReleaseYear) updateFields.release_year = safeReleaseYear
+      if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
+      if (str(pricecharting_id, 100)) updateFields.pricecharting_id = str(pricecharting_id, 100)
+      if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
+      if (url(pricecharting_url)) updateFields.pricecharting_url = url(pricecharting_url)
+      if (category?.id) updateFields.category_large_id = category.id
       if (rarityId) updateFields.rarity_id = rarityId
       if (url(image_url)) updateFields.image_url = url(image_url)
 
@@ -220,18 +219,20 @@ export async function POST(request: NextRequest) {
 
       if (mergeTarget) {
         // 既存カードにJustTCGデータを追記（UPDATE）
+        // nullで既存値を消さないよう、値がある場合のみセット
         const updateFields: Record<string, unknown> = {
           justtcg_id: trimmedJusttcgId,
-          name_en: str(name_en, 200),
-          rarity: str(rarity, 50),
-          set_code: str(set_code, 100),
-          set_name_en: str(set_name_en, 200),
-          release_year: safeReleaseYear,
-          pricecharting_id: str(pricecharting_id, 100),
-          pricecharting_name: str(pricecharting_name, 200),
-          pricecharting_url: url(pricecharting_url),
         }
-        // 既存値がない場合のみ上書き
+        if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
+        if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
+        if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
+        if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
+        if (safeReleaseYear) updateFields.release_year = safeReleaseYear
+        if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
+        if (str(pricecharting_id, 100)) updateFields.pricecharting_id = str(pricecharting_id, 100)
+        if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
+        if (url(pricecharting_url)) updateFields.pricecharting_url = url(pricecharting_url)
+        if (category?.id) updateFields.category_large_id = category.id
         if (rarityId) updateFields.rarity_id = rarityId
         if (url(image_url)) updateFields.image_url = url(image_url)
 
