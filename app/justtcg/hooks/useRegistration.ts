@@ -229,7 +229,10 @@ export function useRegistration(
       }
     } finally {
       bulkRunningRef.current = false
-      setBulkProgress(null)
+      // セット切替後は新セットの進捗を消さない
+      if (selectedSetRef.current?.id === capturedSetId) {
+        setBulkProgress(null)
+      }
     }
   }, [handleRegister])
 
@@ -256,7 +259,9 @@ export function useRegistration(
       if (selectedSetRef.current?.id === capturedSetId) setBulkProgress(null)
     } finally {
       bulkRunningRef.current = false
-      setBulkProgress(null)
+      if (selectedSetRef.current?.id === capturedSetId) {
+        setBulkProgress(null)
+      }
     }
   }, [handleRegister])
 

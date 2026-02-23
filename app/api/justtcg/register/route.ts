@@ -17,6 +17,21 @@ const RARITY_EN_TO_JA: Record<string, string> = {
   'Special Art Rare': 'SAR',
   'Hyper Rare': 'HR',
   'Promo': 'PR',
+  // 追加レアリティ
+  'Amazing Rare': 'A',
+  'Shiny Rare': 'S',
+  'Character Rare': 'CHR',
+  'Character Super Rare': 'CSR',
+  'Ace Spec Rare': 'ACE',
+  'Rare Holo V': 'V',
+  'Rare Holo VMAX': 'VMAX',
+  'Rare Holo VSTAR': 'VSTAR',
+  'Rare Holo GX': 'GX',
+  'Rare BREAK': 'BREAK',
+  'Rare Holo EX': 'EX',
+  'Trainer Gallery Rare Holo': 'CHR',
+  'Radiant Rare': 'K',
+  'Super Rare': 'SR',
 }
 
 // レート制限（IPごとに5秒間隔）
@@ -308,12 +323,44 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error('Card register error:', error)
-      // 重複キーエラーの場合は409を返す（レースコンディション対策）
+      // TOCTOU対策: justtcg_id重複 → 既存レコードをUPDATEにフォールバック
       const isDuplicate = error.code === '23505' || error.message?.includes('duplicate')
+      if (isDuplicate) {
+        const { data: raceExisting } = await supabase
+          .from('cards')
+          .select('id')
+          .eq('justtcg_id', trimmedJusttcgId)
+          .maybeSingle()
+        if (raceExisting) {
+          const fallbackFields: Record<string, unknown> = { name: trimmedName }
+          if (str(name_en, 200)) fallbackFields.name_en = str(name_en, 200)
+          if (cardNumber) fallbackFields.card_number = cardNumber
+          if (str(rarity, 50)) fallbackFields.rarity = str(rarity, 50)
+          if (rarityId) fallbackFields.rarity_id = rarityId
+          if (str(set_code, 100)) fallbackFields.set_code = str(set_code, 100)
+          if (str(expansion, 200)) fallbackFields.expansion = str(expansion, 200)
+          if (pcId) fallbackFields.pricecharting_id = pcId
+          if (category?.id) fallbackFields.category_large_id = category.id
+          if (url(image_url)) fallbackFields.image_url = url(image_url)
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('cards')
+            .update(fallbackFields)
+            .eq('id', raceExisting.id)
+            .select()
+            .single()
+          if (!fallbackError) {
+            return NextResponse.json({ success: true, data: fallbackData, updated: true })
+          }
+        }
+        return NextResponse.json(
+          { success: false, error: '既に登録済みです（重複）' },
+          { status: 409 }
+        )
+      }
+      console.error('Card register error:', error)
       return NextResponse.json(
-        { success: false, error: isDuplicate ? '既に登録済みです（重複）' : error.message },
-        { status: isDuplicate ? 409 : 500 }
+        { success: false, error: error.message },
+        { status: 500 }
       )
     }
 

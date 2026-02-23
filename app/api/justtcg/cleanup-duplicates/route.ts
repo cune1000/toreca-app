@@ -12,8 +12,8 @@ export const maxDuration = 60
  *
  * BのJTデータをAにマージし、関連テーブルのFK参照をAに移行してBを削除。
  *
- * GET: ドライラン（対象一覧を表示）
- * POST: 実行（マージ+削除）
+ * GET: ドライラン（対象一覧を表示）— 要認証
+ * POST: 実行（マージ+削除）— 要認証
  */
 
 interface DuplicatePair {
@@ -22,8 +22,14 @@ interface DuplicatePair {
   matchReason: string
 }
 
+function verifyAuth(request: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  const auth = request.headers.get('authorization')
+  return auth === `Bearer ${secret}`
+}
+
 async function findDuplicates(supabase: ReturnType<typeof createServiceClient>): Promise<DuplicatePair[]> {
-  // JTレコード（justtcg_idあり）を全件取得
   const { data: jtCards, error } = await supabase
     .from('cards')
     .select('id, name, card_number, category_large_id, pricecharting_id, justtcg_id')
@@ -35,9 +41,12 @@ async function findDuplicates(supabase: ReturnType<typeof createServiceClient>):
   }
 
   const pairs: DuplicatePair[] = []
+  // 1つのkeep IDが複数のremoveとペアにならないよう追跡
+  const usedKeepIds = new Set<string>()
+  const usedRemoveIds = new Set<string>()
 
   for (const jt of jtCards) {
-    if (!jt.justtcg_id) continue
+    if (!jt.justtcg_id || usedRemoveIds.has(jt.id)) continue
 
     // Stage 1: pricecharting_id マッチ
     if (jt.pricecharting_id) {
@@ -49,17 +58,19 @@ async function findDuplicates(supabase: ReturnType<typeof createServiceClient>):
         .neq('id', jt.id)
         .maybeSingle()
 
-      if (pcMatch) {
+      if (pcMatch && !usedKeepIds.has(pcMatch.id)) {
         pairs.push({
           keep: pcMatch,
           remove: { id: jt.id, name: jt.name, justtcg_id: jt.justtcg_id },
           matchReason: `pricecharting_id=${jt.pricecharting_id}`,
         })
+        usedKeepIds.add(pcMatch.id)
+        usedRemoveIds.add(jt.id)
         continue
       }
     }
 
-    // Stage 2: card_number + category マッチ
+    // Stage 2: card_number + category マッチ（1件のみ）
     if (jt.card_number && jt.category_large_id) {
       const { data: numMatch } = await supabase
         .from('cards')
@@ -70,12 +81,14 @@ async function findDuplicates(supabase: ReturnType<typeof createServiceClient>):
         .neq('id', jt.id)
         .limit(2)
 
-      if (numMatch && numMatch.length === 1) {
+      if (numMatch && numMatch.length === 1 && !usedKeepIds.has(numMatch[0].id)) {
         pairs.push({
           keep: numMatch[0],
           remove: { id: jt.id, name: jt.name, justtcg_id: jt.justtcg_id },
           matchReason: `card_number=${jt.card_number} + category`,
         })
+        usedKeepIds.add(numMatch[0].id)
+        usedRemoveIds.add(jt.id)
       }
     }
   }
@@ -94,7 +107,11 @@ const FK_TABLES = [
   { table: 'card_purchase_links', column: 'card_id' },
 ] as const
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!verifyAuth(request)) {
+    return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
+  }
+
   try {
     const supabase = createServiceClient()
     const pairs = await findDuplicates(supabase)
@@ -115,6 +132,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!verifyAuth(request)) {
+    return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
+  }
+
   try {
     const supabase = createServiceClient()
     const pairs = await findDuplicates(supabase)
@@ -130,8 +151,7 @@ export async function POST(request: NextRequest) {
       const removeId = pair.remove.id
 
       try {
-        // 1. JTデータをkeepレコードにマージ
-        // removeレコードからJT固有フィールドを取得
+        // removeレコードの全フィールドを取得
         const { data: removeCard } = await supabase
           .from('cards')
           .select('*')
@@ -143,11 +163,6 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // keepレコードにJTデータをマージ（既存値がある場合は上書きしない、JT固有フィールドは必ずセット）
-        const mergeFields: Record<string, unknown> = {
-          justtcg_id: removeCard.justtcg_id,
-        }
-        // JTからの情報で既存が空のフィールドを埋める
         const { data: keepCard } = await supabase
           .from('cards')
           .select('*')
@@ -159,9 +174,22 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // name: JT側の日本語名が最新なので常に更新
+        // Step 0: UNIQUE制約回避 — removeレコードのjusttcg_idを先にNULLにする
+        const { error: nullError } = await supabase
+          .from('cards')
+          .update({ justtcg_id: null })
+          .eq('id', removeId)
+
+        if (nullError) {
+          results.push({ keep: keepId, remove: removeId, status: `null justtcg_id error: ${nullError.message}` })
+          continue
+        }
+
+        // Step 1: keepレコードにJTデータをマージ
+        const mergeFields: Record<string, unknown> = {
+          justtcg_id: removeCard.justtcg_id,
+        }
         if (removeCard.name) mergeFields.name = removeCard.name
-        // 以下は既存値がなければJT側から補完
         if (!keepCard.name_en && removeCard.name_en) mergeFields.name_en = removeCard.name_en
         if (!keepCard.rarity && removeCard.rarity) mergeFields.rarity = removeCard.rarity
         if (!keepCard.rarity_id && removeCard.rarity_id) mergeFields.rarity_id = removeCard.rarity_id
@@ -171,7 +199,7 @@ export async function POST(request: NextRequest) {
         if (!keepCard.expansion && removeCard.expansion) mergeFields.expansion = removeCard.expansion
         if (!keepCard.tcgplayer_id && removeCard.tcgplayer_id) mergeFields.tcgplayer_id = removeCard.tcgplayer_id
         if (!keepCard.category_large_id && removeCard.category_large_id) mergeFields.category_large_id = removeCard.category_large_id
-        // image_url: JT側の方が良い場合は更新（PCのimage_urlはbase64の場合がある）
+        if (!keepCard.card_number && removeCard.card_number) mergeFields.card_number = removeCard.card_number
         if (removeCard.image_url && removeCard.image_url.startsWith('http')) {
           mergeFields.image_url = removeCard.image_url
         }
@@ -182,11 +210,13 @@ export async function POST(request: NextRequest) {
           .eq('id', keepId)
 
         if (mergeError) {
+          // ロールバック: removeレコードのjusttcg_idを復元
+          await supabase.from('cards').update({ justtcg_id: removeCard.justtcg_id }).eq('id', removeId)
           results.push({ keep: keepId, remove: removeId, status: `merge error: ${mergeError.message}` })
           continue
         }
 
-        // 2. FK参照テーブルを全てkeepIdに移行
+        // Step 2: FK参照テーブルを全てkeepIdに移行
         let fkErrors = 0
         for (const { table, column } of FK_TABLES) {
           const { error: fkError } = await supabase
@@ -200,24 +230,30 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 3. removeレコードを削除
+        // Step 3: FK移行エラーがあればDELETEをスキップ（孤児レコード防止）
+        if (fkErrors > 0) {
+          results.push({ keep: keepId, remove: removeId, status: `partial: merged but ${fkErrors} FK errors, delete skipped` })
+          continue
+        }
+
+        // Step 4: removeレコードを削除
         const { error: deleteError } = await supabase
           .from('cards')
           .delete()
           .eq('id', removeId)
 
         if (deleteError) {
-          results.push({ keep: keepId, remove: removeId, status: `delete error: ${deleteError.message} (fkErrors: ${fkErrors})` })
+          results.push({ keep: keepId, remove: removeId, status: `delete error: ${deleteError.message}` })
           continue
         }
 
-        results.push({ keep: keepId, remove: removeId, status: `ok (fkErrors: ${fkErrors})` })
+        results.push({ keep: keepId, remove: removeId, status: 'ok' })
       } catch (err: any) {
         results.push({ keep: keepId, remove: removeId, status: `error: ${err.message}` })
       }
     }
 
-    const succeeded = results.filter(r => r.status.startsWith('ok')).length
+    const succeeded = results.filter(r => r.status === 'ok').length
     return NextResponse.json({
       success: true,
       merged: succeeded,
