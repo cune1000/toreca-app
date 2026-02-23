@@ -37,6 +37,30 @@ export function useRegistration(
     }
   }, [selectedSet?.id])
 
+  // DB登録済みチェック: カード読み込み時にjusttcg_idで一括照会
+  useEffect(() => {
+    if (cards.length === 0) return
+    const controller = new AbortController()
+    const ids = cards.map(c => c.id)
+    fetch('/api/justtcg/check-registered', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justtcg_ids: ids }),
+      signal: controller.signal,
+    })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(json => {
+        if (controller.signal.aborted || !json.success) return
+        const map: Record<string, boolean> = {}
+        for (const id of json.registeredIds) map[id] = true
+        setRegistered(prev => ({ ...prev, ...map }))
+      })
+      .catch(e => {
+        if (e.name !== 'AbortError') console.warn('Registration check failed:', e)
+      })
+    return () => controller.abort()
+  }, [cards])
+
   const toggleCheck = useCallback((cardId: string) => {
     setCheckedCards(prev => {
       const next = new Set(prev)
