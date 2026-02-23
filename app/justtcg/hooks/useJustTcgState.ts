@@ -108,8 +108,17 @@ function appendVariantSuffix(englishName: string, jaName: string): string {
 // === フック ===
 
 export function useJustTcgState() {
-  // ゲーム・セット
-  const [selectedGame, setSelectedGame] = useState('pokemon-japan')
+  // ゲーム・セット（localStorageで永続化）
+  const [selectedGame, setSelectedGameRaw] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('jtcg-selectedGame') || 'pokemon-japan'
+    }
+    return 'pokemon-japan'
+  })
+  const setSelectedGame = useCallback((game: string) => {
+    setSelectedGameRaw(game)
+    try { localStorage.setItem('jtcg-selectedGame', game) } catch {}
+  }, [])
   const [sets, setSets] = useState<JTSet[]>([])
   const [selectedSetId, setSelectedSetId] = useState('')
   const [cards, setCards] = useState<JTCard[]>([])

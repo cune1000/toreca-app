@@ -31,13 +31,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient()
     const registeredIds: string[] = []
+    const registeredNames: Record<string, string> = {}
 
     // Supabase .in() は100件制限があるため、チャンク処理
     for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
       const chunk = ids.slice(i, i + CHUNK_SIZE)
       const { data, error } = await supabase
         .from('cards')
-        .select('justtcg_id')
+        .select('justtcg_id, name')
         .in('justtcg_id', chunk)
 
       if (error) {
@@ -47,12 +48,15 @@ export async function POST(request: NextRequest) {
 
       if (data) {
         for (const row of data) {
-          if (row.justtcg_id) registeredIds.push(row.justtcg_id)
+          if (row.justtcg_id) {
+            registeredIds.push(row.justtcg_id)
+            if (row.name) registeredNames[row.justtcg_id] = row.name
+          }
         }
       }
     }
 
-    return NextResponse.json({ success: true, registeredIds })
+    return NextResponse.json({ success: true, registeredIds, registeredNames })
   } catch (error: unknown) {
     console.error('check-registered error:', error)
     return NextResponse.json({ success: false, error: '登録チェックに失敗しました' }, { status: 500 })

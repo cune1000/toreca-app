@@ -54,6 +54,16 @@ export function useRegistration(
         const map: Record<string, boolean> = {}
         for (const id of json.registeredIds) map[id] = true
         setRegistered(map)
+        // 登録済みカードの日本語名を事前セット（上書き更新ボタン活性化）
+        if (json.registeredNames) {
+          setJaNames(prev => {
+            const next = { ...prev }
+            for (const [id, name] of Object.entries(json.registeredNames as Record<string, string>)) {
+              if (!next[id]) next[id] = name
+            }
+            return next
+          })
+        }
       })
       .catch(e => {
         if (e.name !== 'AbortError') console.warn('Registration check failed:', e)
@@ -225,6 +235,33 @@ export function useRegistration(
     }
   }, [handleRegister])
 
+  const handleBulkOverwrite = useCallback(async () => {
+    if (bulkRunningRef.current) return
+    bulkRunningRef.current = true
+    const capturedSetId = selectedSetRef.current?.id
+    try {
+      const toOverwrite = cardsRef.current.filter(c =>
+        checkedCardsRef.current.has(c.id) && registeredRef.current[c.id] && jaNamesRef.current[c.id]?.trim()
+      )
+      if (toOverwrite.length === 0) return
+      cancelBulkRef.current = false
+      let succeeded = 0, failed = 0
+      setBulkProgress({ current: 0, total: toOverwrite.length, succeeded: 0, failed: 0 })
+      for (let i = 0; i < toOverwrite.length; i++) {
+        if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
+        if (i > 0) await new Promise(r => setTimeout(r, 5500))
+        if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
+        const ok = await handleRegister(toOverwrite[i])
+        if (ok) succeeded++; else failed++
+        setBulkProgress({ current: i + 1, total: toOverwrite.length, succeeded, failed })
+      }
+      if (selectedSetRef.current?.id === capturedSetId) setBulkProgress(null)
+    } finally {
+      bulkRunningRef.current = false
+      setBulkProgress(null)
+    }
+  }, [handleRegister])
+
   const cancelBulkRegister = useCallback(() => {
     cancelBulkRef.current = true
   }, [])
@@ -232,6 +269,9 @@ export function useRegistration(
   const checkedCount = checkedCards.size
   const readyCount = useMemo(() =>
     cards.filter(c => checkedCards.has(c.id) && jaNames[c.id]?.trim() && !registered[c.id]).length
+  , [cards, checkedCards, jaNames, registered])
+  const readyOverwriteCount = useMemo(() =>
+    cards.filter(c => checkedCards.has(c.id) && jaNames[c.id]?.trim() && registered[c.id]).length
   , [cards, checkedCards, jaNames, registered])
 
   return {
@@ -242,6 +282,7 @@ export function useRegistration(
     registerError,
     checkedCount,
     readyCount,
+    readyOverwriteCount,
     bulkProgress,
     expansionOverride,
     defaultExpansion,
@@ -251,6 +292,7 @@ export function useRegistration(
     setJaName,
     handleRegister,
     handleBulkRegister,
+    handleBulkOverwrite,
     cancelBulkRegister,
   }
 }

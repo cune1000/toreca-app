@@ -29,11 +29,13 @@ interface CenterPanelProps {
   registered: Record<string, boolean>
   checkedCount: number
   readyCount: number
+  readyOverwriteCount: number
   bulkProgress: { current: number; total: number; succeeded: number; failed: number } | null
   // Registration callbacks
   toggleCheck: (cardId: string) => void
   toggleAllFiltered: (filteredIds: string[]) => void
   handleBulkRegister: () => void
+  handleBulkOverwrite: () => void
   cancelBulkRegister: () => void
   // Bulk PC search
   bulkPcProgress: { current: number; total: number; succeeded: number; failed: number } | null
@@ -50,8 +52,8 @@ export default memo(function CenterPanel({
   loadingSets, loadingCards, hasSelectedSet, totalSets,
   rarities, rarityFilter, showRegistration,
   setSearch, toggleRarity, clearRarityFilter, onSelectCard,
-  checkedCards, registered, checkedCount, readyCount, bulkProgress,
-  toggleCheck, toggleAllFiltered, handleBulkRegister, cancelBulkRegister,
+  checkedCards, registered, checkedCount, readyCount, readyOverwriteCount, bulkProgress,
+  toggleCheck, toggleAllFiltered, handleBulkRegister, handleBulkOverwrite, cancelBulkRegister,
   bulkPcProgress, handleBulkPcSearchChecked, handleBulkPcSearchFiltered, cancelBulkPcSearch,
   className = '',
 }: CenterPanelProps) {
@@ -199,13 +201,26 @@ export default memo(function CenterPanel({
                       中止
                     </button>
                   ) : (
-                    <button
-                      onClick={handleBulkRegister}
-                      disabled={readyCount === 0 || !!bulkPcProgress}
-                      className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {`${readyCount}件を一括登録`}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {readyCount > 0 && (
+                        <button
+                          onClick={handleBulkRegister}
+                          disabled={!!bulkPcProgress}
+                          className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-[var(--jtcg-ink)] text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {`${readyCount}件を登録`}
+                        </button>
+                      )}
+                      {readyOverwriteCount > 0 && (
+                        <button
+                          onClick={handleBulkOverwrite}
+                          disabled={!!bulkPcProgress}
+                          className="text-xs px-3 py-1.5 rounded-[var(--jtcg-radius)] bg-amber-500 text-white font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {`${readyOverwriteCount}件を上書き`}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

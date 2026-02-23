@@ -175,10 +175,12 @@ export default function JustTcgExplorer() {
           registered={reg.registered}
           checkedCount={reg.checkedCount}
           readyCount={reg.readyCount}
+          readyOverwriteCount={reg.readyOverwriteCount}
           bulkProgress={reg.bulkProgress}
           toggleCheck={reg.toggleCheck}
           toggleAllFiltered={reg.toggleAllFiltered}
           handleBulkRegister={reg.handleBulkRegister}
+          handleBulkOverwrite={reg.handleBulkOverwrite}
           cancelBulkRegister={reg.cancelBulkRegister}
           bulkPcProgress={state.bulkPcProgress}
           handleBulkPcSearchChecked={handleBulkPcSearchChecked}

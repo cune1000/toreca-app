@@ -48,21 +48,15 @@ export default memo(function LeftPanel({
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--jtcg-text-muted)] mb-2">
             Game
           </h3>
-          <div className="space-y-1">
+          <select
+            value={selectedGame}
+            onChange={e => setSelectedGame(e.target.value)}
+            className="w-full px-2.5 py-1.5 rounded-[var(--jtcg-radius)] text-xs border border-[var(--jtcg-border)] bg-white focus:outline-none focus:ring-1 focus:ring-[var(--jtcg-ink-light)]"
+          >
             {GAME_OPTIONS.map(g => (
-              <button
-                key={g.id}
-                onClick={() => setSelectedGame(g.id)}
-                className={`w-full text-left px-2.5 py-1.5 rounded-[var(--jtcg-radius)] text-xs transition-colors ${
-                  selectedGame === g.id
-                    ? 'bg-[var(--jtcg-ink)] text-white font-bold'
-                    : 'text-[var(--jtcg-text-secondary)] hover:bg-gray-50'
-                }`}
-              >
-                {g.short}
-              </button>
+              <option key={g.id} value={g.id}>{g.short}</option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* セット選択 */}
