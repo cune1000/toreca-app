@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 const cacheMap = new Map<string, { data: any; usage?: any; at: number }>()
 const CACHE_TTL = 24 * 60 * 60 * 1000
 const MAX_CACHE_ENTRIES = 10
-const VALID_GAMES = new Set(['pokemon-japan', 'pokemon', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world'])
+const VALID_GAMES = new Set(['pokemon-japan', 'one-piece-card-game'])
 
 export async function GET(request: NextRequest) {
   try {

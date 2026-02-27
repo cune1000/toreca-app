@@ -1,12 +1,7 @@
 // ゲーム設定
 export const GAME_OPTIONS = [
   { id: 'pokemon-japan', label: 'ポケモンカード（日本版）', short: 'ポケカ JP' },
-  { id: 'pokemon', label: 'Pokemon TCG（英語版）', short: 'ポケカ EN' },
   { id: 'one-piece-card-game', label: 'ワンピースカードゲーム', short: 'ワンピ' },
-  { id: 'digimon-card-game', label: 'デジモンカードゲーム', short: 'デジモン' },
-  { id: 'union-arena', label: 'ユニオンアリーナ', short: 'UA' },
-  { id: 'hololive-official-card-game', label: 'hololive OFFICIAL CARD GAME', short: 'ホロライブ' },
-  { id: 'dragon-ball-super-fusion-world', label: 'ドラゴンボール超 FW', short: 'ドラゴンボール' },
 ] as const
 
 // レアリティバッジの色マッピング

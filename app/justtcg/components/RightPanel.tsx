@@ -7,6 +7,7 @@ import VariantRow from './VariantRow'
 import PriceHistoryChart from './PriceHistoryChart'
 import type { JTCard, PCMatch } from '../hooks/useJustTcgState'
 import { getNmVariant, formatUpdated, isValidPrice } from '../hooks/useJustTcgState'
+import { getSetNameJa } from '@/lib/justtcg-set-names'
 
 const EMPTY_HISTORY: Array<{ p: number; t: number }> = []
 
@@ -100,7 +101,7 @@ export default memo(function RightPanel({
               </span>
               <RarityBadge rarity={card.rarity} />
             </div>
-            <p className="text-[10px] text-[var(--jtcg-text-muted)] mt-0.5">{card.set_name}</p>
+            <p className="text-[10px] text-[var(--jtcg-text-muted)] mt-0.5">{getSetNameJa(card.set, card.set_name)}</p>
           </div>
           <button
             onClick={onClose}

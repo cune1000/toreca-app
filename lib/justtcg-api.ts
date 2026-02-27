@@ -137,6 +137,8 @@ export async function getCards(setId: string, opts?: { offset?: number; limit?: 
     set: setId,
     orderBy: 'price',
     order: 'desc',
+    include_price_history: 'true',
+    priceHistoryDuration: '180d',
   }
   if (opts?.offset != null) params.offset = String(opts.offset)
   if (opts?.limit) params.limit = String(opts.limit)

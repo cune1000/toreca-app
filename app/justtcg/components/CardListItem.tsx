@@ -6,6 +6,7 @@ import RarityBadge from './RarityBadge'
 import SparklineChart from './SparklineChart'
 import type { JTCard } from '../hooks/useJustTcgState'
 import { getNmVariant, isValidPrice } from '../hooks/useJustTcgState'
+import { getSetNameJa } from '@/lib/justtcg-set-names'
 
 const EMPTY_HISTORY: Array<{ p: number; t: number }> = []
 
@@ -76,7 +77,7 @@ export default memo(function CardListItem({
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[var(--jtcg-text)] truncate leading-tight">{card.name}</p>
-        <p className="text-[10px] text-[var(--jtcg-text-muted)] truncate">{card.set_name}</p>
+        <p className="text-[10px] text-[var(--jtcg-text-muted)] truncate">{getSetNameJa(card.set, card.set_name)}</p>
       </div>
 
       {hasJapanese && <span className="text-xs shrink-0" title="日本語版あり">🇯🇵</span>}

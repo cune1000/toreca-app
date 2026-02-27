@@ -9,7 +9,7 @@ const CACHE_TTL = 60 * 60 * 1000
 const MAX_CACHE_ENTRIES = 50
 const MAX_PAGES = 20 // 安全ガード: 最大2000カード
 const PAGINATION_TIMEOUT = 25_000 // R11-02: 25秒（Vercel関数タイムアウトの余裕）
-const VALID_GAMES = new Set(['pokemon-japan', 'pokemon', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world'])
+const VALID_GAMES = new Set(['pokemon-japan', 'one-piece-card-game'])
 
 export async function GET(request: NextRequest) {
   try {

@@ -85,7 +85,7 @@ export default memo(function LeftPanel({
                       : 'text-[var(--jtcg-text)] hover:bg-gray-50'
                   }`}
                 >
-                  <span className="block truncate">{getSetNameJa(s.id, s.name)}</span>
+                  <span className="block whitespace-normal break-words leading-snug">{getSetNameJa(s.id, s.name)}</span>
                   <span className="text-[10px] text-[var(--jtcg-text-muted)]">
                     {s.cards_count}枚{s.release_date ? ` / ${s.release_date.slice(0, 10)}` : ''}
                   </span>

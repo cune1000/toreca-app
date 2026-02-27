@@ -297,15 +297,23 @@ export function useJustTcgState() {
     }
   }, [filteredCards, selectedCard])
 
-  // セットフィルタ
+  // セットフィルタ + 発売日ソート（新しい順、日付なしは末尾）
   const filteredSets = useMemo(() => {
-    if (!setFilterText) return sets
-    const q = setFilterText.toLowerCase()
-    return sets.filter(s =>
-      getSetNameJa(s.id, s.name).toLowerCase().includes(q) ||
-      s.name.toLowerCase().includes(q) ||
-      s.id.toLowerCase().includes(q)
-    )
+    let list = sets
+    if (setFilterText) {
+      const q = setFilterText.toLowerCase()
+      list = list.filter(s =>
+        getSetNameJa(s.id, s.name).toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        s.id.toLowerCase().includes(q)
+      )
+    }
+    return [...list].sort((a, b) => {
+      if (a.release_date && b.release_date) return b.release_date.localeCompare(a.release_date)
+      if (a.release_date && !b.release_date) return -1
+      if (!a.release_date && b.release_date) return 1
+      return 0
+    })
   }, [sets, setFilterText])
 
   // 統計 — NaN ガード追加

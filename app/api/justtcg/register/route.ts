@@ -14,6 +14,7 @@ const RARITY_EN_TO_JA: Record<string, string> = {
   'Secret Rare': 'SR',
   'Ultra Rare': 'UR',
   'Illustration Rare': 'AR',
+  'Art Rare': 'AR',
   'Special Art Rare': 'SAR',
   'Hyper Rare': 'HR',
   'Promo': 'PR',
@@ -145,12 +146,7 @@ export async function POST(request: NextRequest) {
     // ゲームに応じた category_large_id を取得
     const GAME_CATEGORY_MAP: Record<string, string> = {
       'pokemon-japan': 'ポケモンカード',
-      'pokemon': 'ポケモンカード',
       'one-piece-card-game': 'ワンピースカード',
-      'digimon-card-game': 'デジモンカード',
-      'union-arena': 'ユニオンアリーナ',
-      'hololive-official-card-game': 'ホロライブカード',
-      'dragon-ball-super-fusion-world': 'ドラゴンボール',
     }
     const validGame = typeof game === 'string' && game in GAME_CATEGORY_MAP ? game : 'pokemon-japan'
     const categoryName = GAME_CATEGORY_MAP[validGame]

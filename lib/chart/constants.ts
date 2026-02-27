@@ -93,16 +93,10 @@ export const CATEGORIES: Category[] = [
     { slug: 'all', name: '全体' },
     { slug: 'pokemon', name: 'ポケモン' },
     { slug: 'onepiece', name: 'ワンピース' },
-    { slug: 'yugioh', name: '遊戯王' },
-    { slug: 'mtg', name: 'MTG' },
-    { slug: 'duelma', name: 'デュエマ' },
 ]
 
 // カテゴリスラグ → DBカテゴリ名マッピング
 export const CATEGORY_SLUG_MAP: Record<string, string> = {
     pokemon: 'ポケモン',
     onepiece: 'ワンピース',
-    yugioh: '遊戯王',
-    mtg: 'MTG',
-    duelma: 'デュエルマスターズ',
 }

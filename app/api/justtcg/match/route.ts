@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ゲームに応じて "japanese" を付加（日本版ゲームのみ）
-    const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game', 'digimon-card-game', 'union-arena', 'hololive-official-card-game', 'dragon-ball-super-fusion-world']
-    const validGame = typeof game === 'string' && JAPANESE_GAMES.concat(['pokemon']).includes(game) ? game : 'pokemon-japan'
+    const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game']
+    const validGame = typeof game === 'string' && JAPANESE_GAMES.includes(game) ? game : 'pokemon-japan'
     const isJapaneseGame = JAPANESE_GAMES.includes(validGame)
     const query = isJapaneseGame ? `${name} japanese` : name
     const products = await searchProducts(query)
