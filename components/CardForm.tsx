@@ -165,7 +165,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
         const data = await res.json()
 
         if (data.success) {
-          setForm({ ...form, image_url: data.url })
+          setForm(prev => ({ ...prev, image_url: data.url }))
         } else {
           alert('アップロードに失敗しました: ' + data.error)
         }
@@ -203,8 +203,8 @@ export default function CardForm({ onClose, onSaved }: Props) {
 
     setLoading(false)
 
-    if (!result) {
-      alert('カードの登録に失敗しました')
+    if (result.error) {
+      alert('カードの登録に失敗しました: ' + result.error)
       return
     }
 

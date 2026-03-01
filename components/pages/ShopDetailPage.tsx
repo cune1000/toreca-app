@@ -511,7 +511,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                                     onChange={(e) => setPurchaseFilterLarge(e.target.value)}
                                     className="px-3 py-1.5 border rounded-lg text-sm"
                                 >
-                                    <option value="">全カテゴリ</option>
+                                    <option value="">全ゲーム</option>
                                     <option value={UNSET}>⚠️ 未設定</option>
                                     {categories.map(cat => (
                                         <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>

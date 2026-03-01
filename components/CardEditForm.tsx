@@ -154,7 +154,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         const data = await res.json()
 
         if (data.success) {
-          setForm({ ...form, image_url: data.url })
+          setForm(prev => ({ ...prev, image_url: data.url }))
         } else {
           alert('アップロードに失敗しました: ' + data.error)
         }

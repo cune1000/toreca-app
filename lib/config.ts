@@ -4,11 +4,6 @@
  */
 
 /**
- * Toreca Scraper (Railway) のURL
- */
-export const TORECA_SCRAPER_URL = process.env.TORECA_SCRAPER_URL || 'https://skillful-love-production.up.railway.app'
-
-/**
  * Gemini API キー
  */
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY

@@ -9,7 +9,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **toreca-app** is a Japanese trading card marketplace application for tracking card prices, scraping marketplace data, and managing inventory. It is one of two repositories:
 
 - **toreca-app** (this repo) — Next.js web app + API routes, deployed on Vercel
-- **toreca-scraper** — Express.js scraping service, deployed on Railway
 
 ## Commands
 
@@ -47,33 +46,32 @@ No test runner is configured. Playwright is installed for browser automation (sc
 
 ### Data Flow
 
-The app has two scraping patterns:
-1. **Purchase history** (Snkrdunk only) — via `/api/snkrdunk-scrape` (manual) and `/api/cron/snkrdunk-auto-scrape` (auto). Both delegate to the Railway scraper.
-2. **Sale prices/inventory** (CardRush, TorecaCamp, Drasuta, Snkrdunk) — via `/api/cron/update-prices`, also delegated to the Railway scraper.
-
-Static sites use direct fetch with ZenRows proxy fallback. Dynamic sites (Snkrdunk) require ZenRows browser.
+- **Snkrdunk sale prices** — via `/api/cron/snkrdunk-sync` (auto batch) and `/api/snkrdunk-scrape` (manual)
+- **Purchase prices** — Shinsoku/TorecaLounge via dedicated cron jobs
+- **Overseas prices** — PriceCharting via `/api/cron/overseas-price-sync`
 
 ### External Services
 
 - **Supabase** — Database, auth
 - **Google Gemini / Google Cloud Vision** — AI card recognition, OCR
-- **ZenRows** — Browser proxy (via Railway scraper)
-- **Snkrdunk, CardRush, TorecaCamp, Drasuta** — Marketplace data sources
+- **Snkrdunk** — Marketplace data source (API direct)
 - **X (Twitter) API** — Tweet monitoring for price data
 - **Shinsoku, TorecaLounge** — Card pricing/marketplace services
+- **PriceCharting** — Overseas card prices (USD)
 
 ### Cron Jobs (vercel.json)
 
 | Route | Schedule | Purpose |
 |---|---|---|
-| `/api/cron/update-prices` | Every 20 min | Sale price updates |
-| `/api/cron/snkrdunk-auto-scrape` | Every 20 min | Snkrdunk purchase history |
-| `/api/cron/daily-price-aggregate` | 22:00 UTC daily | Daily price aggregation |
-| `/api/cron/shinsoku-sync` | 2:00, 4:00, 13:00 UTC | Shinsoku data sync |
-| `/api/cron/shinsoku` | 2:30, 4:30, 13:30 UTC | Shinsoku price fetch |
-| `/api/cron/lounge-cache` | 2:00, 4:00, 13:00 UTC | TorecaLounge cache |
-| `/api/cron/toreca-lounge` | 2:30, 4:30, 13:30 UTC | TorecaLounge price fetch |
-| `/api/twitter/monitor` | Hourly | Twitter/X monitoring |
+| `/api/cron/snkrdunk-sync` | Every 5 min | Snkrdunk sale data batch sync |
+| `/api/cron/daily-price-aggregate` | Hourly | Daily price aggregation |
+| `/api/cron/shinsoku-sync` | Hourly | Shinsoku data sync |
+| `/api/cron/shinsoku` | Hourly | Shinsoku price fetch |
+| `/api/cron/lounge-cache` | Hourly | TorecaLounge cache |
+| `/api/cron/toreca-lounge` | Hourly | TorecaLounge price fetch |
+| `/api/cron/exchange-rate-sync` | Hourly | USD→JPY exchange rate |
+| `/api/cron/overseas-price-sync` | Hourly | PriceCharting overseas prices |
+| `/api/twitter/monitor` | Every 5 min | Twitter/X monitoring |
 
 ### Environment Variables
 
@@ -83,7 +81,6 @@ Required in `.env.local`:
 - `CRON_SECRET` — Bearer token for cron job authentication
 - `GEMINI_API_KEY` — Google Gemini AI
 - `GOOGLE_APPLICATION_CREDENTIALS` — Google Cloud Vision (JSON string)
-- `TORECA_SCRAPER_URL` — Railway scraper URL
 - `X_BEARER_TOKEN` — Twitter/X API
 
 ### UI Patterns

@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { RefreshCw, CheckCircle, Clock, Settings, Save, Play, XCircle, Calendar, X, Plus } from 'lucide-react'
-
-const DAY_NAMES = ['日曜', '月曜', '火曜', '水曜', '木曜', '金曜', '土曜']
+import { RefreshCw, CheckCircle, Clock, Save, Play, XCircle, Calendar, X, Plus } from 'lucide-react'
 
 interface CronLog {
   id: string
@@ -19,22 +17,14 @@ interface CronLog {
   stock_changed?: boolean
 }
 
-interface RestTime {
-  day_of_week: number
-  rest_start_1?: string | null
-  rest_end_1?: string | null
-  rest_start_2?: string | null
-  rest_end_2?: string | null
-}
-
 interface UrlStatus {
   id: string
   card?: { name: string }
   site?: { name: string }
+  product_url?: string
   last_price?: number
   last_stock?: number
-  check_interval?: number
-  next_check_at?: string
+  next_scrape_at?: string
   error_count: number
   last_error?: string
 }
@@ -69,11 +59,9 @@ const JOB_DESCRIPTIONS: Record<string, string> = {
   'overseas-price-sync':   'PriceCharting等の海外価格データを取得・同期',
   'snkrdunk-sync':         'スニダンの売買履歴＋販売中最安値を一括取得（バッチ5件/回）',
   'twitter-monitor':       'Twitter/Xからトレカ関連ツイートを監視・収集',
-  'update-prices':         '販売サイト（CardRush等）の最新価格・在庫を巡回更新',
 }
 
 const JOB_API_MAP: Record<string, { path: string; method: string }> = {
-  'update-prices':         { path: '/api/cron/update-prices', method: 'POST' },
   'snkrdunk-sync':         { path: '/api/cron/snkrdunk-sync', method: 'GET' },
   'twitter-monitor':       { path: '/api/twitter/monitor', method: 'POST' },
   'daily-price-aggregate': { path: '/api/cron/daily-price-aggregate', method: 'GET' },
@@ -86,13 +74,10 @@ const JOB_API_MAP: Record<string, { path: string; method: string }> = {
 }
 
 export default function CronDashboard() {
-  const [activeTab, setActiveTab] = useState<'logs' | 'settings' | 'status' | 'schedule'>('logs')
+  const [activeTab, setActiveTab] = useState<'logs' | 'status' | 'schedule'>('logs')
   const [logs, setLogs] = useState<CronLog[]>([])
-  const [restTimes, setRestTimes] = useState<RestTime[]>([])
   const [urlStatus, setUrlStatus] = useState<UrlStatus[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [running, setRunning] = useState(false)
   const [stats, setStats] = useState<Stats>({ total: 0, success: 0, errors: 0, priceChanges: 0 })
 
   // Schedule state
@@ -104,7 +89,6 @@ export default function CronDashboard() {
 
   useEffect(() => {
     fetchLogs()
-    fetchRestTimes()
     fetchUrlStatus()
   }, [])
 
@@ -143,16 +127,12 @@ export default function CronDashboard() {
     setLoading(false)
   }
 
-  const fetchRestTimes = async () => {
-    const { data } = await supabase.from('cron_rest_times').select('*').order('day_of_week')
-    setRestTimes(data || [])
-  }
-
   const fetchUrlStatus = async () => {
     const { data } = await supabase
       .from('card_sale_urls')
       .select('*, card:card_id(name), site:site_id(name)')
-      .order('next_check_at', { ascending: true })
+      .not('product_url', 'is', null)
+      .order('next_scrape_at', { ascending: true, nullsFirst: true })
     setUrlStatus(data || [])
   }
 
@@ -168,49 +148,6 @@ export default function CronDashboard() {
       console.error('Failed to fetch schedules:', err)
     }
     setScheduleLoading(false)
-  }
-
-  const updateRestTime = (dayOfWeek: number, field: string, value: string) => {
-    setRestTimes(prev => prev.map(rt =>
-      rt.day_of_week === dayOfWeek ? { ...rt, [field]: value || null } : rt
-    ))
-  }
-
-  const saveRestTimes = async () => {
-    setSaving(true)
-    for (const rt of restTimes) {
-      await supabase.from('cron_rest_times').update({
-        rest_start_1: rt.rest_start_1, rest_end_1: rt.rest_end_1,
-        rest_start_2: rt.rest_start_2, rest_end_2: rt.rest_end_2
-      }).eq('day_of_week', rt.day_of_week)
-    }
-    setSaving(false)
-    alert('保存しました')
-  }
-
-  const runCronManually = async () => {
-    if (!confirm('今すぐ価格チェックを実行しますか？')) return
-    setRunning(true)
-    try {
-      const res = await fetch('/api/cron/update-prices', { method: 'POST' })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`HTTP ${res.status}: ${text || 'Unknown error'}`)
-      }
-      const data = await res.json()
-      alert(`実行完了\n処理: ${data.processed || 0}件\n更新: ${data.updated || 0}件\nエラー: ${data.errors || 0}件\n${data.message || ''}`)
-      fetchLogs()
-      fetchUrlStatus()
-    } catch (err: any) {
-      alert('エラー: ' + err.message)
-    }
-    setRunning(false)
-  }
-
-  const formatInterval = (minutes: number) => {
-    if (minutes < 60) return `${minutes}分`
-    if (minutes < 1440) return `${minutes / 60}時間`
-    return `${minutes / 1440}日`
   }
 
   // === Schedule handlers ===
@@ -332,14 +269,6 @@ export default function CronDashboard() {
             <RefreshCw size={18} /> 監視状況
           </button>
           <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-              activeTab === 'settings' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
-            }`}
-          >
-            <Settings size={18} /> 休憩時間
-          </button>
-          <button
             onClick={() => setActiveTab('schedule')}
             className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
               activeTab === 'schedule' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
@@ -348,15 +277,6 @@ export default function CronDashboard() {
             <Calendar size={18} /> スケジュール
           </button>
         </div>
-        {activeTab !== 'schedule' && (
-          <button
-            onClick={runCronManually}
-            disabled={running}
-            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
-          >
-            {running ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />} 手動実行
-          </button>
-        )}
       </div>
 
       {activeTab === 'logs' && (
@@ -476,17 +396,13 @@ export default function CronDashboard() {
                       {url.last_price ? `¥${url.last_price.toLocaleString()}` : '-'}
                     </td>
                     <td className="px-4 py-2 text-sm text-center">
-                      <span className={`px-2 py-0.5 rounded text-xs ${
-                        (url.check_interval || 30) <= 30 ? 'bg-green-100 text-green-700' :
-                        (url.check_interval || 30) <= 180 ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {formatInterval(url.check_interval || 30)}
+                      <span className="px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-700">
+                        2時間
                       </span>
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600">
-                      {url.next_check_at
-                        ? new Date(url.next_check_at).toLocaleString('ja-JP', {
+                      {url.next_scrape_at
+                        ? new Date(url.next_scrape_at).toLocaleString('ja-JP', {
                             month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
                           })
                         : '-'
@@ -503,71 +419,6 @@ export default function CronDashboard() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'settings' && (
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="font-bold">休憩時間設定</h3>
-              <p className="text-sm text-gray-500 mt-1">休憩時間中は価格チェックを行いません（日本時間）</p>
-            </div>
-            <button
-              onClick={saveRestTimes}
-              disabled={saving}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2"
-            >
-              {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />} 保存
-            </button>
-          </div>
-          <div className="space-y-3">
-            {restTimes.map((rt) => (
-              <div key={rt.day_of_week} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-16 font-medium">{DAY_NAMES[rt.day_of_week]}</div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">休憩1:</span>
-                  <input
-                    type="time"
-                    value={rt.rest_start_1 || ''}
-                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_start_1', e.target.value)}
-                    className="px-2 py-1 border rounded text-sm"
-                  />
-                  <span>〜</span>
-                  <input
-                    type="time"
-                    value={rt.rest_end_1 || ''}
-                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_end_1', e.target.value)}
-                    className="px-2 py-1 border rounded text-sm"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">休憩2:</span>
-                  <input
-                    type="time"
-                    value={rt.rest_start_2 || ''}
-                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_start_2', e.target.value)}
-                    className="px-2 py-1 border rounded text-sm"
-                  />
-                  <span>〜</span>
-                  <input
-                    type="time"
-                    value={rt.rest_end_2 || ''}
-                    onChange={(e) => updateRestTime(rt.day_of_week, 'rest_end_2', e.target.value)}
-                    className="px-2 py-1 border rounded text-sm"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-medium text-blue-800 mb-2">間隔ルール</h4>
-            <ul className="text-sm text-blue-700 space-y-1">
-              <li>• 初回/価格変動時 → 30分間隔</li>
-              <li>• 変動なし → 30分 → 1時間 → 3時間 → 6時間 → 12時間 → 24時間</li>
-              <li>• エラー時 → 30分後にリトライ</li>
-            </ul>
           </div>
         </div>
       )}

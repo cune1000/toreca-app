@@ -36,7 +36,7 @@ export async function GET(req: Request) {
             .select(`
                 id, name, card_number, image_url, expansion, set_code,
                 category_large:category_large_id(id, name),
-                rarity:rarity_id(id, name)
+                rarities:rarity_id(id, name)
             `, { count: 'exact' })
 
         // 検索（ひらがな/カタカナ対応）
@@ -86,7 +86,7 @@ export async function GET(req: Request) {
             expansion: card.expansion,
             set_code: card.set_code || null,
             category: card.category_large?.name || null,
-            rarity: card.rarity?.name || null,
+            rarity: card.rarities?.name || null,
         }))
 
         return apiSuccess({

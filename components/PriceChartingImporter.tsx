@@ -423,7 +423,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
                   onChange={(e) => setCategoryLargeId(e.target.value)}
                   className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
                 >
-                  <option value="">カテゴリ大（一括指定）</option>
+                  <option value="">ゲーム（一括指定）</option>
                   {categories.map(c => (
                     <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
                   ))}

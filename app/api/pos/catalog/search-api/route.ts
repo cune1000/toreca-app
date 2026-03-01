@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         // 既存の cards テーブルから検索
         const { data, error } = await supabase
             .from('cards')
-            .select('id, name, image_url, category_large_id, category_medium_id, rarity_id')
+            .select('id, name, image_url, category_large_id, rarity_id')
             .ilike('name', `%${q}%`)
             .range(offset, offset + limit - 1)
 

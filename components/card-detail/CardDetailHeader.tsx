@@ -186,9 +186,9 @@ export default function CardDetailHeader({
               {card?.card_number && (
                 <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-sm">{card.card_number}</span>
               )}
-              {card?.rarity && (
+              {(card?.rarities || card?.rarity) && (
                 <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
-                  {getRarityDisplayName(card.rarity)}
+                  {getRarityDisplayName(card.rarities || card.rarity)}
                 </span>
               )}
               {card?.set_code && (

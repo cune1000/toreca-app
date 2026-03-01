@@ -30,7 +30,6 @@ export default function CardDetailPage({ params }: Props) {
   const [salePrices, setSalePrices] = useState<any[]>([])
   const [saleUrls, setSaleUrls] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [scraping, setScraping] = useState(false)
   const [purchaseLinks, setPurchaseLinks] = useState<any[]>([])
 
   // ── UI state ──
@@ -57,7 +56,7 @@ export default function CardDetailPage({ params }: Props) {
       try {
         const { data } = await supabase
           .from('cards')
-          .select('*, category_large:category_large_id(id, name, icon), rarity:rarity_id(id, name)')
+          .select('*, category_large:category_large_id(id, name, icon), rarities:rarity_id(id, name)')
           .eq('id', id)
           .single()
         if (data) {
@@ -129,7 +128,7 @@ export default function CardDetailPage({ params }: Props) {
   const handleCardUpdated = async () => {
     const { data } = await supabase
       .from('cards')
-      .select('*, category_large:category_large_id(id, name, icon), rarity:rarity_id(id, name)')
+      .select('*, category_large:category_large_id(id, name, icon), rarities:rarity_id(id, name)')
       .eq('id', id)
       .single()
     if (data) {
@@ -149,46 +148,8 @@ export default function CardDetailPage({ params }: Props) {
       const res = await fetch('/api/snkrdunk-scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cardId: card.id, url: snkrdunkUrl.product_url }) })
       const data = await res.json()
       if (!data.success) { alert('エラー: ' + data.error); return }
-      if (data.jobId) {
-        alert(`スクレイピングを開始しました`)
-        for (let attempts = 0; attempts < 60; attempts++) {
-          await new Promise(resolve => setTimeout(resolve, 2000))
-          try {
-            const statusRes = await fetch(`${process.env.NEXT_PUBLIC_TORECA_SCRAPER_URL}/scrape/status/${data.jobId}`)
-            const statusData = await statusRes.json()
-            if (statusData.status === 'completed') { alert(`完了: ${statusData.result.count}件`); fetchSnkrdunkSales(); fetchPrices(); break }
-            if (statusData.status === 'failed') { alert('エラー: ' + (statusData.error || '不明')); break }
-          } catch { /* ポーリング中のネットワークエラーは無視して再試行 */ }
-          if (attempts === 59) alert('タイムアウト')
-        }
-      } else { alert(`完了: ${data.total}件 (新規: ${data.inserted}件)`); fetchSnkrdunkSales(); fetchPrices() }
+      alert(`完了: ${data.total}件 (新規: ${data.inserted}件)`); fetchSnkrdunkSales(); fetchPrices()
     } catch (error: any) { alert('エラー: ' + error.message) } finally { setSnkrdunkScraping(false) }
-  }
-
-  const updateAutoScrapeMode = async (saleUrlId: string, mode: string) => {
-    try {
-      const { error } = await supabase.from('card_sale_urls').update({ auto_scrape_mode: mode }).eq('id', saleUrlId)
-      if (error) throw error
-      alert('自動更新モードを変更しました')
-      fetchPrices()
-    } catch (error: any) { alert('エラー: ' + error.message) }
-  }
-
-  const updateScrapeInterval = async (saleUrlId: string, intervalMinutes: number) => {
-    try {
-      const { error } = await supabase.from('card_sale_urls').update({ auto_scrape_interval_minutes: intervalMinutes }).eq('id', saleUrlId)
-      if (error) throw error
-      alert(`更新間隔を${intervalMinutes}分に変更しました`)
-      fetchPrices()
-    } catch (error: any) { alert('エラー: ' + error.message) }
-  }
-
-  const updateCheckInterval = async (saleUrlId: string, intervalMinutes: number) => {
-    try {
-      const { error } = await supabase.from('card_sale_urls').update({ check_interval: intervalMinutes, next_check_at: new Date(Date.now() + intervalMinutes * 60000).toISOString() }).eq('id', saleUrlId)
-      if (error) throw error
-      fetchPrices()
-    } catch (error: any) { alert('エラー: ' + error.message) }
   }
 
   const editSaleUrl = async (saleUrlId: string, newUrl: string) => {
@@ -205,65 +166,6 @@ export default function CardDetailPage({ params }: Props) {
       if (error) throw error
       fetchPrices()
     } catch (error: any) { alert('URL削除エラー: ' + error.message) }
-  }
-
-  const updatePrice = async (saleUrl: any) => {
-    setScraping(true)
-    try {
-      const siteName = saleUrl.site?.name?.toLowerCase() || ''
-      let source = null
-      if (isSnkrdunkSiteName(siteName)) source = 'snkrdunk'
-      else if (siteName.includes('カードラッシュ') || siteName.includes('cardrush')) source = 'cardrush'
-      else if (siteName.includes('トレカキャンプ') || siteName.includes('torecacamp')) source = 'torecacamp'
-      const res = await fetch('/api/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: saleUrl.product_url, source }) })
-      const data = await res.json()
-      if (data.success && data.price === null && (data.stock === 0 || data.stock === null)) {
-        // 在庫切れ（出品0件）→ 正常系として処理
-        await supabase.from('card_sale_urls').update({ last_price: null, last_stock: 0, last_checked_at: new Date().toISOString() }).eq('id', saleUrl.id)
-        alert('出品0件（在庫なし）')
-        fetchPrices()
-      } else if (data.success && (data.price || data.price === 0)) {
-        let stock = null
-        if (data.stock !== null && data.stock !== undefined) {
-          if (typeof data.stock === 'number') stock = data.stock
-          else if (typeof data.stock === 'string') {
-            const stockMatch = data.stock.match(/(\d+)/)
-            if (stockMatch) stock = parseInt(stockMatch[1], 10)
-            else if (data.stock.includes('あり') || data.stock.includes('在庫')) stock = 1
-            else if (data.stock.includes('なし') || data.stock.includes('売切')) stock = 0
-          }
-        }
-        if (data.gradePrices && data.gradePrices.length > 0) {
-          // 全体最安値（grade=null）を保存
-          const { error: overallError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.price, stock, grade: null })
-          if (overallError) console.error('sale_prices insert (overall) error:', overallError)
-
-          // グレード別を保存（top_pricesが未認識の場合はフォールバック）
-          let gradeInsertFailed = false
-          for (const gp of data.gradePrices) {
-            const { error: gradeError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: gp.price, grade: gp.grade, stock: gp.stock ?? null, top_prices: gp.topPrices ?? null })
-            if (gradeError) {
-              console.error('sale_prices insert (grade) error:', gradeError)
-              // top_pricesカラムが未認識の場合、top_pricesなしでリトライ
-              if (gradeError.message?.includes('top_prices') || gradeError.code === '42703') {
-                const { error: retryError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: gp.price, grade: gp.grade, stock: gp.stock ?? null })
-                if (retryError) { console.error('sale_prices insert (grade retry) error:', retryError); gradeInsertFailed = true }
-              } else {
-                gradeInsertFailed = true
-              }
-            }
-          }
-          const warnMsg = gradeInsertFailed ? '\n(一部グレードの保存に失敗)' : ''
-          alert(`更新完了: 全体¥${data.price.toLocaleString()}${warnMsg}`)
-        } else {
-          const { error: insertError } = await supabase.from('sale_prices').insert({ card_id: card.id, site_id: saleUrl.site_id, price: data.priceNumber || data.price, stock })
-          if (insertError) console.error('sale_prices insert error:', insertError)
-          alert(`更新完了: ¥${(data.priceNumber || data.price).toLocaleString()}`)
-        }
-        await supabase.from('card_sale_urls').update({ last_price: data.priceNumber || data.price, last_stock: stock, last_checked_at: new Date().toISOString() }).eq('id', saleUrl.id)
-        fetchPrices()
-      } else { alert('価格の取得に失敗: ' + (data.error || '不明なエラー')) }
-    } catch (err: any) { alert('エラー: ' + err.message) } finally { setScraping(false) }
   }
 
   // ── Computed data (useMemo) ──
@@ -577,12 +479,7 @@ export default function CardDetailPage({ params }: Props) {
                   saleUrls={saleUrls}
                   purchaseLinks={purchaseLinks}
                   snkrdunkScraping={snkrdunkScraping}
-                  scraping={scraping}
                   onScrapeSnkrdunk={scrapeSnkrdunk}
-                  onUpdateAutoScrapeMode={updateAutoScrapeMode}
-                  onUpdateScrapeInterval={updateScrapeInterval}
-                  onUpdateCheckInterval={updateCheckInterval}
-                  onUpdatePrice={updatePrice}
                   onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); handleCardUpdated() }}
                   onUpdated={handleCardUpdated}
                   onEditSaleUrl={editSaleUrl}

@@ -67,6 +67,9 @@ export default function CardsPage({
     const e = restore('expansion'); if (e !== undefined) setFilterExpansion(e)
     const cn = restore('cardNumber'); if (cn !== undefined) setFilterCardNumber(cn)
     const p = restore('page'); if (p !== undefined) setCurrentPage(p)
+    // 旧カテゴリフィルターキーのクリーンアップ
+    sessionStorage.removeItem('cards-filter-categoryMedium')
+    sessionStorage.removeItem('cards-filter-categorySmall')
     setFiltersHydrated(true)
   }, [])
   const [totalCount, setTotalCount] = useState(0)
@@ -295,11 +298,12 @@ export default function CardsPage({
         .order('sort_order')
       setRarities(rarData || [])
 
-      // 収録弾 + セットコードの一覧を取得
+      // 収録弾 + セットコードの一覧を取得（デフォルト1000行を超えるケース対応）
       const { data: expData } = await supabase
         .from('cards')
         .select('expansion, set_code')
         .order('expansion')
+        .limit(10000)
       if (expData) {
         const uniqueExps = [...new Set(expData.map(d => d.expansion).filter(Boolean))] as string[]
         setExpansions(uniqueExps)
@@ -564,8 +568,8 @@ export default function CardsPage({
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
 
   const formatIntervalLabel = (minutes: number) => {
-    if (minutes >= 1440) return `${minutes / 1440}日`
-    if (minutes >= 60) return `${minutes / 60}h`
+    if (minutes >= 1440) return `${Math.floor(minutes / 1440)}日`
+    if (minutes >= 60) return `${Math.floor(minutes / 60)}h`
     return `${minutes}分`
   }
 
@@ -869,7 +873,7 @@ export default function CardsPage({
                       )}
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.category_large?.icon} {card.category_large?.name || <span className="text-gray-300">−</span>}
+                      {card.category_large ? `${card.category_large.icon} ${card.category_large.name}` : <span className="text-gray-300">−</span>}
                     </td>
                     <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
                       {card.set_code ? (
@@ -914,7 +918,7 @@ export default function CardsPage({
         ) : (
           <div className="p-8 text-center text-gray-500">
             <Database size={48} className="mx-auto mb-4 text-gray-300" />
-            <p>{searchQuery || filterCategoryLarge || filterRarity ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
+            <p>{searchQuery || filterCategoryLarge || filterSetCode || filterRarity || filterExpansion || filterCardNumber ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
           </div>
         )}
 
@@ -1077,7 +1081,7 @@ export default function CardsPage({
               </button>
               <button
                 onClick={() => setShowConfirm(true)}
-                disabled={Object.values(batchUpdates).every(v => v === undefined || v === null || v === '')}
+                disabled={Object.keys(batchUpdates).length === 0}
                 className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
               >
                 変更を確認

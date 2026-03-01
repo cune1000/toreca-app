@@ -7,7 +7,7 @@ import { RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 export default function SnkrdunkMonitorPage() {
     const [monitorData, setMonitorData] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState<'all' | 'monitoring' | 'error'>('all')
+    const [filter, setFilter] = useState<'all' | 'error'>('all')
 
     useEffect(() => {
         fetchMonitorData()
@@ -41,7 +41,6 @@ export default function SnkrdunkMonitorPage() {
     }
 
     const filteredData = monitorData.filter(item => {
-        if (filter === 'monitoring') return item.auto_scrape_mode !== 'off'
         if (filter === 'error') return item.last_scrape_status === 'error'
         return true
     })
@@ -58,13 +57,6 @@ export default function SnkrdunkMonitorPage() {
         if (diffHours < 24) return `${diffHours}時間前`
         const diffDays = Math.floor(diffHours / 24)
         return `${diffDays}日前`
-    }
-
-    const getModeLabel = (mode: string | null) => {
-        if (mode === 'off') return '停止'
-        if (mode === 'manual') return '手動設定'
-        if (mode === 'auto') return 'オートメーション'
-        return '未設定'
     }
 
     const getStatusIcon = (status: string | null) => {
@@ -101,15 +93,6 @@ export default function SnkrdunkMonitorPage() {
                     全て ({monitorData.length})
                 </button>
                 <button
-                    onClick={() => setFilter('monitoring')}
-                    className={`px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'monitoring'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                >
-                    監視中 ({monitorData.filter(item => item.auto_scrape_mode !== 'off').length})
-                </button>
-                <button
                     onClick={() => setFilter('error')}
                     className={`px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'error'
                         ? 'bg-red-500 text-white'
@@ -131,7 +114,6 @@ export default function SnkrdunkMonitorPage() {
                         <thead className="bg-gray-50 border-b">
                             <tr>
                                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">カード</th>
-                                <th className="text-center px-4 py-3 text-sm font-medium text-gray-700">モード</th>
                                 <th className="text-center px-4 py-3 text-sm font-medium text-gray-700">間隔</th>
                                 <th className="text-center px-4 py-3 text-sm font-medium text-gray-700">ステータス</th>
                                 <th className="text-center px-4 py-3 text-sm font-medium text-gray-700">最終更新</th>
@@ -160,24 +142,8 @@ export default function SnkrdunkMonitorPage() {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <span
-                                            className={`px-2 py-1 rounded text-xs font-medium ${item.auto_scrape_mode === 'off'
-                                                ? 'bg-gray-100 text-gray-600'
-                                                : item.auto_scrape_mode === 'manual'
-                                                    ? 'bg-blue-100 text-blue-700'
-                                                    : item.auto_scrape_mode === 'auto'
-                                                        ? 'bg-purple-100 text-purple-700'
-                                                        : 'bg-gray-100 text-gray-400'
-                                                }`}
-                                        >
-                                            {getModeLabel(item.auto_scrape_mode)}
-                                        </span>
-                                    </td>
                                     <td className="px-4 py-3 text-center text-sm text-gray-600">
-                                        {item.auto_scrape_mode === 'manual' && item.auto_scrape_interval_minutes
-                                            ? `${item.auto_scrape_interval_minutes}分`
-                                            : '-'}
+                                        2時間
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center justify-center gap-2">
@@ -200,7 +166,7 @@ export default function SnkrdunkMonitorPage() {
                                         )}
                                     </td>
                                     <td className="px-4 py-3 text-center text-sm text-gray-600">
-                                        {item.next_scrape_at && item.auto_scrape_mode !== 'off' ? (
+                                        {item.next_scrape_at ? (
                                             <div>
                                                 <p>{new Date(item.next_scrape_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                                                 <p className="text-xs text-gray-400">{formatRelativeTime(item.next_scrape_at)}</p>

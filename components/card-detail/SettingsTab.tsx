@@ -13,38 +13,17 @@ interface SettingsTabProps {
   saleUrls: any[]
   purchaseLinks: any[]
   snkrdunkScraping: boolean
-  scraping: boolean
   onScrapeSnkrdunk: () => void
-  onUpdateAutoScrapeMode: (saleUrlId: string, mode: string) => void
-  onUpdateScrapeInterval: (saleUrlId: string, intervalMinutes: number) => void
-  onUpdateCheckInterval: (saleUrlId: string, intervalMinutes: number) => void
-  onUpdatePrice: (saleUrl: any) => void
   onLinksChanged: () => void
   onUpdated?: () => void
   onEditSaleUrl?: (saleUrlId: string, newUrl: string) => Promise<void>
   onDeleteSaleUrl?: (saleUrlId: string) => Promise<void>
 }
 
-const STATUS_CONFIG: Record<string, { label: string; dotClass: string; bgClass: string }> = {
-  off: { label: '停止中', dotClass: 'bg-slate-300', bgClass: 'bg-slate-50 text-slate-500' },
-  auto: { label: '自動', dotClass: 'bg-emerald-400 animate-pulse', bgClass: 'bg-emerald-50 text-emerald-700' },
-  manual: { label: '手動', dotClass: 'bg-amber-400', bgClass: 'bg-amber-50 text-amber-700' },
-}
-
-const INTERVAL_OPTIONS = [
-  { value: 180, label: '3時間' },
-  { value: 360, label: '6時間' },
-  { value: 720, label: '12時間' },
-  { value: 1440, label: '24時間' },
-  { value: 2880, label: '48時間' },
-  { value: 4320, label: '72時間' },
-]
-
 export default function SettingsTab({
   card, saleUrls, purchaseLinks,
-  snkrdunkScraping, scraping,
-  onScrapeSnkrdunk, onUpdateAutoScrapeMode, onUpdateScrapeInterval,
-  onUpdateCheckInterval, onUpdatePrice,
+  snkrdunkScraping,
+  onScrapeSnkrdunk,
   onLinksChanged, onUpdated, onEditSaleUrl, onDeleteSaleUrl,
 }: SettingsTabProps) {
   const [editingUrlId, setEditingUrlId] = useState<string | null>(null)
@@ -53,9 +32,6 @@ export default function SettingsTab({
   const snkrdunkUrl = saleUrls.find((url: any) =>
     isSnkrdunkSiteName(url.site?.name || '') || isSnkrdunkUrl(url.product_url || '')
   )
-
-  const currentMode = snkrdunkUrl?.auto_scrape_mode || 'off'
-  const statusConfig = STATUS_CONFIG[currentMode] || STATUS_CONFIG.off
 
   return (
     <div className="space-y-8">
@@ -73,12 +49,6 @@ export default function SettingsTab({
                 <p className="text-xs text-slate-400 mt-0.5">売買履歴・価格データを自動取得</p>
               </div>
             </div>
-            {snkrdunkUrl && (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.bgClass}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dotClass}`} />
-                {statusConfig.label}
-              </span>
-            )}
           </div>
         </div>
 
@@ -100,45 +70,6 @@ export default function SettingsTab({
                 </a>
               </div>
 
-              {/* コントロール行 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 自動更新モード */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">更新モード</label>
-                  <select
-                    value={currentMode}
-                    onChange={(e) => onUpdateAutoScrapeMode(snkrdunkUrl.id, e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-medium
-                               focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 transition-all
-                               hover:border-slate-300 appearance-none cursor-pointer"
-                    style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em', paddingRight: '2rem' }}
-                  >
-                    <option value="off">停止</option>
-                    <option value="auto">オートメーション（自動間隔調整）</option>
-                    <option value="manual">手動で間隔を設定</option>
-                  </select>
-                </div>
-
-                {/* 更新間隔（手動時のみ） */}
-                {currentMode === 'manual' && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">更新間隔</label>
-                    <select
-                      value={snkrdunkUrl.auto_scrape_interval_minutes || 1440}
-                      onChange={(e) => onUpdateScrapeInterval(snkrdunkUrl.id, parseInt(e.target.value))}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-medium
-                                 focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 transition-all
-                                 hover:border-slate-300 appearance-none cursor-pointer"
-                      style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em', paddingRight: '2rem' }}
-                    >
-                      {INTERVAL_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-
               {/* タイムスタンプ行 */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 {snkrdunkUrl.last_scraped_at && (
@@ -147,7 +78,7 @@ export default function SettingsTab({
                     <span>最終: <span className="text-slate-600 font-medium">{formatRelativeTime(snkrdunkUrl.last_scraped_at)}</span></span>
                   </div>
                 )}
-                {snkrdunkUrl.next_scrape_at && currentMode !== 'off' && (
+                {snkrdunkUrl.next_scrape_at && (
                   <div className="flex items-center gap-1.5 text-xs text-slate-400">
                     <ChevronRight size={11} />
                     <span>次回: <span className="text-slate-600 font-medium">{formatRelativeTime(snkrdunkUrl.next_scrape_at)}</span></span>
@@ -300,31 +231,6 @@ export default function SettingsTab({
                     </div>
                   )}
 
-                  {/* チェック間隔 */}
-                  <select
-                    value={url.check_interval || 180}
-                    onChange={(e) => onUpdateCheckInterval(url.id, parseInt(e.target.value))}
-                    className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 font-medium
-                               focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 transition-all
-                               hover:border-slate-300 cursor-pointer flex-shrink-0"
-                    title="価格チェック間隔"
-                  >
-                    {INTERVAL_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-
-                  {/* 更新ボタン */}
-                  <button
-                    onClick={() => onUpdatePrice(url)}
-                    disabled={scraping}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-medium
-                               hover:bg-slate-800 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none
-                               transition-all flex-shrink-0"
-                  >
-                    <RefreshCw size={11} className={scraping ? 'animate-spin' : ''} />
-                    更新
-                  </button>
                 </div>
               ))}
             </div>
