@@ -5,6 +5,7 @@ import { Database, Search, RefreshCw, Plus, Globe, CheckSquare, Square, Settings
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
 import { getRarityDisplayName } from '@/lib/rarity-mapping'
+import { getSeriesFromSetCode } from '@/lib/justtcg-set-names'
 import type { CardWithRelations, CategoryLarge, Rarity } from '@/lib/types'
 
 // =============================================================================
@@ -44,12 +45,18 @@ export default function CardsPage({
   // State（sessionStorageに永続化）
   const [searchQuery, setSearchQuery] = useSessionState('searchQuery', '')
   const [filterCategoryLarge, setFilterCategoryLarge] = useSessionState('categoryLarge', '')
+  const [filterSeries, setFilterSeries] = useSessionState('series', '')
   const [filterSetCode, setFilterSetCode] = useSessionState('setCode', '')
   const [filterRarity, setFilterRarity] = useSessionState('rarity', '')
   const [filterExpansion, setFilterExpansion] = useSessionState('expansion', '')
   const [filterCardNumber, setFilterCardNumber] = useSessionState('cardNumber', '')
   const [expansions, setExpansions] = useState<string[]>([])
   const [setCodes, setSetCodes] = useState<string[]>([])
+  const [seriesList, setSeriesList] = useState<string[]>([])
+  // セットコード→シリーズのマッピング（フィルタ連動用）
+  const [codeToSeries, setCodeToSeries] = useState<Record<string, string>>({})
+  // セットコード→収録弾名のマッピング（連動フィルタ用）
+  const [codeToExpansions, setCodeToExpansions] = useState<Record<string, Set<string>>>({})
   const [currentPage, setCurrentPage] = useSessionState('page', 1)
 
   // マウント後にsessionStorageから全フィルタを一括復元
@@ -63,6 +70,7 @@ export default function CardsPage({
     }
     const sq = restore('searchQuery'); if (sq !== undefined) setSearchQuery(sq)
     const cl = restore('categoryLarge'); if (cl !== undefined) setFilterCategoryLarge(cl)
+    const sr = restore('series'); if (sr !== undefined) setFilterSeries(sr)
     const sc = restore('setCode'); if (sc !== undefined) setFilterSetCode(sc)
     const r = restore('rarity'); if (r !== undefined) setFilterRarity(r)
     const e = restore('expansion'); if (e !== undefined) setFilterExpansion(e)
@@ -311,6 +319,35 @@ export default function CardsPage({
         const uniqueCodes = [...new Set(expData.map(d => d.set_code).filter(Boolean))] as string[]
         uniqueCodes.sort()
         setSetCodes(uniqueCodes)
+
+        // シリーズ一覧を構築 + コード→シリーズ/収録弾マッピング
+        const c2s: Record<string, string> = {}
+        const c2e: Record<string, Set<string>> = {}
+        const seriesSet = new Set<string>()
+        for (const code of uniqueCodes) {
+          const series = getSeriesFromSetCode(code)
+          if (series) {
+            c2s[code] = series
+            seriesSet.add(series)
+          }
+        }
+        // 各セットコードに紐づく収録弾を構築
+        for (const d of expData) {
+          if (d.set_code && d.expansion) {
+            if (!c2e[d.set_code]) c2e[d.set_code] = new Set()
+            c2e[d.set_code].add(d.expansion)
+          }
+        }
+        // シリーズのソート順（新しい順）
+        const seriesOrder = ['M', 'SV', 'S', 'SM', 'XY', 'CP', 'BW', 'L', 'PT', 'DP', 'OP', 'WCS']
+        const sorted = [...seriesSet].sort((a, b) => {
+          const ia = seriesOrder.indexOf(a)
+          const ib = seriesOrder.indexOf(b)
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+        })
+        setSeriesList(sorted)
+        setCodeToSeries(c2s)
+        setCodeToExpansions(c2e)
       }
     }
     fetchFilters()
@@ -376,6 +413,14 @@ export default function CardsPage({
         query = query.is('category_large_id', null)
       } else if (filterCategoryLarge) {
         query = query.eq('category_large_id', filterCategoryLarge)
+      }
+
+      // シリーズ（セットコード群でフィルタ）
+      if (filterSeries && !filterSetCode) {
+        const seriesCodes = setCodes.filter(code => codeToSeries[code] === filterSeries)
+        if (seriesCodes.length > 0) {
+          query = query.in('set_code', seriesCodes)
+        }
       }
 
       // セットコード
@@ -445,7 +490,7 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategoryLarge, filterSetCode, filterRarity, filterExpansion, filterCardNumber, currentPage, refreshKey, filtersHydrated])
+  }, [searchQuery, filterCategoryLarge, filterSeries, filterSetCode, filterRarity, filterExpansion, filterCardNumber, currentPage, refreshKey, filtersHydrated])
 
   // フィルタ変更時は1ページ目に戻る（sessionStorage復元時はスキップ）
   const filterChangeCount = useRef(0)
@@ -456,7 +501,7 @@ export default function CardsPage({
     if (filterChangeCount.current <= 1) return
     setCurrentPage(1)
     setSelectedIds(new Set())
-  }, [searchQuery, filterCategoryLarge, filterSetCode, filterRarity, filterExpansion, filterCardNumber, filtersHydrated])
+  }, [searchQuery, filterCategoryLarge, filterSeries, filterSetCode, filterRarity, filterExpansion, filterCardNumber, filtersHydrated])
 
   // =============================================================================
   // Checkbox Logic
@@ -619,6 +664,29 @@ export default function CardsPage({
     ? rarities.filter(r => r.large_id === filterCategoryLarge)
     : rarities
 
+  // シリーズでフィルタされたセットコード一覧
+  const filteredSetCodes = filterSeries
+    ? setCodes.filter(code => codeToSeries[code] === filterSeries)
+    : setCodes
+
+  // シリーズ（+セットコード）でフィルタされた収録弾一覧
+  const filteredExpansions = (() => {
+    if (filterSetCode && filterSetCode !== UNSET) {
+      // セットコード指定時はそのコードの収録弾のみ
+      return [...(codeToExpansions[filterSetCode] || [])].sort()
+    }
+    if (filterSeries) {
+      // シリーズ指定時はそのシリーズ内のセットコードに紐づく収録弾のみ
+      const exps = new Set<string>()
+      for (const code of filteredSetCodes) {
+        const e = codeToExpansions[code]
+        if (e) e.forEach(exp => exps.add(exp))
+      }
+      return [...exps].sort()
+    }
+    return expansions
+  })()
+
   // =============================================================================
   // Render
   // =============================================================================
@@ -692,16 +760,32 @@ export default function CardsPage({
               ))}
             </select>
 
-            {/* セットコード */}
+            {/* シリーズ */}
             <select
-              value={filterSetCode}
-              onChange={(e) => setFilterSetCode(e.target.value)}
+              value={filterSeries}
+              onChange={(e) => {
+                setFilterSeries(e.target.value)
+                setFilterSetCode('')
+                setFilterExpansion('')
+              }}
               className="px-3 py-1.5 border rounded-lg text-sm"
             >
-              <option value="">全セット</option>
+              <option value="">全シリーズ</option>
+              {seriesList.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            {/* 収録弾 */}
+            <select
+              value={filterExpansion}
+              onChange={(e) => setFilterExpansion(e.target.value)}
+              className="px-3 py-1.5 border rounded-lg text-sm"
+            >
+              <option value="">全収録弾</option>
               <option value={UNSET}>⚠️ 未設定</option>
-              {setCodes.map(code => (
-                <option key={code} value={code}>{code}</option>
+              {filteredExpansions.map(exp => (
+                <option key={exp} value={exp}>{exp}</option>
               ))}
             </select>
 
@@ -715,19 +799,6 @@ export default function CardsPage({
               <option value={UNSET}>⚠️ 未設定</option>
               {filteredRarities.map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-
-            {/* 収録弾 */}
-            <select
-              value={filterExpansion}
-              onChange={(e) => setFilterExpansion(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
-            >
-              <option value="">全収録弾</option>
-              <option value={UNSET}>⚠️ 未設定</option>
-              {expansions.map(exp => (
-                <option key={exp} value={exp}>{exp}</option>
               ))}
             </select>
 
@@ -750,11 +821,12 @@ export default function CardsPage({
             )}
 
             {/* フィルタリセット */}
-            {(searchQuery || filterCategoryLarge || filterSetCode || filterRarity || filterExpansion || filterCardNumber) && (
+            {(searchQuery || filterCategoryLarge || filterSeries || filterSetCode || filterRarity || filterExpansion || filterCardNumber) && (
               <button
                 onClick={() => {
                   setSearchQuery('')
                   setFilterCategoryLarge('')
+                  setFilterSeries('')
                   setFilterSetCode('')
                   setFilterRarity('')
                   setFilterExpansion('')
@@ -789,7 +861,7 @@ export default function CardsPage({
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">サイト</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 min-w-[220px]">URL追加</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">ゲーム</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">セット</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">シリーズ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">収録弾</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
@@ -878,7 +950,7 @@ export default function CardsPage({
                     </td>
                     <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
                       {card.set_code ? (
-                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-mono font-medium">{card.set_code}</span>
+                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-mono font-medium">{getSeriesFromSetCode(card.set_code) || card.set_code}</span>
                       ) : (
                         <span className="text-gray-300 text-sm">−</span>
                       )}
@@ -923,7 +995,7 @@ export default function CardsPage({
         ) : (
           <div className="p-8 text-center text-gray-500">
             <Database size={48} className="mx-auto mb-4 text-gray-300" />
-            <p>{searchQuery || filterCategoryLarge || filterSetCode || filterRarity || filterExpansion || filterCardNumber ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
+            <p>{searchQuery || filterCategoryLarge || filterSeries || filterSetCode || filterRarity || filterExpansion || filterCardNumber ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
           </div>
         )}
 
