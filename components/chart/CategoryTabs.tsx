@@ -16,10 +16,6 @@ const CATEGORY_STYLES: Record<string, { active: string; icon: string }> = {
         active: 'bg-amber-400 text-amber-900 shadow-amber-200/50',
         icon: '⚡',
     },
-    onepiece: {
-        active: 'bg-blue-500 text-white shadow-blue-200/50',
-        icon: '🏴‍☠️',
-    },
 }
 
 export default function CategoryTabs({ selected, onChange }: Props) {

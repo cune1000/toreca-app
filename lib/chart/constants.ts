@@ -92,11 +92,9 @@ export const RANKING_STORAGE_KEY = 'chart_rankings_v3'
 export const CATEGORIES: Category[] = [
     { slug: 'all', name: '全体' },
     { slug: 'pokemon', name: 'ポケモン' },
-    { slug: 'onepiece', name: 'ワンピース' },
 ]
 
 // カテゴリスラグ → DBカテゴリ名マッピング
 export const CATEGORY_SLUG_MAP: Record<string, string> = {
     pokemon: 'ポケモン',
-    onepiece: 'ワンピース',
 }
