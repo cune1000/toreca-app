@@ -185,7 +185,7 @@ export default function CardDetailPage({ params }: Props) {
                             )}
                         </div>
                         <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-2xl px-4 py-3 border border-gray-100">
-                            <p className="text-xs text-gray-400 font-medium">レンジ</p>
+                            <p className="text-xs text-gray-400 font-medium">最高値 / 最安値</p>
                             <div className="mt-1">
                                 <span className="text-sm font-bold text-red-500 tabular-nums">
                                     {card.high_price ? formatPrice(card.high_price) : '-'}

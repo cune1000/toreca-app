@@ -43,7 +43,7 @@ export default function ChartTopPage() {
                     const cards = await getRanking({
                         type: r.id,
                         category,
-                        limit: 10,
+                        limit: 20,
                     })
                     return { id: r.id, cards }
                 } catch (err) {
