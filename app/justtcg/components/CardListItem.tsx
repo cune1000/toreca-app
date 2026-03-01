@@ -64,9 +64,19 @@ export default memo(function CardListItem({
         </div>
       )}
 
-      <div className="shrink-0">
-        <RarityBadge rarity={card.rarity} />
-      </div>
+      {/* サムネイル画像 */}
+      {card.tcgplayerId ? (
+        <img
+          src={`https://product-images.tcgplayer.com/fit-in/100x140/${card.tcgplayerId}.jpg`}
+          alt=""
+          className="w-8 h-11 object-contain rounded shrink-0"
+          loading="lazy"
+        />
+      ) : (
+        <div className="shrink-0">
+          <RarityBadge rarity={card.rarity} />
+        </div>
+      )}
 
       <span
         className="text-[11px] text-[var(--jtcg-text-muted)] w-14 shrink-0 tabular-nums"

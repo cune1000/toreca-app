@@ -365,9 +365,9 @@ export default function CardsPage({
         .from('cards')
         .select(`*, category_large:category_large_id(name, icon), rarities:rarity_id(name)`, { count: 'exact' })
 
-      // 検索条件
+      // 検索条件（name, name_en, card_number で検索）
       if (searchQuery.length >= 2) {
-        query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'card_number']))
+        query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'name_en', 'card_number']))
       }
 
       // ゲーム（カテゴリ大）

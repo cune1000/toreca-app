@@ -45,7 +45,7 @@ interface CenterPanelProps {
   className?: string
 }
 
-const ROW_HEIGHT = 48
+const ROW_HEIGHT = 56
 
 export default memo(function CenterPanel({
   filteredCards, totalCards, selectedCardId, search,

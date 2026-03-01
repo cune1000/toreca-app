@@ -112,6 +112,17 @@ export default memo(function RightPanel({
           </button>
         </div>
 
+        {/* カード画像 */}
+        {card.tcgplayerId && (
+          <div className="flex justify-center">
+            <img
+              src={`https://product-images.tcgplayer.com/fit-in/400x558/${card.tcgplayerId}.jpg`}
+              alt={card.name}
+              className="w-32 h-44 object-contain rounded-lg shadow-sm"
+            />
+          </div>
+        )}
+
         {/* メイン価格 */}
         {nm && (
           <div className="bg-gray-50 rounded-[var(--jtcg-radius)] p-3">

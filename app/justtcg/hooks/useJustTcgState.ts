@@ -33,6 +33,7 @@ export interface JTCard {
   set: string
   set_name: string
   rarity: string
+  tcgplayerId?: string | null
   variants: JTVariant[]
 }
 

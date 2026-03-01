@@ -93,6 +93,15 @@ export async function POST(request: NextRequest) {
       if (!s) return null
       try { const u = new URL(s); return u.protocol === 'https:' || u.protocol === 'http:' ? s : null } catch { return null }
     }
+    // card_number正規化: JustTCGが "111/80" のような不整合形式で返す場合がある
+    // → "111/080" に統一（スラッシュ両側を最大桁数に0パディング）
+    const normalizeCardNumber = (num: string | null): string | null => {
+      if (!num) return null
+      const m = num.match(/^(\d+)\/(\d+)$/)
+      if (!m) return num
+      const maxLen = Math.max(m[1].length, m[2].length)
+      return `${m[1].padStart(maxLen, '0')}/${m[2].padStart(maxLen, '0')}`
+    }
 
     const supabase = createServiceClient()
 
@@ -187,7 +196,7 @@ export async function POST(request: NextRequest) {
 
     // pricecharting_id でマージ対象を検索（PCインポート済みカードとの紐付け）
     const pcId = str(pricecharting_id, 100)
-    const cardNumber = str(card_number, 50)
+    const cardNumber = normalizeCardNumber(str(card_number, 50))
     let mergeTarget: { id: string; name: string } | null = null
 
     if (pcId) {
