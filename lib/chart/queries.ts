@@ -41,7 +41,7 @@ export async function getCardDetail(id: string): Promise<CardDetail | null> {
 
 export async function getPriceHistory(
     cardId: string,
-    period: '30d' | '90d' | '1y' | 'all'
+    period: '7d' | '30d' | '90d' | '1y' | 'all'
 ): Promise<PricePoint[]> {
     const res = await fetch(`${BASE_URL}/api/chart/card/${cardId}/history?period=${period}`)
     if (!res.ok) return []

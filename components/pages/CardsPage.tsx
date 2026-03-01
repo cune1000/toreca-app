@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Database, Search, RefreshCw, Plus, Globe, CheckSquare, Square, Settings, Link, Loader2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
+import { getRarityDisplayName } from '@/lib/rarity-mapping'
 import type { CardWithRelations, CategoryLarge, Rarity } from '@/lib/types'
 
 // =============================================================================
@@ -889,6 +890,10 @@ export default function CardsPage({
                       {card.rarities?.name ? (
                         <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
                           {card.rarities.name}
+                        </span>
+                      ) : card.rarity ? (
+                        <span className="px-2 py-1 bg-purple-50 text-purple-500 rounded text-xs font-medium">
+                          {getRarityDisplayName(card.rarity)}
                         </span>
                       ) : (
                         <span className="text-gray-300 text-sm">−</span>
