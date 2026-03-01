@@ -141,6 +141,12 @@ async function processSingleUrl(
   results: UpdateResults,
   logPrefix: string
 ): Promise<void> {
+  // スニダンは snkrdunk-sync で処理するためスキップ
+  if (site.product_url?.includes('snkrdunk.com')) {
+    results.skipped++
+    return
+  }
+
   results.processed++
 
   const cardName = (site.card as any)?.name || 'Unknown'
@@ -150,58 +156,50 @@ async function processSingleUrl(
   const currentNoChangeCount = site.no_change_count || 0
 
   try {
-    // スニダンは snkrdunk-sync で処理するためスキップ
-    if (site.product_url?.includes('snkrdunk.com')) {
-      results.skipped++
+    let newPrice: number | null = null
+    let newStock: number | null = null
+
+    const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
+
+    if (!scrapeResult.success) {
+      results.errors++
+      const errorMsg = scrapeResult.error || 'Scrape failed'
+      const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
+
+      await supabase
+        .from('card_sale_urls')
+        .update({
+          last_checked_at: new Date().toISOString(),
+          next_check_at: calculateNextCheckAt(nextInterval),
+          check_interval: CONFIG.ERROR_RETRY_INTERVAL,
+          error_count: (site.error_count || 0) + 1,
+          last_error: errorMsg
+        })
+        .eq('id', site.id)
+
+      results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
+      await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
       return
     }
 
-    let newPrice: number | null = null
-    let newStock: number | null = null
-    let gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
+    newPrice = scrapeResult.price ?? scrapeResult.mainPrice
+    newStock = scrapeResult.stock
 
-    {
-      const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
+    if (typeof newStock !== 'number' || isNaN(newStock)) {
+      const parsed = parseInt(String(newStock), 10)
+      newStock = isNaN(parsed) ? 0 : parsed
+    }
 
-      if (!scrapeResult.success) {
-        results.errors++
-        const errorMsg = scrapeResult.error || 'Scrape failed'
-        const nextInterval = getJitteredInterval(CONFIG.ERROR_RETRY_INTERVAL)
+    if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
+      const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
+      const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
 
-        await supabase
-          .from('card_sale_urls')
-          .update({
-            last_checked_at: new Date().toISOString(),
-            next_check_at: calculateNextCheckAt(nextInterval),
-            check_interval: CONFIG.ERROR_RETRY_INTERVAL,
-            error_count: (site.error_count || 0) + 1,
-            last_error: errorMsg
-          })
-          .eq('id', site.id)
-
-        results.details.push({ cardName, siteName, status: 'error', error: errorMsg, nextInterval })
-        await logCronResult(site.id, cardName, siteName, 'error', oldPrice, null, oldStock, null, nextInterval, errorMsg)
-        return
-      }
-
-      newPrice = scrapeResult.price ?? scrapeResult.mainPrice
-      newStock = scrapeResult.stock
-
-      if (typeof newStock !== 'number') {
-        newStock = newStock ? parseInt(newStock, 10) : 0
-      }
-
-      if (scrapeResult.conditions && scrapeResult.conditions.length > 0) {
-        const conditionA = scrapeResult.conditions.find((c: any) => c.condition === '状態A')
-        const conditionNew = scrapeResult.conditions.find((c: any) => c.condition === '新品')
-
-        if (conditionA?.price) {
-          newPrice = conditionA.price
-          newStock = conditionA.stock ?? 0
-        } else if (conditionNew?.price) {
-          newPrice = conditionNew.price
-          newStock = conditionNew.stock ?? 0
-        }
+      if (conditionA?.price) {
+        newPrice = conditionA.price
+        newStock = conditionA.stock ?? 0
+      } else if (conditionNew?.price) {
+        newPrice = conditionNew.price
+        newStock = conditionNew.stock ?? 0
       }
     }
 
@@ -270,57 +268,15 @@ async function processSingleUrl(
         .eq('id', site.id)
 
       // 毎回履歴に追加
-      if (gradePrices.length > 0) {
-        const { error: overallErr } = await supabase
-          .from('sale_prices')
-          .insert({
-            card_id: site.card_id,
-            site_id: site.site_id,
-            price: newPrice,
-            stock: newStock,
-            grade: null,
-          })
-        if (overallErr) console.error(`[${logPrefix}] sale_prices insert (overall) error for ${cardName}:`, overallErr)
-
-        for (const gp of gradePrices) {
-          if (!gp.price || gp.price <= 0) continue
-          const { error: gradeErr } = await supabase
-            .from('sale_prices')
-            .insert({
-              card_id: site.card_id,
-              site_id: site.site_id,
-              price: gp.price,
-              grade: gp.grade,
-              stock: gp.stock ?? null,
-              top_prices: gp.topPrices ?? null,
-            })
-          if (gradeErr) {
-            console.error(`[${logPrefix}] sale_prices insert (grade ${gp.grade}) error for ${cardName}:`, gradeErr)
-            if (gradeErr.message?.includes('top_prices') || gradeErr.code === '42703') {
-              const { error: retryErr } = await supabase
-                .from('sale_prices')
-                .insert({
-                  card_id: site.card_id,
-                  site_id: site.site_id,
-                  price: gp.price,
-                  grade: gp.grade,
-                  stock: gp.stock ?? null,
-                })
-              if (retryErr) console.error(`[${logPrefix}] sale_prices insert (grade ${gp.grade} retry) error for ${cardName}:`, retryErr)
-            }
-          }
-        }
-      } else {
-        const { error: saleErr } = await supabase
-          .from('sale_prices')
-          .insert({
-            card_id: site.card_id,
-            site_id: site.site_id,
-            price: newPrice,
-            stock: newStock
-          })
-        if (saleErr) console.error(`[${logPrefix}] sale_prices insert error for ${cardName}:`, saleErr)
-      }
+      const { error: saleErr } = await supabase
+        .from('sale_prices')
+        .insert({
+          card_id: site.card_id,
+          site_id: site.site_id,
+          price: newPrice,
+          stock: newStock
+        })
+      if (saleErr) console.error(`[${logPrefix}] sale_prices insert error for ${cardName}:`, saleErr)
 
       results.details.push({
         cardName, siteName, status,
@@ -411,6 +367,7 @@ export async function GET(request: NextRequest) {
       .from('card_sale_urls')
       .select(SALE_URL_SELECT)
       .not('product_url', 'is', null)
+      .not('product_url', 'ilike', '%snkrdunk.com%')
       .or(`next_check_at.is.null,next_check_at.lte.${now}`)
       .order('next_check_at', { ascending: true, nullsFirst: true })
       .limit(50)
@@ -455,6 +412,7 @@ export async function POST(request: NextRequest) {
       .from('card_sale_urls')
       .select(SALE_URL_SELECT)
       .not('product_url', 'is', null)
+      .not('product_url', 'ilike', '%snkrdunk.com%')
       .order('next_check_at', { ascending: true, nullsFirst: true })
       .limit(limit)
 

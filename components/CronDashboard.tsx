@@ -67,7 +67,7 @@ const JOB_DESCRIPTIONS: Record<string, string> = {
   'shinsoku-sync':         'シンソクAPIから全商品データを取得 → キャッシュDB更新',
   'shinsoku':              'キャッシュから紐付け済みカードの買取価格を履歴に記録（←shinsoku-syncの後に実行）',
   'overseas-price-sync':   'PriceCharting等の海外価格データを取得・同期',
-  'snkrdunk-sync':         'スニダンの売買履歴＋販売中最安値を一括取得（バッチ15件/回）',
+  'snkrdunk-sync':         'スニダンの売買履歴＋販売中最安値を一括取得（バッチ10件/回）',
   'twitter-monitor':       'Twitter/Xからトレカ関連ツイートを監視・収集',
   'update-prices':         '販売サイト（CardRush等）の最新価格・在庫を巡回更新',
 }

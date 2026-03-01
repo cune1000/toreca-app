@@ -10,9 +10,9 @@ import {
 } from '@/lib/snkrdunk-api'
 import { normalizeGrade, parseRelativeTime, extractGradePrices } from '@/lib/scraping/helpers'
 
-export const maxDuration = 120
+export const maxDuration = 180
 
-const BATCH_SIZE = 15
+const BATCH_SIZE = 10
 const SYNC_INTERVAL_MINUTES = 120   // 2時間
 const ERROR_RETRY_MINUTES = 30      // エラー時30分後にリトライ
 
