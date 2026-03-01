@@ -59,6 +59,19 @@ interface CronSchedule {
   last_error: string | null
 }
 
+const JOB_DESCRIPTIONS: Record<string, string> = {
+  'daily-price-aggregate': '買取・販売価格を日別に集計 → チャート用統計データを生成',
+  'exchange-rate-sync':    'USD→JPYの為替レートを取得・更新',
+  'lounge-cache':          'トレカラウンジ全商品をスクレイピング → キャッシュDB更新',
+  'toreca-lounge':         'キャッシュから紐付け済みカードの買取価格を履歴に記録（←lounge-cacheの後に実行）',
+  'shinsoku-sync':         'シンソクAPIから全商品データを取得 → キャッシュDB更新',
+  'shinsoku':              'キャッシュから紐付け済みカードの買取価格を履歴に記録（←shinsoku-syncの後に実行）',
+  'overseas-price-sync':   'PriceCharting等の海外価格データを取得・同期',
+  'snkrdunk-auto-scrape':  'スニダンの売買履歴を自動スクレイピング',
+  'twitter-monitor':       'Twitter/Xからトレカ関連ツイートを監視・収集',
+  'update-prices':         '販売サイト（CardRush等）の最新価格・在庫を巡回更新',
+}
+
 const JOB_API_MAP: Record<string, { path: string; method: string }> = {
   'update-prices':         { path: '/api/cron/update-prices', method: 'POST' },
   'snkrdunk-auto-scrape':  { path: '/api/cron/snkrdunk-auto-scrape', method: 'GET' },
@@ -607,6 +620,9 @@ export default function CronDashboard() {
                       <div className="min-w-0">
                         <div className="font-medium text-sm truncate">{schedule.display_name}</div>
                         <div className="text-xs text-gray-400">{schedule.job_name}</div>
+                        {JOB_DESCRIPTIONS[schedule.job_name] && (
+                          <div className="text-xs text-gray-500 mt-0.5">{JOB_DESCRIPTIONS[schedule.job_name]}</div>
+                        )}
                       </div>
 
                       {/* Type badge */}
