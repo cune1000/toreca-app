@@ -101,12 +101,10 @@ export const TABLES = {
   SALE_PRICES: 'sale_prices',
   CARD_SALE_URLS: 'card_sale_urls',
 
-  // 店舗・サイト
+  // 店舗
   PURCHASE_SHOPS: 'purchase_shops',
-  SALE_SITES: 'sale_sites',
 
   // 保留
-  PENDING_IMAGES: 'pending_images',
   PENDING_CARDS: 'pending_cards',
 
   // カテゴリ

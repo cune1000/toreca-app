@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Image, Cpu, Check, X, Clock, Inbox } from 'lucide-react'
+import { RefreshCw, Image, Check, X, Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { addPendingImage } from '@/lib/api/pending'
-import BulkRecognition from './BulkRecognition'
 
 interface SelectedImage {
   url: string
@@ -31,8 +29,6 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: Props) {
   const [tweets, setTweets] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null)
-  const [showBulkRecognition, setShowBulkRecognition] = useState(false)
-  const [savingToPending, setSavingToPending] = useState(false)
 
   // ツイートを取得
   const fetchTweets = async () => {
@@ -71,54 +67,6 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: Props) {
       tweetUrl: `https://x.com/${shop.x_account}/status/${tweet.id}`,
       tweetId: tweet.id
     })
-  }
-
-  // 一括認識を開く
-  const openBulkRecognition = () => {
-    if (selectedImage) {
-      setShowBulkRecognition(true)
-    }
-  }
-
-  // 保留リストに追加（lib/api使用）
-  const addToPending = async () => {
-    if (!selectedImage) return
-    
-    if (!shop?.id) {
-      alert('店舗IDが見つかりません')
-      return
-    }
-
-    setSavingToPending(true)
-    try {
-      const { data, error } = await addPendingImage({
-        shop_id: shop.id,
-        image_url: selectedImage.url,
-        tweet_url: selectedImage.tweetUrl,
-        tweet_time: selectedImage.tweetTime,
-      })
-
-      if (error) {
-        throw new Error(error)
-      }
-
-      alert('保留リストに追加しました（バックグラウンドでAI解析中...）')
-      setSelectedImage(null)
-
-      // バックグラウンドでAI解析を開始（awaitしない）
-      if (data?.id) {
-        fetch('/api/pending-images/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pendingImageId: data.id }),
-        }).catch(err => console.error('Background analysis error:', err))
-      }
-    } catch (err: any) {
-      console.error('Failed to add to pending:', err)
-      alert('保存に失敗しました: ' + (err.message || JSON.stringify(err)))
-    } finally {
-      setSavingToPending(false)
-    }
   }
 
   return (
@@ -244,60 +192,8 @@ export default function TwitterFeed({ shop, onImageSelect, onClose }: Props) {
             )}
           </div>
 
-          {/* フッター */}
-          {selectedImage && (
-            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-purple-50">
-              <div className="flex items-center gap-3">
-                <img 
-                  src={selectedImage.url} 
-                  alt="Selected" 
-                  className="w-16 h-16 object-cover rounded"
-                  referrerPolicy="no-referrer"
-                />
-                <div>
-                  <p className="text-sm text-gray-700">この画像を処理しますか？</p>
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    <Clock size={12} />
-                    {new Date(selectedImage.tweetTime).toLocaleString('ja-JP')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={addToPending}
-                  disabled={savingToPending}
-                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Inbox size={18} />
-                  保留に追加
-                </button>
-                <button
-                  onClick={openBulkRecognition}
-                  className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
-                >
-                  <Cpu size={18} />
-                  今すぐ認識
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* 一括認識モーダル */}
-      {showBulkRecognition && selectedImage && (
-        <BulkRecognition
-          imageUrl={selectedImage.url}
-          shop={shop}
-          tweetTime={selectedImage.tweetTime}
-          tweetUrl={selectedImage.tweetUrl}
-          onClose={() => setShowBulkRecognition(false)}
-          onCompleted={() => {
-            setShowBulkRecognition(false)
-            onClose()
-          }}
-        />
-      )}
     </>
   )
 }

@@ -10,7 +10,6 @@ import PriceChartTab from '@/components/card-detail/PriceChartTab'
 import SnkrdunkTab from '@/components/card-detail/SnkrdunkTab'
 import SettingsTab from '@/components/card-detail/SettingsTab'
 import CardEditForm from '@/components/CardEditForm'
-import SaleUrlForm from '@/components/SaleUrlForm'
 import { GRADE_SORT_ORDER } from '@/components/card-detail/constants'
 import { isSnkrdunkSiteName, isSnkrdunkUrl } from '@/lib/snkrdunk-api'
 
@@ -36,7 +35,6 @@ export default function CardDetailPage({ params }: Props) {
 
   // ── UI state ──
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showSaleUrlForm, setShowSaleUrlForm] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(30)
   const [cardImageUrl, setCardImageUrl] = useState<string | null>(null)
   const [chartTab, setChartTab] = useState<'price' | 'snkrdunk' | 'settings'>('price')
@@ -585,7 +583,6 @@ export default function CardDetailPage({ params }: Props) {
                   onUpdateScrapeInterval={updateScrapeInterval}
                   onUpdateCheckInterval={updateCheckInterval}
                   onUpdatePrice={updatePrice}
-                  onShowSaleUrlForm={() => setShowSaleUrlForm(true)}
                   onLinksChanged={() => { fetchPurchaseLinks(); fetchPrices(); handleCardUpdated() }}
                   onUpdated={handleCardUpdated}
                   onEditSaleUrl={editSaleUrl}
@@ -605,13 +602,6 @@ export default function CardDetailPage({ params }: Props) {
         />
       )}
 
-      {showSaleUrlForm && (
-        <SaleUrlForm
-          cardId={card.id}
-          onClose={() => setShowSaleUrlForm(false)}
-          onSaved={() => { setShowSaleUrlForm(false); fetchPrices() }}
-        />
-      )}
     </div>
   )
 }

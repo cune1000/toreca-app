@@ -1,19 +1,16 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Eye, Clock, Inbox, X, Search, Sparkles } from 'lucide-react'
-import { 
-  getPendingImages, 
-  getPendingCards, 
-  updatePendingImageStatus,
-  deletePendingImage,
+import { Inbox, X, Search } from 'lucide-react'
+import {
+  getPendingCards,
   deletePendingCard,
   matchPendingCard,
   updatePendingCardPrice,
   savePendingCardsToPurchasePrices
 } from '@/lib/api'
 import { searchCards } from '@/lib/api/cards'
-import type { PendingImage, PendingCard, Shop } from '@/lib/types'
+import type { PendingCard, Shop } from '@/lib/types'
 
 // =============================================================================
 // Types
@@ -21,24 +18,19 @@ import type { PendingImage, PendingCard, Shop } from '@/lib/types'
 
 interface Props {
   shops: Shop[]
-  pendingImages: PendingImage[]
   onRefresh: () => void
-  onProcessImage: (pending: PendingImage) => void
 }
 
 // =============================================================================
 // Component
 // =============================================================================
 
-export default function PendingPage({ 
-  shops, 
-  pendingImages, 
-  onRefresh,
-  onProcessImage 
+export default function PendingPage({
+  shops,
+  onRefresh
 }: Props) {
   // State
   const [pendingCards, setPendingCards] = useState<PendingCard[]>([])
-  const [activeTab, setActiveTab] = useState<'images' | 'cards'>('images')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [editingCardId, setEditingCardId] = useState<string | null>(null)
@@ -60,23 +52,6 @@ export default function PendingPage({
   }, [fetchPendingCards])
 
   // =============================================================================
-  // Image Handlers
-  // =============================================================================
-
-  const handleProcessImage = async (pending: PendingImage) => {
-    // ★ 修正: statusを変更しない（×で閉じても保留に残るように）
-    onProcessImage(pending)
-  }
-
-  const handleDeletePending = async (id: string) => {
-    if (!confirm('この保留画像を削除しますか？')) return
-    const success = await deletePendingImage(id)
-    if (success) {
-      onRefresh()
-    }
-  }
-
-  // =============================================================================
   // Card Handlers
   // =============================================================================
 
@@ -89,7 +64,7 @@ export default function PendingPage({
     setSearchResults(results.map(r => ({
       id: r.id,
       name: r.name,
-      image_url: r.imageUrl
+      image_url: r.image_url
     })))
   }
 
@@ -148,9 +123,6 @@ export default function PendingPage({
   }
 
   const matchedCount = pendingCards.filter(c => c.status === 'matched').length
-  
-  // ★ 追加: 解析済みの数をカウント
-  const analyzedCount = pendingImages.filter(p => p.ai_result && !p.ai_result.error).length
 
   // =============================================================================
   // Render
@@ -158,131 +130,7 @@ export default function PendingPage({
 
   return (
     <div className="p-6">
-      {/* タブ */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setActiveTab('images')}
-          className={`px-4 py-2 rounded-lg font-medium ${
-            activeTab === 'images' 
-              ? 'bg-purple-500 text-white' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          📷 画像 ({pendingImages.length})
-          {/* ★ 追加: 解析済み数を表示 */}
-          {analyzedCount > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 bg-green-400 text-white text-xs rounded-full">
-              {analyzedCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('cards')}
-          className={`px-4 py-2 rounded-lg font-medium ${
-            activeTab === 'cards' 
-              ? 'bg-orange-500 text-white' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          🃏 カード ({pendingCards.length})
-        </button>
-      </div>
-      
-      {/* 画像タブ */}
-      {activeTab === 'images' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-bold text-gray-800">保留画像一覧</h2>
-            <span className="text-sm text-gray-500">{pendingImages.length}件</span>
-          </div>
-          
-          {pendingImages.length > 0 ? (
-            <div className="divide-y divide-gray-50">
-              {pendingImages.map((pending) => (
-                <div key={pending.id} className="p-4 flex items-center gap-4 hover:bg-gray-50">
-                  <div className="flex-shrink-0 relative">
-                    {pending.image_url ? (
-                      <img
-                        src={pending.image_url}
-                        alt="保留画像"
-                        className="w-24 h-24 object-cover rounded-lg border"
-                      />
-                    ) : pending.image_base64 ? (
-                      <img
-                        src={pending.image_base64}
-                        alt="保留画像"
-                        className="w-24 h-24 object-cover rounded-lg border"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
-                        <Inbox size={32} className="text-gray-400" />
-                      </div>
-                    )}
-                    
-                    {/* ★ 追加: 解析済みバッジ */}
-                    {pending.ai_result && !pending.ai_result.error && (
-                      <div className="absolute -top-2 -right-2 bg-green-500 text-white px-2 py-0.5 rounded-full text-xs flex items-center gap-1">
-                        <Sparkles size={12} />
-                        解析済
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-gray-800">
-                        {pending.shop?.name || getShopName(pending.shop_id)}
-                      </span>
-                      {/* ★ 追加: カード数表示 */}
-                      {pending.ai_result?.cards && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
-                          {pending.ai_result.cards.length}枚検出
-                        </span>
-                      )}
-                    </div>
-                    
-                    {pending.tweet_time && (
-                      <p className="text-sm text-gray-500 flex items-center gap-1">
-                        <Clock size={14} />
-                        {new Date(pending.tweet_time).toLocaleString('ja-JP')}
-                      </p>
-                    )}
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleProcessImage(pending)}
-                      className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                        pending.ai_result && !pending.ai_result.error
-                          ? 'bg-green-500 text-white hover:bg-green-600'
-                          : 'bg-purple-500 text-white hover:bg-purple-600'
-                      }`}
-                    >
-                      <Eye size={18} />
-                      {pending.ai_result && !pending.ai_result.error ? '確認' : '認識'}
-                    </button>
-                    <button
-                      onClick={() => handleDeletePending(pending.id)}
-                      className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg"
-                    >
-                      削除
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-12 text-center text-gray-500">
-              <Inbox size={48} className="mx-auto mb-4 text-gray-300" />
-              <p>保留中の画像はありません</p>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* カードタブ */}
-      {activeTab === 'cards' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="font-bold text-gray-800">保留カード一覧</h2>
             <div className="flex items-center gap-2">
@@ -423,11 +271,10 @@ export default function PendingPage({
             <div className="p-12 text-center text-gray-500">
               <Inbox size={48} className="mx-auto mb-4 text-gray-300" />
               <p>保留中のカードはありません</p>
-              <p className="text-sm mt-2">認識画面で「保留に追加」すると追加されます</p>
+              <p className="text-sm mt-2">手動でカードを追加できます</p>
             </div>
           )}
         </div>
-      )}
     </div>
   )
 }

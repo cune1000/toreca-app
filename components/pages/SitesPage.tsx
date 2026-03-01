@@ -2,11 +2,17 @@
 
 import React from 'react'
 import { Globe } from 'lucide-react'
-import type { SaleSite } from '@/lib/types'
 
 // =============================================================================
 // Types
 // =============================================================================
+
+interface SaleSite {
+  id: string
+  name: string
+  icon?: string
+  url?: string
+}
 
 interface Props {
   sites: SaleSite[]

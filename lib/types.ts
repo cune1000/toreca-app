@@ -51,15 +51,6 @@ export interface Shop {
   created_at?: string
 }
 
-/** 販売サイト */
-export interface SaleSite {
-  id: string
-  name: string
-  icon?: string
-  url?: string
-  created_at?: string
-}
-
 /** 買取価格 */
 export interface PurchasePrice {
   id: string
@@ -173,97 +164,6 @@ export interface PendingCard {
   // リレーション
   matched_card?: Card
   shop?: Shop
-}
-
-// =============================================================================
-// 認識関連
-// =============================================================================
-
-/** カード状態 */
-export type CardCondition = 'normal' | 'psa' | 'sealed' | 'opened'
-
-export const CONDITION_OPTIONS = [
-  { value: 'normal' as const, label: '素体', color: 'bg-gray-100 text-gray-700' },
-  { value: 'psa' as const, label: 'PSA', color: 'bg-purple-100 text-purple-700' },
-  { value: 'sealed' as const, label: '未開封', color: 'bg-blue-100 text-blue-700' },
-  { value: 'opened' as const, label: '開封済み', color: 'bg-orange-100 text-orange-700' },
-] as const
-
-/** Grounding情報（Google検索連携結果） */
-export interface GroundingInfo {
-  official_name?: string
-  card_number?: string
-  expansion?: string
-  rarity?: string
-  confidence?: 'high' | 'medium' | 'low'
-  notes?: string
-  search_queries?: string[]
-  sources?: { url: string; title: string }[]
-}
-
-/** カード候補（DB検索結果） */
-export interface CardCandidate {
-  id: string
-  name: string
-  cardNumber?: string
-  imageUrl?: string
-  rarity?: string
-  expansion?: string
-  similarity: number
-  isExactMatch: boolean
-}
-
-/** 認識結果カード（BulkRecognition用） */
-export interface RecognizedCard {
-  index: number
-  price?: number
-  quantity?: number
-  name?: string
-  ocrText?: string
-  matchedCard: CardCandidate | null
-  candidates: CardCandidate[]
-  needsReview: boolean
-  excluded?: boolean
-  condition: CardCondition
-  grounding?: GroundingInfo | null
-}
-
-/** Gemini認識APIレスポンス */
-export interface GeminiRecognitionResult {
-  cards: Array<{
-    index: number
-    name: string
-    quantity?: number
-    price: number
-    bounding_box?: {
-      x: number
-      y: number
-      width: number
-      height: number
-    }
-    raw_text?: string
-    grounding?: GroundingInfo
-  }>
-  layout?: {
-    type: string
-    rows: number
-    cols: number
-    total_detected: number
-  }
-  shop_info?: {
-    name?: string
-    date?: string
-  }
-  is_psa: boolean
-  psa_info?: {
-    detected: boolean
-    grades_found: string[]
-  }
-  grounding_stats?: {
-    total: number
-    high_confidence: number
-    success_rate: number
-  }
 }
 
 // =============================================================================

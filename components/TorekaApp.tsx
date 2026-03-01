@@ -11,12 +11,10 @@ import {
 import DashboardContent from './DashboardContent'
 import CardForm from './CardForm'
 import ShopForm from './ShopForm'
-import ImageRecognition from './ImageRecognition'
 import TwitterFeed from './TwitterFeed'
 // CategoryManager — サイドバーから削除済み（v2でgame_type CHECK制約に移行予定）
 import CardImporter from './CardImporter'
 import PriceChartingImporter from './PriceChartingImporter'
-import BulkRecognition from './BulkRecognition'
 import CronDashboard from './CronDashboard'
 
 // Pages
@@ -40,25 +38,12 @@ const TorekaApp = () => {
   // モーダル状態
   const [showCardForm, setShowCardForm] = useState(false)
   const [showShopForm, setShowShopForm] = useState(false)
-  const [showImageRecognition, setShowImageRecognition] = useState(false)
   const [showTwitterFeed, setShowTwitterFeed] = useState(false)
   const [showCardImporter, setShowCardImporter] = useState(false)
   const [showPriceChartingImporter, setShowPriceChartingImporter] = useState(false)
-  const [showBulkRecognition, setShowBulkRecognition] = useState(false)
-
   // 選択状態
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null)
   const [editingShop, setEditingShop] = useState<any>(null)
-
-  // ★ 修正: pendingImageIdとaiResultを追加
-  const [bulkRecognitionImage, setBulkRecognitionImage] = useState<{
-    url?: string
-    base64?: string
-    tweetTime?: string
-    tweetUrl?: string
-    pendingImageId?: string    // ← 追加
-    aiResult?: any             // ← 追加
-  } | null>(null)
 
   // データ
   const [shops, setShops] = useState<Shop[]>([])
@@ -262,7 +247,6 @@ const TorekaApp = () => {
               key={refresh}
               onAddCard={() => setShowCardForm(true)}
               onImportCards={() => setShowCardImporter(true)}
-              onAIRecognition={() => setShowImageRecognition(true)}
               onPriceChartingImport={() => setShowPriceChartingImporter(true)}
             />
           </>
@@ -362,14 +346,6 @@ const TorekaApp = () => {
         />
       )}
 
-      {showImageRecognition && (
-        <ImageRecognition
-          onClose={() => setShowImageRecognition(false)}
-          onRecognized={handleRefresh}
-        />
-      )}
-
-
       {showTwitterFeed && selectedShop && (
         <TwitterFeed
           shop={selectedShop}
@@ -394,20 +370,6 @@ const TorekaApp = () => {
         />
       )}
 
-      {/* ★ 修正: pendingImageIdとinitialAiResultを追加 */}
-      {showBulkRecognition && (
-        <BulkRecognition
-          imageUrl={bulkRecognitionImage?.url}
-          imageBase64={bulkRecognitionImage?.base64}
-          shop={selectedShop}
-          tweetTime={bulkRecognitionImage?.tweetTime}
-          tweetUrl={bulkRecognitionImage?.tweetUrl}
-          pendingImageId={bulkRecognitionImage?.pendingImageId}    // ← 追加
-          initialAiResult={bulkRecognitionImage?.aiResult}          // ← 追加
-          onClose={() => { setShowBulkRecognition(false); setBulkRecognitionImage(null); handleRefresh(); }}
-          onCompleted={() => { setShowBulkRecognition(false); setBulkRecognitionImage(null); handleRefresh(); }}
-        />
-      )}
     </div>
   )
 }

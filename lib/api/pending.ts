@@ -1,98 +1,8 @@
 import { supabase, TABLES } from '../supabase'
-import type { 
-  PendingImage, 
-  PendingCard, 
-  PendingImageStatus, 
+import type {
+  PendingCard,
   PendingCardStatus,
-  RecognizedCard,
-  Shop
 } from '../types'
-
-// =============================================================================
-// Pending Images (保留画像)
-// =============================================================================
-
-/** 保留画像一覧を取得 */
-export async function getPendingImages(status?: PendingImageStatus): Promise<PendingImage[]> {
-  let query = supabase
-    .from(TABLES.PENDING_IMAGES)
-    .select(`
-      *,
-      shop:shop_id(id, name, icon, x_account)
-    `)
-    .order('created_at', { ascending: false })
-  
-  if (status) {
-    query = query.eq('status', status)
-  }
-  
-  const { data, error } = await query
-  
-  if (error) {
-    console.error('Error fetching pending images:', error)
-    return []
-  }
-  
-  return data || []
-}
-
-/** 保留画像を追加 */
-export async function addPendingImage(params: {
-  shop_id: string
-  image_url?: string
-  image_base64?: string
-  tweet_url?: string
-  tweet_time?: string
-}): Promise<{ data: PendingImage | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from(TABLES.PENDING_IMAGES)
-    .insert({
-      ...params,
-      status: 'pending' as PendingImageStatus
-    })
-    .select()
-    .single()
-  
-  if (error) {
-    console.error('Error adding pending image:', error)
-    return { data: null, error: error.message }
-  }
-  
-  return { data, error: null }
-}
-
-/** 保留画像のステータスを更新 */
-export async function updatePendingImageStatus(
-  id: string, 
-  status: PendingImageStatus
-): Promise<boolean> {
-  const { error } = await supabase
-    .from(TABLES.PENDING_IMAGES)
-    .update({ status })
-    .eq('id', id)
-  
-  if (error) {
-    console.error('Error updating pending image status:', error)
-    return false
-  }
-  
-  return true
-}
-
-/** 保留画像を削除 */
-export async function deletePendingImage(id: string): Promise<boolean> {
-  const { error } = await supabase
-    .from(TABLES.PENDING_IMAGES)
-    .delete()
-    .eq('id', id)
-  
-  if (error) {
-    console.error('Error deleting pending image:', error)
-    return false
-  }
-  
-  return true
-}
 
 // =============================================================================
 // Pending Cards (保留カード)
@@ -149,44 +59,6 @@ export async function addPendingCard(params: {
   }
   
   return { data, error: null }
-}
-
-/** 保留カードを一括追加（認識結果から） */
-export async function addPendingCardsFromRecognition(params: {
-  pending_image_id?: string
-  shop_id: string
-  cards: RecognizedCard[]
-  tweet_time?: string
-}): Promise<{ success: number; failed: number }> {
-  const { pending_image_id, shop_id, cards, tweet_time } = params
-  
-  const records = cards
-    .filter(card => !card.excluded && !card.matchedCard) // マッチしてないカードのみ
-    .map(card => ({
-      pending_image_id,
-      shop_id,
-      recognized_name: card.name,
-      ocr_text: card.ocrText,
-      price: card.price,
-      condition: card.condition,
-      tweet_time,
-      status: 'pending' as PendingCardStatus
-    }))
-  
-  if (records.length === 0) {
-    return { success: 0, failed: 0 }
-  }
-  
-  const { error } = await supabase
-    .from(TABLES.PENDING_CARDS)
-    .insert(records)
-  
-  if (error) {
-    console.error('Error adding pending cards:', error)
-    return { success: 0, failed: records.length }
-  }
-  
-  return { success: records.length, failed: 0 }
 }
 
 /** 保留カードをマッチング */
@@ -302,35 +174,3 @@ export async function savePendingCardsToPurchasePrices(
   return { success: validCards.length, failed: 0 }
 }
 
-// =============================================================================
-// Combined Operations
-// =============================================================================
-
-/** 保留の統計情報を取得 */
-export async function getPendingStats(): Promise<{
-  images: { pending: number; processing: number }
-  cards: { pending: number; matched: number }
-}> {
-  const [imagesResult, cardsResult] = await Promise.all([
-    supabase
-      .from(TABLES.PENDING_IMAGES)
-      .select('status', { count: 'exact' }),
-    supabase
-      .from(TABLES.PENDING_CARDS)
-      .select('status', { count: 'exact' })
-  ])
-  
-  const images = imagesResult.data || []
-  const cards = cardsResult.data || []
-  
-  return {
-    images: {
-      pending: images.filter(i => i.status === 'pending').length,
-      processing: images.filter(i => i.status === 'processing').length
-    },
-    cards: {
-      pending: cards.filter(c => c.status === 'pending').length,
-      matched: cards.filter(c => c.status === 'matched').length
-    }
-  }
-}

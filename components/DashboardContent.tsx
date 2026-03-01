@@ -7,7 +7,6 @@ import {
   getCronStats,
   searchCardsForDashboard,
   getLargeCategories,
-  getAllSaleSites
 } from '@/lib/api/dashboard'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Database, Store, Globe, Clock, Search, RefreshCw, TrendingUp, AlertCircle, Sparkles } from 'lucide-react'
@@ -16,7 +15,6 @@ interface Stats {
   cards: number
   shops: number
   sites: number
-  pending: number
 }
 
 interface CronStats {
@@ -51,9 +49,8 @@ const PRICE_CHANGE_THRESHOLD_PERCENT = 10
 const PRICE_CHANGE_THRESHOLD_YEN = 1000
 
 export default function DashboardContent() {
-  const [stats, setStats] = useState<Stats>({ cards: 0, shops: 0, sites: 0, pending: 0 })
+  const [stats, setStats] = useState<Stats>({ cards: 0, shops: 0, sites: 0 })
   const [categories, setCategories] = useState<any[]>([])
-  const [saleSites, setSaleSites] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -75,17 +72,15 @@ export default function DashboardContent() {
     setLoading(true)
 
     // 並列で全データ取得（lib/api使用）
-    const [statsData, categoriesData, sitesData, changesData, cronStatsData] = await Promise.all([
+    const [statsData, categoriesData, changesData, cronStatsData] = await Promise.all([
       getDashboardStats(),
       getLargeCategories(),
-      getAllSaleSites(),
-      getPriceChanges(24, 50), // より多く取得してフィルタリング
+      getPriceChanges(24, 50),
       getCronStats(24)
     ])
 
     setStats(statsData)
     setCategories(categoriesData)
-    setSaleSites(sitesData)
     setPriceChanges(changesData)
     setCronStats(cronStatsData)
 
@@ -203,17 +198,6 @@ export default function DashboardContent() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">保留中</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-            </div>
-            <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Clock size={20} className="text-yellow-600" />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* 監視状況（24h） */}

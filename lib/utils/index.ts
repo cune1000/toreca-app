@@ -16,10 +16,3 @@ export {
   extractJSON,
 } from './ocr'
 
-// Google Cloud auth
-export {
-  getGoogleCredentials,
-  getVisionClient,
-  getProductSearchClient,
-  type GoogleCredentialsConfig,
-} from './googleAuth'

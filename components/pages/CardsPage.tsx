@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Database, Search, RefreshCw, Plus, Cpu, Globe, CheckSquare, Square, Settings, Link, Loader2, Check } from 'lucide-react'
+import { Database, Search, RefreshCw, Plus, Globe, CheckSquare, Square, Settings, Link, Loader2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
 import type { CardWithRelations, CategoryLarge, CategoryMedium, CategorySmall, Rarity } from '@/lib/types'
@@ -13,7 +13,6 @@ import type { CardWithRelations, CategoryLarge, CategoryMedium, CategorySmall, R
 interface Props {
   onAddCard: () => void
   onImportCards: () => void
-  onAIRecognition: () => void
   onPriceChartingImport: () => void
 }
 
@@ -26,7 +25,6 @@ const UNSET = '__UNSET__'
 export default function CardsPage({
   onAddCard,
   onImportCards,
-  onAIRecognition,
   onPriceChartingImport,
 }: Props) {
   // sessionStorage永続化ヘルパー（保存のみ、復元は一括で行う）
@@ -723,12 +721,6 @@ export default function CardsPage({
                 className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 flex items-center gap-2"
               >
                 <Globe size={18} /> PC Import
-              </button>
-              <button
-                onClick={onAIRecognition}
-                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
-              >
-                <Cpu size={18} /> AI認識
               </button>
               <button
                 onClick={onAddCard}

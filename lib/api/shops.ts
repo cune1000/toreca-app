@@ -1,5 +1,5 @@
 import { supabase, TABLES } from '../supabase'
-import type { Shop, SaleSite } from '../types'
+import type { Shop } from '../types'
 
 // =============================================================================
 // Purchase Shops (買取店舗)
@@ -84,85 +84,3 @@ export async function deleteShop(id: string): Promise<{ error: string | null }> 
   return { error: null }
 }
 
-// =============================================================================
-// Sale Sites (販売サイト)
-// =============================================================================
-
-/** 販売サイト一覧を取得 */
-export async function getSaleSites(): Promise<SaleSite[]> {
-  const { data, error } = await supabase
-    .from(TABLES.SALE_SITES)
-    .select('*')
-    .order('name')
-  
-  if (error) {
-    console.error('Error fetching sale sites:', error)
-    return []
-  }
-  
-  return data || []
-}
-
-/** 販売サイトを取得（ID指定） */
-export async function getSaleSite(id: string): Promise<SaleSite | null> {
-  const { data, error } = await supabase
-    .from(TABLES.SALE_SITES)
-    .select('*')
-    .eq('id', id)
-    .single()
-  
-  if (error) {
-    console.error('Error fetching sale site:', error)
-    return null
-  }
-  
-  return data
-}
-
-/** 販売サイトを追加 */
-export async function addSaleSite(site: Omit<SaleSite, 'id' | 'created_at'>): Promise<{ data: SaleSite | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from(TABLES.SALE_SITES)
-    .insert([site])
-    .select()
-    .single()
-  
-  if (error) {
-    return { data: null, error: error.message }
-  }
-  
-  return { data, error: null }
-}
-
-/** 販売サイトを更新 */
-export async function updateSaleSite(
-  id: string, 
-  updates: Partial<SaleSite>
-): Promise<{ data: SaleSite | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from(TABLES.SALE_SITES)
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  
-  if (error) {
-    return { data: null, error: error.message }
-  }
-  
-  return { data, error: null }
-}
-
-/** 販売サイトを削除 */
-export async function deleteSaleSite(id: string): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from(TABLES.SALE_SITES)
-    .delete()
-    .eq('id', id)
-  
-  if (error) {
-    return { error: error.message }
-  }
-  
-  return { error: null }
-}

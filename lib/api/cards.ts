@@ -5,10 +5,10 @@ import type {
   CardWithRelations,
   PurchasePrice,
   SalePrice,
-  CardCandidate,
   PaginationParams,
   PaginatedResponse
 } from '../types'
+import type { CardCandidate } from '../utils/cardMatch'
 
 // =============================================================================
 // Cards CRUD

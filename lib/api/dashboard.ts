@@ -9,7 +9,6 @@ export interface DashboardStats {
   cards: number
   shops: number
   sites: number
-  pending: number
 }
 
 export interface CronStats {
@@ -36,18 +35,16 @@ export interface RecentCard {
 
 /** ダッシュボード統計を取得 */
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [cardResult, shopResult, siteResult, pendingResult] = await Promise.all([
+  const [cardResult, shopResult, siteResult] = await Promise.all([
     supabase.from(TABLES.CARDS).select('*', { count: 'exact', head: true }),
     supabase.from(TABLES.PURCHASE_SHOPS).select('*', { count: 'exact', head: true }),
-    supabase.from(TABLES.SALE_SITES).select('*', { count: 'exact', head: true }),
-    supabase.from(TABLES.PENDING_IMAGES).select('*', { count: 'exact', head: true }).eq('status', 'pending')
+    supabase.from('sale_sites').select('*', { count: 'exact', head: true }),
   ])
 
   return {
     cards: cardResult.count || 0,
     shops: shopResult.count || 0,
     sites: siteResult.count || 0,
-    pending: pendingResult.count || 0
   }
 }
 
@@ -200,16 +197,3 @@ export async function getLargeCategories(): Promise<CategoryLarge[]> {
   return data || []
 }
 
-/** 販売サイト一覧を取得 */
-export async function getAllSaleSites(): Promise<Array<{ id: string; name: string; icon?: string; url?: string }>> {
-  const { data, error } = await supabase
-    .from(TABLES.SALE_SITES)
-    .select('*')
-
-  if (error) {
-    console.error('Error fetching sale sites:', error)
-    return []
-  }
-
-  return data || []
-}

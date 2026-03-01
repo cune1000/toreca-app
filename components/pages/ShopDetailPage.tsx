@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
     ArrowLeft, Store, Radio, Power, RefreshCw, Twitter,
-    Image, Clock, CheckCircle, AlertCircle, ExternalLink,
+    ExternalLink,
     TrendingUp, Package, Moon, Search, XCircle, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -33,15 +33,6 @@ interface FetchedTweet {
     fetched_at: string
 }
 
-interface PendingImageRow {
-    id: string
-    image_url: string
-    tweet_url: string
-    tweet_time: string
-    status: string
-    created_at: string
-}
-
 interface PurchaseRow {
     id: string
     shop_id: string
@@ -57,13 +48,11 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
     const [loading, setLoading] = useState(true)
     const [monitor, setMonitor] = useState<MonitorSetting | null>(null)
     const [tweets, setTweets] = useState<FetchedTweet[]>([])
-    const [pendingImages, setPendingImages] = useState<PendingImageRow[]>([])
     const [purchases, setPurchases] = useState<PurchaseRow[]>([])
     const [toggling, setToggling] = useState(false)
-    const [activeTab, setActiveTab] = useState<'overview' | 'tweets' | 'pending' | 'purchases'>('overview')
+    const [activeTab, setActiveTab] = useState<'overview' | 'tweets' | 'purchases'>('overview')
     const [searchQuery, setSearchQuery] = useState('')
     const [tweetFilter, setTweetFilter] = useState<'all' | 'purchase' | 'pinned' | 'normal'>('all')
-    const [pendingFilter, setPendingFilter] = useState<'all' | 'pending' | 'processing' | 'processed' | 'error'>('all')
 
     // 買取価格タブ用: カテゴリ・ページネーション
     const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('')
@@ -219,15 +208,13 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
         setLoading(true)
 
         // 並列取得（買取価格はfetchPurchasesで別途取得）
-        const [monitorRes, tweetsRes, pendingRes] = await Promise.all([
+        const [monitorRes, tweetsRes] = await Promise.all([
             supabase.from('shop_monitor_settings').select('*').eq('shop_id', shop.id).single(),
             supabase.from('fetched_tweets').select('*').eq('shop_id', shop.id).order('fetched_at', { ascending: false }).limit(50),
-            supabase.from('pending_images').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }).limit(50),
         ])
 
         setMonitor(monitorRes.data || null)
         setTweets(tweetsRes.data || [])
-        setPendingImages(pendingRes.data || [])
         setLoading(false)
     }
 
@@ -272,16 +259,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
         }
         return result
     }, [tweets, tweetFilter, searchQuery])
-
-    const filteredPending = useMemo(() => {
-        let result = pendingImages
-        if (pendingFilter !== 'all') result = result.filter(img => img.status === pendingFilter)
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase()
-            result = result.filter(img => img.tweet_url?.toLowerCase().includes(q) || img.status.toLowerCase().includes(q))
-        }
-        return result
-    }, [pendingImages, pendingFilter, searchQuery])
 
     // フィルタ用レアリティ（カテゴリで絞り込み）
     const filteredRarities = purchaseFilterLarge && purchaseFilterLarge !== UNSET
@@ -353,10 +330,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                     <p className="text-2xl font-bold text-purple-600">{purchaseCount}</p>
                 </div>
                 <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                    <p className="text-xs text-gray-500 mb-1">保留画像</p>
-                    <p className="text-2xl font-bold text-blue-600">{pendingImages.length}</p>
-                </div>
-                <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                     <p className="text-xs text-gray-500 mb-1">買取価格</p>
                     <p className="text-2xl font-bold text-green-600">{purchases.length}</p>
                 </div>
@@ -411,7 +384,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                 {[
                     { key: 'overview' as const, label: '概要', icon: Store },
                     { key: 'tweets' as const, label: `ツイート (${tweets.length})`, icon: Twitter },
-                    { key: 'pending' as const, label: `保留画像 (${pendingImages.length})`, icon: Image },
                     { key: 'purchases' as const, label: `買取価格 (${purchaseTotalCount})`, icon: TrendingUp },
                 ].map(tab => (
                     <button
@@ -464,26 +436,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                                     key={f.key}
                                     onClick={() => setTweetFilter(f.key)}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${tweetFilter === f.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                                        }`}
-                                >
-                                    {f.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    {activeTab === 'pending' && (
-                        <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-                            {[
-                                { key: 'all' as const, label: '全て' },
-                                { key: 'pending' as const, label: '保留中' },
-                                { key: 'processing' as const, label: '解析中' },
-                                { key: 'processed' as const, label: '解析済' },
-                                { key: 'error' as const, label: 'エラー' },
-                            ].map(f => (
-                                <button
-                                    key={f.key}
-                                    onClick={() => setPendingFilter(f.key)}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${pendingFilter === f.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                 >
                                     {f.label}
@@ -567,54 +519,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                                             <ExternalLink size={14} />
                                         </a>
                                     </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
-
-                {activeTab === 'pending' && (
-                    <div className="divide-y divide-gray-50">
-                        {filteredPending.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">
-                                <Image size={40} className="mx-auto mb-3 text-gray-300" />
-                                <p>{searchQuery || pendingFilter !== 'all' ? '条件に一致する画像がありません' : '保留画像はありません'}</p>
-                            </div>
-                        ) : (
-                            filteredPending.map(img => (
-                                <div key={img.id} className="p-4 flex items-center gap-4">
-                                    {img.image_url && (
-                                        <img src={img.image_url} alt="" className="w-20 h-20 object-cover rounded-lg border" />
-                                    )}
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            {img.status === 'processed' ? (
-                                                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium flex items-center gap-1">
-                                                    <CheckCircle size={12} /> 解析済
-                                                </span>
-                                            ) : img.status === 'processing' ? (
-                                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
-                                                    <RefreshCw size={12} className="animate-spin" /> 解析中
-                                                </span>
-                                            ) : img.status === 'error' ? (
-                                                <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium flex items-center gap-1">
-                                                    <AlertCircle size={12} /> エラー
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-medium flex items-center gap-1">
-                                                    <Clock size={12} /> 保留中
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-xs text-gray-400">
-                                            {new Date(img.created_at).toLocaleString('ja-JP')}
-                                        </p>
-                                    </div>
-                                    {img.tweet_url && (
-                                        <a href={img.tweet_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
-                                            <ExternalLink size={14} />
-                                        </a>
-                                    )}
                                 </div>
                             ))
                         )}

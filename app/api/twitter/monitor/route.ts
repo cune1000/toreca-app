@@ -156,34 +156,6 @@ export async function POST(request: NextRequest) {
                         console.error(`Classify error for tweet ${tweet.id}:`, classifyErr)
                     }
 
-                    // 買取表なら保留に追加
-                    if (isPurchaseList) {
-                        for (const imageUrl of tweet.images) {
-                            const { data: pendingImage, error: pendingError } = await supabase
-                                .from('pending_images')
-                                .insert({
-                                    shop_id: shop.id,
-                                    image_url: imageUrl,
-                                    tweet_url: `https://x.com/${shop.x_account}/status/${tweet.id}`,
-                                    tweet_time: tweet.created_at,
-                                    status: 'pending'
-                                })
-                                .select()
-                                .single()
-
-                            if (!pendingError && pendingImage) {
-                                results.added_to_pending++
-
-                                // バックグラウンドでAI解析
-                                fetch(`${baseUrl}/api/pending-images/analyze`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ pendingImageId: pendingImage.id })
-                                }).catch(err => console.error('Background analysis error:', err))
-                            }
-                        }
-                    }
-
                     // 取得済みツイートとして記録
                     await supabase.from('fetched_tweets').insert({
                         tweet_id: tweet.id,

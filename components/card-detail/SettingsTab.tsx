@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, RefreshCw, Plus, Zap, Clock, AlertTriangle, Link2, ChevronRight, Pencil, Trash2, Check, X } from 'lucide-react'
+import { ExternalLink, RefreshCw, Zap, Clock, AlertTriangle, Link2, ChevronRight, Pencil, Trash2, Check, X } from 'lucide-react'
 import ShinsokuLink from '@/components/chart/ShinsokuLink'
 import LoungeLink from '@/components/chart/LoungeLink'
 import PriceChartingLink from '@/components/chart/PriceChartingLink'
@@ -19,7 +19,6 @@ interface SettingsTabProps {
   onUpdateScrapeInterval: (saleUrlId: string, intervalMinutes: number) => void
   onUpdateCheckInterval: (saleUrlId: string, intervalMinutes: number) => void
   onUpdatePrice: (saleUrl: any) => void
-  onShowSaleUrlForm: () => void
   onLinksChanged: () => void
   onUpdated?: () => void
   onEditSaleUrl?: (saleUrlId: string, newUrl: string) => Promise<void>
@@ -45,7 +44,7 @@ export default function SettingsTab({
   card, saleUrls, purchaseLinks,
   snkrdunkScraping, scraping,
   onScrapeSnkrdunk, onUpdateAutoScrapeMode, onUpdateScrapeInterval,
-  onUpdateCheckInterval, onUpdatePrice, onShowSaleUrlForm,
+  onUpdateCheckInterval, onUpdatePrice,
   onLinksChanged, onUpdated, onEditSaleUrl, onDeleteSaleUrl,
 }: SettingsTabProps) {
   const [editingUrlId, setEditingUrlId] = useState<string | null>(null)
@@ -204,14 +203,6 @@ export default function SettingsTab({
                 <p className="text-xs text-slate-400 mt-0.5">登録URL: {saleUrls.length}件</p>
               </div>
             </div>
-            <button
-              onClick={onShowSaleUrlForm}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium
-                         hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-sm shadow-emerald-200"
-            >
-              <Plus size={13} />
-              URL追加
-            </button>
           </div>
         </div>
 
