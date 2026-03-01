@@ -53,33 +53,33 @@ function SearchContent() {
                                 <Link
                                     key={card.id}
                                     href={`/chart/card/${card.id}`}
-                                    className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 p-3
-                    hover:shadow-md transition-all"
+                                    className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 p-3.5
+                                        hover:shadow-md transition-all min-h-[64px] active:scale-[0.99]"
                                 >
                                     <div className="w-12 h-16 rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
                                         {card.image_url ? (
                                             <img src={card.image_url} alt={card.name} className="h-full object-contain" loading="lazy" />
                                         ) : (
-                                            <span className="text-xl text-gray-300">🃏</span>
+                                            <span className="text-xl text-gray-200">🃏</span>
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-800 truncate">{card.name}</p>
-                                        <div className="flex items-center gap-2 mt-0.5">
+                                        <p className="text-sm font-semibold text-gray-800 truncate">{card.name}</p>
+                                        <div className="flex items-center gap-2 mt-1">
                                             {card.rarity && (
-                                                <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded font-medium">
+                                                <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md font-medium">
                                                     {card.rarity}
                                                 </span>
                                             )}
-                                            <span className="text-[10px] text-gray-400">{card.category}</span>
+                                            <span className="text-xs text-gray-400">{card.category}</span>
                                         </div>
                                     </div>
                                     <div className="text-right shrink-0">
-                                        <p className="text-sm font-bold text-gray-900">
+                                        <p className="text-sm font-black text-gray-900 tabular-nums">
                                             {card.display_price > 0 ? formatPrice(card.display_price) : '-'}
                                         </p>
                                         {card.display_price_usd > 0 && (
-                                            <p className="text-[10px] text-gray-400">
+                                            <p className="text-xs text-gray-400 tabular-nums">
                                                 {formatUsd(card.display_price_usd)}
                                             </p>
                                         )}

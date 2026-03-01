@@ -10,6 +10,22 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* チャート: ポケモン テーマカラー */
+  --color-pokemon-primary: #FFCB05;
+  --color-pokemon-secondary: #E3350D;
+  --color-pokemon-bg: #FFFBEB;
+
+  /* チャート: ワンピース テーマカラー */
+  --color-onepiece-primary: #D32F2F;
+  --color-onepiece-secondary: #1565C0;
+  --color-onepiece-bg: #EFF6FF;
+
+  /* チャート: 共通カラー */
+  --color-chart-up: #EF4444;
+  --color-chart-down: #3B82F6;
+  --color-chart-gold: #F59E0B;
+  --color-chart-silver: #9CA3AF;
 }
 
 @media (prefers-color-scheme: dark) {

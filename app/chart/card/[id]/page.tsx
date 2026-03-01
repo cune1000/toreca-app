@@ -87,7 +87,7 @@ export default function CardDetailPage({ params }: Props) {
                 <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
                     <Link
                         href="/chart"
-                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 min-h-[44px] min-w-[44px]"
                     >
                         <ArrowLeft size={18} />
                     </Link>
@@ -102,7 +102,7 @@ export default function CardDetailPage({ params }: Props) {
                                 navigator.clipboard.writeText(window.location.href)
                             }
                         }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 min-h-[44px] min-w-[44px]"
                     >
                         <Share2 size={16} className="text-gray-500" />
                     </button>
@@ -114,11 +114,11 @@ export default function CardDetailPage({ params }: Props) {
                 <div className="bg-white px-4 pt-4 pb-5">
                     <div className="flex gap-4">
                         {/* カード画像 */}
-                        <div className="flex-shrink-0 w-28 h-40 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden shadow-md border border-gray-100">
+                        <div className="flex-shrink-0 w-24 h-32 sm:w-32 sm:h-44 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden shadow-lg border border-gray-100">
                             {card.image_url ? (
                                 <img src={card.image_url} alt={card.name} className="h-full object-contain" />
                             ) : (
-                                <span className="text-5xl text-gray-300">🃏</span>
+                                <span className="text-5xl text-gray-200">🃏</span>
                             )}
                         </div>
 
@@ -129,12 +129,12 @@ export default function CardDetailPage({ params }: Props) {
                             </h2>
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                                 {card.rarity && (
-                                    <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
+                                    <span className="text-xs px-2.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-semibold">
                                         {card.rarity}
                                     </span>
                                 )}
                                 {card.card_number && (
-                                    <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                                    <span className="text-xs px-2.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">
                                         {card.card_number}
                                     </span>
                                 )}
@@ -145,11 +145,11 @@ export default function CardDetailPage({ params }: Props) {
 
                             {/* 現在価格（素体） */}
                             <div className="mt-3">
-                                <p className="text-2xl font-bold text-gray-900">
+                                <p className="text-2xl sm:text-3xl font-black text-gray-900 tabular-nums">
                                     {formatPrice(card.loose_price_jpy)}
                                 </p>
                                 {card.loose_price_usd > 0 && (
-                                    <p className="text-xs text-gray-400">
+                                    <p className="text-xs text-gray-400 tabular-nums">
                                         {formatUsd(card.loose_price_usd)}
                                     </p>
                                 )}
@@ -171,39 +171,43 @@ export default function CardDetailPage({ params }: Props) {
                         </div>
                     </div>
 
-                    {/* 価格サマリーカード */}
-                    <div className="grid grid-cols-2 gap-2 mt-4">
-                        <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
-                            <p className="text-[10px] text-gray-400">PSA10 海外相場</p>
-                            <p className="text-sm font-bold text-green-600">
+                    {/* 価格サマリーカード (Bento UI風) */}
+                    <div className="grid grid-cols-2 gap-2.5 mt-5">
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl px-4 py-3 border border-green-100">
+                            <p className="text-xs text-green-500 font-medium">PSA10 海外相場</p>
+                            <p className="text-lg font-black text-green-600 mt-1 tabular-nums">
                                 {card.graded_price_jpy ? formatPrice(card.graded_price_jpy) : '-'}
                             </p>
                             {card.graded_price_usd && card.graded_price_usd > 0 && (
-                                <p className="text-[9px] text-gray-400">{formatUsd(card.graded_price_usd)}</p>
+                                <p className="text-xs text-green-400 tabular-nums">{formatUsd(card.graded_price_usd)}</p>
                             )}
                         </div>
-                        <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
-                            <p className="text-[10px] text-gray-400">最高値 / 最安値</p>
-                            <p className="text-sm font-bold">
-                                <span className="text-red-500">{card.high_price ? formatPrice(card.high_price) : '-'}</span>
+                        <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-2xl px-4 py-3 border border-gray-100">
+                            <p className="text-xs text-gray-400 font-medium">レンジ</p>
+                            <div className="mt-1">
+                                <span className="text-sm font-bold text-red-500 tabular-nums">
+                                    {card.high_price ? formatPrice(card.high_price) : '-'}
+                                </span>
                                 <span className="text-gray-300 mx-1">/</span>
-                                <span className="text-blue-500">{card.low_price ? formatPrice(card.low_price) : '-'}</span>
-                            </p>
+                                <span className="text-sm font-bold text-blue-500 tabular-nums">
+                                    {card.low_price ? formatPrice(card.low_price) : '-'}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
                     {/* 買取価格サマリー */}
                     {(card.purchase_loose_best || card.purchase_psa10_best) && (
-                        <div className="grid grid-cols-2 gap-2 mt-2">
-                            <div className="bg-blue-50 rounded-lg px-3 py-2 text-center">
-                                <p className="text-[10px] text-blue-400">買取最高値（素体）</p>
-                                <p className="text-sm font-bold text-blue-600">
+                        <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl px-4 py-3 border border-blue-100">
+                                <p className="text-xs text-blue-400 font-medium">買取最高値（素体）</p>
+                                <p className="text-lg font-black text-blue-600 mt-1 tabular-nums">
                                     {card.purchase_loose_best ? formatPrice(card.purchase_loose_best) : '-'}
                                 </p>
                             </div>
-                            <div className="bg-purple-50 rounded-lg px-3 py-2 text-center">
-                                <p className="text-[10px] text-purple-400">買取最高値（PSA10）</p>
-                                <p className="text-sm font-bold text-purple-600">
+                            <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 rounded-2xl px-4 py-3 border border-purple-100">
+                                <p className="text-xs text-purple-400 font-medium">買取最高値（PSA10）</p>
+                                <p className="text-lg font-black text-purple-600 mt-1 tabular-nums">
                                     {card.purchase_psa10_best ? formatPrice(card.purchase_psa10_best) : '-'}
                                 </p>
                             </div>

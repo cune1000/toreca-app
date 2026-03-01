@@ -36,8 +36,8 @@ export default function RankingRow({ ranking, cards }: Props) {
         return (
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3 px-4">
-                    <span className="text-lg">{ranking.icon}</span>
-                    <h3 className="text-sm font-bold text-gray-800">{ranking.label}</h3>
+                    <span className="text-xl">{ranking.icon}</span>
+                    <h3 className="text-base font-bold text-gray-800">{ranking.label}</h3>
                     <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full font-medium">
                         Coming Soon
                     </span>
@@ -55,35 +55,40 @@ export default function RankingRow({ ranking, cards }: Props) {
         <div className="mb-6 group/row">
             {/* ヘッダー */}
             <div className="flex items-center gap-2 mb-3 px-4">
-                <span className="text-lg">{ranking.icon}</span>
-                <h3 className="text-sm font-bold text-gray-800">{ranking.label}</h3>
+                <span className="text-xl">{ranking.icon}</span>
+                <h3 className="text-base font-bold text-gray-800">{ranking.label}</h3>
                 <div
-                    className="w-2 h-2 rounded-full"
+                    className="w-2.5 h-2.5 rounded-full animate-pulse"
                     style={{ backgroundColor: ranking.color }}
                 />
+                <span className="text-xs text-gray-400 ml-auto">
+                    {cards.length}枚
+                </span>
             </div>
 
             {/* 横スクロールエリア */}
             <div className="relative">
-                {/* 左矢印 */}
+                {/* 左矢印: モバイルでは常に表示 */}
                 {showLeft && (
                     <button
                         onClick={() => scroll('left')}
-                        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/90 shadow-md
-              rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100
-              transition-opacity hover:bg-white"
+                        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-9 h-9 bg-white shadow-lg
+                            rounded-full flex items-center justify-center
+                            opacity-80 md:opacity-0 md:group-hover/row:opacity-100
+                            transition-opacity active:scale-95"
                     >
                         <ChevronLeft size={18} className="text-gray-600" />
                     </button>
                 )}
 
-                {/* 右矢印 */}
+                {/* 右矢印: モバイルでは常に表示 */}
                 {showRight && cards.length > 0 && (
                     <button
                         onClick={() => scroll('right')}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/90 shadow-md
-              rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100
-              transition-opacity hover:bg-white"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-9 h-9 bg-white shadow-lg
+                            rounded-full flex items-center justify-center
+                            opacity-80 md:opacity-0 md:group-hover/row:opacity-100
+                            transition-opacity active:scale-95"
                     >
                         <ChevronRight size={18} className="text-gray-600" />
                     </button>
@@ -93,17 +98,18 @@ export default function RankingRow({ ranking, cards }: Props) {
                 <div
                     ref={scrollRef}
                     onScroll={handleScroll}
-                    className="flex gap-3 overflow-x-auto px-4 pb-2"
-                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    className="flex gap-3 overflow-x-auto px-4 pb-3 snap-x snap-mandatory"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
                 >
                     {cards.length > 0 ? (
                         cards.map((card, i) => (
-                            <RankingCardComponent
-                                key={card.id}
-                                card={card}
-                                rank={i + 1}
-                                color={ranking.color}
-                            />
+                            <div key={card.id} className="snap-start">
+                                <RankingCardComponent
+                                    card={card}
+                                    rank={i + 1}
+                                    color={ranking.color}
+                                />
+                            </div>
                         ))
                     ) : (
                         <div className="w-full py-8 text-center text-gray-400 text-sm">

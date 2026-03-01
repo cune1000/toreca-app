@@ -18,7 +18,7 @@ export default function PriceChangeIndicator({ value, suffix = '%', size = 'sm' 
 
     return (
         <span
-            className={`inline-flex items-center gap-0.5 font-bold ${sizeClasses[size]} ${isUp ? 'text-red-500' : 'text-blue-500'
+            className={`inline-flex items-center gap-0.5 font-bold tabular-nums ${sizeClasses[size]} ${isUp ? 'text-red-500' : 'text-blue-500'
                 }`}
         >
             {isUp ? '▲' : '▼'} {Math.abs(value).toFixed(1)}{suffix}

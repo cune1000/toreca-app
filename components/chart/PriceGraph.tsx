@@ -67,14 +67,15 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '30d'
     return (
         <div>
             {/* 期間切り替え */}
-            <div className="flex gap-1.5 mb-3">
+            <div className="grid grid-cols-4 gap-1.5 mb-4">
                 {PERIODS.map(p => (
                     <button
                         key={p.key}
                         onClick={() => handlePeriodChange(p.key)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === p.key
-                                ? 'bg-gray-800 text-white'
-                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        className={`py-2.5 rounded-xl text-xs font-bold transition-all min-h-[44px]
+                            ${period === p.key
+                                ? 'bg-gray-800 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 active:bg-gray-300'
                             }`}
                     >
                         {p.label}

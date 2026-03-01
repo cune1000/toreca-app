@@ -46,30 +46,30 @@ export default function PurchasePriceTable({ prices }: Props) {
 
                 return (
                     <div key={condition}>
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${style.bg} ${style.text}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${style.bg} ${style.text}`}>
                                 {condition}
                             </span>
-                            <span className="text-[10px] text-gray-400">{items.length}店舗</span>
+                            <span className="text-xs text-gray-400">{items.length}店舗</span>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                             {items.map((shop, i) => (
                                 <div
                                     key={`${shop.shop_name}-${i}`}
-                                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-gray-100"
+                                    className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 min-h-[56px]"
                                 >
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
                                             {shop.shop_icon || shop.shop_name[0]}
                                         </div>
                                         <div>
-                                            <p className="text-xs font-medium text-gray-800">{shop.shop_name}</p>
-                                            <p className="text-[10px] text-gray-400">
+                                            <p className="text-sm font-medium text-gray-800">{shop.shop_name}</p>
+                                            <p className="text-xs text-gray-400">
                                                 {formatRelativeTime(shop.updated_at)}
                                             </p>
                                         </div>
                                     </div>
-                                    <p className="text-sm font-bold text-gray-900">
+                                    <p className="text-base font-black text-gray-900 tabular-nums">
                                         {formatPrice(shop.price)}
                                     </p>
                                 </div>
@@ -78,7 +78,7 @@ export default function PurchasePriceTable({ prices }: Props) {
                     </div>
                 )
             })}
-            <p className="text-[10px] text-gray-400 mt-2 text-center">
+            <p className="text-xs text-gray-400 mt-2 text-center">
                 ※ 買取価格は各店舗から自動取得しています
             </p>
         </div>
