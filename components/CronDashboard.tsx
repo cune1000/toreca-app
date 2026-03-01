@@ -67,14 +67,14 @@ const JOB_DESCRIPTIONS: Record<string, string> = {
   'shinsoku-sync':         'シンソクAPIから全商品データを取得 → キャッシュDB更新',
   'shinsoku':              'キャッシュから紐付け済みカードの買取価格を履歴に記録（←shinsoku-syncの後に実行）',
   'overseas-price-sync':   'PriceCharting等の海外価格データを取得・同期',
-  'snkrdunk-auto-scrape':  'スニダンの売買履歴を自動スクレイピング',
+  'snkrdunk-sync':         'スニダンの売買履歴＋販売中最安値を一括取得（バッチ15件/回）',
   'twitter-monitor':       'Twitter/Xからトレカ関連ツイートを監視・収集',
   'update-prices':         '販売サイト（CardRush等）の最新価格・在庫を巡回更新',
 }
 
 const JOB_API_MAP: Record<string, { path: string; method: string }> = {
   'update-prices':         { path: '/api/cron/update-prices', method: 'POST' },
-  'snkrdunk-auto-scrape':  { path: '/api/cron/snkrdunk-auto-scrape', method: 'GET' },
+  'snkrdunk-sync':         { path: '/api/cron/snkrdunk-sync', method: 'GET' },
   'twitter-monitor':       { path: '/api/twitter/monitor', method: 'POST' },
   'daily-price-aggregate': { path: '/api/cron/daily-price-aggregate', method: 'GET' },
   'shinsoku-sync':         { path: '/api/cron/shinsoku-sync', method: 'GET' },

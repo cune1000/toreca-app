@@ -3,13 +3,6 @@ import { createServiceClient } from '@/lib/supabase'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 const supabase = createServiceClient()
-import {
-  extractApparelId,
-  getProductInfo,
-  getAllListings,
-  getBoxSizes,
-} from '@/lib/snkrdunk-api'
-import { extractGradePrices } from '@/lib/scraping/helpers'
 import { TORECA_SCRAPER_URL } from '@/lib/config'
 
 // ===== 設定 =====
@@ -99,55 +92,6 @@ async function scrapeViaRailway(url: string, mode: string = 'light') {
   return await res.json()
 }
 
-// スニダンAPIでグレード別最安値を取得
-interface SnkrdunkPriceResult {
-  prices: { grade: string; price: number; stock?: number; topPrices?: number[] }[]
-  overallMin: number | null
-  totalListings: number  // 全出品数
-}
-async function scrapeSnkrdunkPrices(productUrl: string): Promise<SnkrdunkPriceResult> {
-  const apparelId = extractApparelId(productUrl)
-  if (!apparelId) {
-    throw new Error('Invalid snkrdunk URL: cannot extract apparelId')
-  }
-
-  const productInfo = await getProductInfo(apparelId)
-  const productType = productInfo.isBox ? 'box' : 'single'
-  const prices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
-  let totalListings = 0
-  let overallMin: number | null = null
-
-  if (productType === 'single') {
-    // シングル: 出品一覧からグレード別最安値を取得
-    const listings = await getAllListings(apparelId, 'single', 5)
-    totalListings = listings.length
-
-    // 全体最安値（全出品の中から）
-    if (listings.length > 0) {
-      overallMin = Math.min(...listings.map(l => l.price))
-    }
-
-    // グレード別最安値（PSA10, A, B）を共通ヘルパーで抽出
-    prices.push(...extractGradePrices(listings))
-  } else {
-    // BOX: /sizes APIから価格・出品数を取得
-    // productInfoはBOXでminPrice=0, totalListingCount=0を返すため
-    const sizes = await getBoxSizes(apparelId)
-    totalListings = sizes.reduce((sum, s) => sum + s.listingCount, 0)
-    const oneBox = sizes.find(s => s.quantity === 1)
-    if (oneBox) {
-      prices.push({ grade: 'BOX', price: oneBox.minPrice })
-      overallMin = oneBox.minPrice
-    } else if (sizes.length > 0) {
-      const cheapest = sizes.reduce((a, b) => a.minPrice < b.minPrice ? a : b)
-      prices.push({ grade: 'BOX', price: cheapest.minPrice })
-      overallMin = cheapest.minPrice
-    }
-  }
-
-  return { prices, overallMin, totalListings }
-}
-
 // cron_logsに記録
 async function logCronResult(
   cardSaleUrlId: string,
@@ -206,18 +150,17 @@ async function processSingleUrl(
   const currentNoChangeCount = site.no_change_count || 0
 
   try {
-    const isSnkrdunk = site.product_url?.includes('snkrdunk.com')
+    // スニダンは snkrdunk-sync で処理するためスキップ
+    if (site.product_url?.includes('snkrdunk.com')) {
+      results.skipped++
+      return
+    }
 
     let newPrice: number | null = null
     let newStock: number | null = null
     let gradePrices: { grade: string; price: number; stock?: number; topPrices?: number[] }[] = []
 
-    if (isSnkrdunk) {
-      const result = await scrapeSnkrdunkPrices(site.product_url)
-      gradePrices = result.prices
-      newPrice = result.overallMin
-      newStock = result.totalListings
-    } else {
+    {
       const scrapeResult = await scrapeViaRailway(site.product_url, 'light')
 
       if (!scrapeResult.success) {
