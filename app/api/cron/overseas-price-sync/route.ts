@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, TABLES } from '@/lib/supabase'
 import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5分（大量カード対応）
@@ -26,6 +27,11 @@ export async function GET(req: Request) {
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       )
+    }
+
+    const gate = await shouldRunCronJob('overseas-price-sync')
+    if (!gate.shouldRun) {
+      return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
     console.log('[Overseas Price Sync] Starting...')
@@ -132,6 +138,7 @@ export async function GET(req: Request) {
 
     console.log(`[Overseas Price Sync] Done: ${success} success, ${failed} failed`)
 
+    await markCronJobRun('overseas-price-sync', 'success')
     return NextResponse.json({
       success: true,
       processed: cards.length,
@@ -141,6 +148,7 @@ export async function GET(req: Request) {
     })
   } catch (error: any) {
     console.error('[Overseas Price Sync] Error:', error)
+    await markCronJobRun('overseas-price-sync', 'error', error.message)
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

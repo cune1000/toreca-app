@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { fetchShinsokuItems, toYen } from '@/lib/shinsoku'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 const supabase = createServiceClient()
 
@@ -11,6 +12,11 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const gate = await shouldRunCronJob('shinsoku-sync')
+    if (!gate.shouldRun) {
+        return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
     const startTime = Date.now()
@@ -81,6 +87,8 @@ export async function GET(request: NextRequest) {
         message: `同期完了: ${totalInserted}件 (${elapsed}s)${errors.length > 0 ? ` errors: ${errors.join(', ')}` : ''}`,
         response_time_ms: Date.now() - startTime,
     })
+
+    await markCronJobRun('shinsoku-sync', errors.length > 0 ? 'error' : 'success', errors.length > 0 ? errors.join(', ') : undefined)
 
     return NextResponse.json({
         success: true,

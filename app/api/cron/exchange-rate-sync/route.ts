@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, TABLES } from '@/lib/supabase'
 import { getUsdJpyRate } from '@/lib/exchange-rate'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -21,6 +22,11 @@ export async function GET(req: Request) {
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       )
+    }
+
+    const gate = await shouldRunCronJob('exchange-rate-sync')
+    if (!gate.shouldRun) {
+      return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
     console.log('[Exchange Rate Sync] Starting...')
@@ -50,6 +56,7 @@ export async function GET(req: Request) {
 
     console.log(`[Exchange Rate Sync] Saved: ${rate}`)
 
+    await markCronJobRun('exchange-rate-sync', 'success')
     return NextResponse.json({
       success: true,
       rate,
@@ -57,6 +64,7 @@ export async function GET(req: Request) {
     })
   } catch (error: any) {
     console.error('[Exchange Rate Sync] Error:', error)
+    await markCronJobRun('exchange-rate-sync', 'error', error.message)
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

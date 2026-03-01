@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 /**
  * X自動監視API
@@ -25,6 +26,11 @@ export async function POST(request: NextRequest) {
                 { success: false, error: 'Unauthorized' },
                 { status: 401 }
             )
+        }
+
+        const gate = await shouldRunCronJob('twitter-monitor')
+        if (!gate.shouldRun) {
+            return NextResponse.json({ skipped: true, reason: gate.reason })
         }
 
         // 現在のJST時刻
@@ -204,6 +210,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        await markCronJobRun('twitter-monitor', 'success')
         return NextResponse.json({
             success: true,
             duration_ms: Date.now() - startTime,
@@ -213,6 +220,7 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error('Monitor error:', error)
+        await markCronJobRun('twitter-monitor', 'error', error.message)
         return NextResponse.json({
             success: false,
             error: error.message

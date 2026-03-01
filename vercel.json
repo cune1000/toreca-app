@@ -1,44 +1,14 @@
 {
   "crons": [
-    {
-      "path": "/api/cron/update-prices",
-      "schedule": "*/20 * * * *"
-    },
-    {
-      "path": "/api/twitter/monitor",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/snkrdunk-auto-scrape",
-      "schedule": "*/20 * * * *"
-    },
-    {
-      "path": "/api/cron/daily-price-aggregate",
-      "schedule": "0 22 * * *"
-    },
-    {
-      "path": "/api/cron/shinsoku-sync",
-      "schedule": "0 2,4,13 * * *"
-    },
-    {
-      "path": "/api/cron/shinsoku",
-      "schedule": "30 2,4,13 * * *"
-    },
-    {
-      "path": "/api/cron/lounge-cache",
-      "schedule": "0 2,4,13 * * *"
-    },
-    {
-      "path": "/api/cron/toreca-lounge",
-      "schedule": "30 2,4,13 * * *"
-    },
-    {
-      "path": "/api/cron/exchange-rate-sync",
-      "schedule": "55 17 * * *"
-    },
-    {
-      "path": "/api/cron/overseas-price-sync",
-      "schedule": "0 18 * * *"
-    }
+    { "path": "/api/cron/update-prices",        "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/snkrdunk-auto-scrape",  "schedule": "*/5 * * * *" },
+    { "path": "/api/twitter/monitor",             "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/daily-price-aggregate",  "schedule": "0 * * * *" },
+    { "path": "/api/cron/shinsoku-sync",          "schedule": "0 * * * *" },
+    { "path": "/api/cron/shinsoku",               "schedule": "0 * * * *" },
+    { "path": "/api/cron/lounge-cache",           "schedule": "0 * * * *" },
+    { "path": "/api/cron/toreca-lounge",          "schedule": "0 * * * *" },
+    { "path": "/api/cron/exchange-rate-sync",     "schedule": "0 * * * *" },
+    { "path": "/api/cron/overseas-price-sync",    "schedule": "0 * * * *" }
   ]
 }

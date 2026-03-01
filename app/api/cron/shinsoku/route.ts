@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 const supabase = createServiceClient()
 
@@ -9,6 +10,11 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const gate = await shouldRunCronJob('shinsoku')
+    if (!gate.shouldRun) {
+        return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
     const start = Date.now()
@@ -121,6 +127,7 @@ export async function GET(request: NextRequest) {
 
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
+        await markCronJobRun('shinsoku', 'success')
         return NextResponse.json({
             success: true,
             total_links: links.length,
@@ -133,6 +140,7 @@ export async function GET(request: NextRequest) {
         })
     } catch (error: any) {
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
+        await markCronJobRun('shinsoku', 'error', error.message)
 
         return NextResponse.json({
             error: error.message,

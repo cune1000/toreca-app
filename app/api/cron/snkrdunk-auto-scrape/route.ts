@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 const supabase = createServiceClient()
 import {
@@ -34,6 +35,11 @@ export async function GET(req: Request) {
         const authHeader = req.headers.get('authorization')
         if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
             return new Response('Unauthorized', { status: 401 })
+        }
+
+        const gate = await shouldRunCronJob('snkrdunk-auto-scrape')
+        if (!gate.shouldRun) {
+            return NextResponse.json({ skipped: true, reason: gate.reason })
         }
 
         const now = new Date()
@@ -133,6 +139,7 @@ export async function GET(req: Request) {
             }
         }
 
+        await markCronJobRun('snkrdunk-auto-scrape', 'success')
         return NextResponse.json({
             success: true,
             processed: results.length,
@@ -140,6 +147,7 @@ export async function GET(req: Request) {
         })
     } catch (error: any) {
         console.error('Cron job error:', error)
+        await markCronJobRun('snkrdunk-auto-scrape', 'error', error.message)
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 }

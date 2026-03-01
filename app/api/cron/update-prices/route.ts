@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 const supabase = createServiceClient()
 import {
@@ -453,6 +454,11 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  const gate = await shouldRunCronJob('update-prices')
+  if (!gate.shouldRun) {
+    return NextResponse.json({ skipped: true, reason: gate.reason })
+  }
+
   const startTime = Date.now()
   const results: UpdateResults = { processed: 0, updated: 0, noChange: 0, errors: 0, skipped: 0, details: [] }
 
@@ -476,9 +482,11 @@ export async function GET(request: NextRequest) {
       await processSingleUrl(site, results, 'cron')
     }
 
+    await markCronJobRun('update-prices', 'success')
     return NextResponse.json({ success: true, ...results, duration: Date.now() - startTime })
   } catch (error: any) {
     console.error('Cron error:', error)
+    await markCronJobRun('update-prices', 'error', error.message)
     return NextResponse.json({ success: false, error: error.message, ...results, duration: Date.now() - startTime }, { status: 500 })
   }
 }

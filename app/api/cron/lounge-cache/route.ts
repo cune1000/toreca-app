@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 const supabase = createServiceClient()
 import { fetchAllLoungeCards } from '@/lib/toreca-lounge'
@@ -10,6 +11,11 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const gate = await shouldRunCronJob('lounge-cache')
+    if (!gate.shouldRun) {
+        return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
     const start = Date.now()
@@ -110,6 +116,7 @@ export async function GET(request: NextRequest) {
             },
         })
 
+        await markCronJobRun('lounge-cache', 'success')
         return NextResponse.json({
             success: true,
             scraped: allCards.length,
@@ -129,6 +136,7 @@ export async function GET(request: NextRequest) {
             details: { error: error.message, elapsed: `${elapsed}s` },
         })
 
+        await markCronJobRun('lounge-cache', 'error', error.message)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

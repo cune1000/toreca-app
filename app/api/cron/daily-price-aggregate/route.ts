@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -27,6 +28,11 @@ export async function GET(req: Request) {
                 { success: false, error: 'Unauthorized' },
                 { status: 401 }
             )
+        }
+
+        const gate = await shouldRunCronJob('daily-price-aggregate')
+        if (!gate.shouldRun) {
+            return NextResponse.json({ skipped: true, reason: gate.reason })
         }
 
         const supabase = createServiceClient()
@@ -293,6 +299,7 @@ export async function GET(req: Request) {
 
         console.log(`[Chart Prices] Saved ${chartCardCount} card-level records for ${targetDate}`)
 
+        await markCronJobRun('daily-price-aggregate', 'success')
         return NextResponse.json({
             success: true,
             date: targetDate,
@@ -305,6 +312,7 @@ export async function GET(req: Request) {
 
     } catch (error: any) {
         console.error('[Price Index] Error:', error)
+        await markCronJobRun('daily-price-aggregate', 'error', error.message)
         return NextResponse.json({
             success: false,
             error: error.message
