@@ -10,11 +10,12 @@ import {
 } from '@/lib/snkrdunk-api'
 import { normalizeGrade, parseRelativeTime, extractGradePrices } from '@/lib/scraping/helpers'
 
-export const maxDuration = 180
+export const maxDuration = 300
 
-const BATCH_SIZE = 10
-const SYNC_INTERVAL_MINUTES = 120   // 2時間
-const ERROR_RETRY_MINUTES = 30      // エラー時30分後にリトライ
+const BATCH_SIZE = 5
+const SYNC_INTERVAL_MINUTES = 120        // 通常: 2時間
+const ERROR_BASE_RETRY_MINUTES = 60      // エラー初回: 1時間
+const ERROR_MAX_RETRY_MINUTES = 360      // エラー最大: 6時間
 
 const supabase = createServiceClient()
 
@@ -33,10 +34,17 @@ function extractIconNumber(imageUrl: string): number | null {
   return match ? parseInt(match[1]) : null
 }
 
+// エクスポネンシャルバックオフでリトライ間隔を計算
+function calculateErrorRetryMinutes(errorCount: number): number {
+  // 1時間 → 2時間 → 4時間 → 6時間（上限）
+  const retry = ERROR_BASE_RETRY_MINUTES * Math.pow(2, Math.min(errorCount, 3))
+  return Math.min(retry, ERROR_MAX_RETRY_MINUTES)
+}
+
 /**
  * スニダン統合同期Cron
  * 売買履歴 + 販売中最安値を1カード1回の処理で取得
- * バッチ処理: 1回あたり最大15カード
+ * バッチ処理: 1回あたり最大5カード
  */
 export async function GET(req: Request) {
   try {
@@ -51,8 +59,8 @@ export async function GET(req: Request) {
     }
 
     const now = new Date()
+    const batchStart = Date.now()
 
-    // 全スニダンURLを対象（auto_scrape_mode不問）
     const { data: saleUrls, error: fetchError } = await supabase
       .from('card_sale_urls')
       .select('*, site:site_id(id, name), card:card_id(id, name)')
@@ -72,65 +80,80 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, processed: 0, message: 'No URLs to sync' })
     }
 
+    console.log(`[snkrdunk-sync] Starting batch: ${saleUrls.length} cards`)
     const results = []
 
     for (const saleUrl of saleUrls) {
+      const cardStart = Date.now()
+      let syncResult: SyncResult | null = null
+      let syncError: string | null = null
+
       try {
-        const result = await syncCard(saleUrl, now)
-
-        const nextScrapeAt = new Date(now.getTime() + SYNC_INTERVAL_MINUTES * 60 * 1000)
-
-        await supabase
-          .from('card_sale_urls')
-          .update({
-            last_scraped_at: now.toISOString(),
-            last_scrape_status: 'success',
-            last_scrape_error: null,
-            next_scrape_at: nextScrapeAt.toISOString(),
-            // 最安値・在庫も更新
-            last_price: result.overallMin,
-            last_stock: result.totalListings,
-            last_checked_at: now.toISOString(),
-            apparel_id: result.apparelId,
-          })
-          .eq('id', saleUrl.id)
-
-        results.push({
-          cardName: saleUrl.card?.name,
-          status: 'success',
-          salesInserted: result.salesInserted,
-          salesSkipped: result.salesSkipped,
-          overallMin: result.overallMin,
-          totalListings: result.totalListings,
-          gradePrices: result.gradePricesCount,
-        })
+        syncResult = await syncCard(saleUrl, now)
       } catch (error: any) {
-        console.error(`[snkrdunk-sync] Failed to sync card ${saleUrl.card?.name}:`, error)
-
-        const nextScrapeAt = new Date(now.getTime() + ERROR_RETRY_MINUTES * 60 * 1000)
-
-        await supabase
-          .from('card_sale_urls')
-          .update({
-            last_scraped_at: now.toISOString(),
-            last_scrape_status: 'error',
-            last_scrape_error: error.message,
-            next_scrape_at: nextScrapeAt.toISOString(),
-          })
-          .eq('id', saleUrl.id)
-
-        results.push({
-          cardName: saleUrl.card?.name,
-          status: 'error',
-          error: error.message,
-        })
+        console.error(`[snkrdunk-sync] Failed: ${saleUrl.card?.name}:`, error.message)
+        syncError = error.message
       }
+
+      // card_sale_urls 共通UPDATE
+      const isSuccess = syncResult !== null
+      const errorCount = isSuccess ? 0 : ((saleUrl.error_count || 0) + 1)
+      const nextMinutes = isSuccess
+        ? SYNC_INTERVAL_MINUTES
+        : calculateErrorRetryMinutes(errorCount)
+      const nextScrapeAt = new Date(now.getTime() + nextMinutes * 60 * 1000)
+
+      const updatePayload: Record<string, any> = {
+        last_scraped_at: now.toISOString(),
+        last_scrape_status: isSuccess ? 'success' : 'error',
+        last_scrape_error: syncError,
+        next_scrape_at: nextScrapeAt.toISOString(),
+        error_count: errorCount,
+      }
+      if (isSuccess && syncResult) {
+        updatePayload.last_price = syncResult.overallMin
+        updatePayload.last_stock = syncResult.totalListings
+        updatePayload.last_checked_at = now.toISOString()
+        updatePayload.apparel_id = syncResult.apparelId
+      }
+
+      const { error: updateError } = await supabase
+        .from('card_sale_urls')
+        .update(updatePayload)
+        .eq('id', saleUrl.id)
+      if (updateError) {
+        console.error(`[snkrdunk-sync] card_sale_urls update failed:`, updateError.message)
+      }
+
+      const elapsed = Date.now() - cardStart
+      results.push(isSuccess
+        ? {
+            cardName: saleUrl.card?.name,
+            status: 'success',
+            salesInserted: syncResult!.salesInserted,
+            salesSkipped: syncResult!.salesSkipped,
+            overallMin: syncResult!.overallMin,
+            totalListings: syncResult!.totalListings,
+            gradePrices: syncResult!.gradePricesCount,
+            ms: elapsed,
+          }
+        : {
+            cardName: saleUrl.card?.name,
+            status: 'error',
+            error: syncError,
+            ms: elapsed,
+          }
+      )
     }
+
+    const totalMs = Date.now() - batchStart
+    console.log(`[snkrdunk-sync] Batch complete: ${results.length} cards in ${totalMs}ms`)
 
     await markCronJobRun('snkrdunk-sync', 'success')
     return NextResponse.json({
       success: true,
       processed: results.length,
+      durationMs: totalMs,
       results,
     })
   } catch (error: any) {
@@ -151,22 +174,27 @@ interface SyncResult {
 
 /**
  * 1カード分の統合同期処理
- * ① 商品情報 → ② 売買履歴 → ③ 出品一覧（最安値・在庫・Top3）
+ * ① 商品情報（キャッシュ済みならスキップ） → ② 売買履歴 → ③ 出品一覧
  */
 async function syncCard(saleUrl: any, now: Date): Promise<SyncResult> {
   const cardId = saleUrl.card_id
   const siteId = saleUrl.site_id
 
-  // ① 商品情報取得
-  const apparelId = extractApparelId(saleUrl.product_url)
+  // apparel_id: DB保存済みならURL解析不要
+  const apparelId = saleUrl.apparel_id ?? extractApparelId(saleUrl.product_url)
   if (!apparelId) {
     throw new Error(`Invalid URL: ${saleUrl.product_url}`)
   }
 
-  const productInfo = await getProductInfo(apparelId)
-  const productType = productInfo.isBox ? 'box' : 'single'
-
-  console.log(`[snkrdunk-sync] ${productInfo.localizedName} (type=${productType}, apparelId=${apparelId})`)
+  // ① product_type判定: DB保存済みなら getProductInfo をスキップ
+  let productType: string
+  if (saleUrl.product_type) {
+    productType = saleUrl.product_type
+  } else {
+    const productInfo = await getProductInfo(apparelId)
+    productType = productInfo.isBox ? 'box' : 'single'
+    console.log(`[snkrdunk-sync] ${productInfo.localizedName} (type=${productType}) [初回判定]`)
+  }
 
   // ② 売買履歴取得（最新20件）
   const { salesInserted, salesSkipped } = await syncSalesHistory(
@@ -189,7 +217,7 @@ async function syncCard(saleUrl: any, now: Date): Promise<SyncResult> {
 }
 
 /**
- * 売買履歴の同期: snkrdunk_sales_history に新規レコードをINSERT
+ * 売買履歴の同期: snkrdunk_sales_history に新規レコードをバッチINSERT
  */
 async function syncSalesHistory(
   cardId: string,
@@ -199,7 +227,6 @@ async function syncSalesHistory(
 ): Promise<{ salesInserted: number; salesSkipped: number }> {
   const { history } = await getSalesHistory(apparelId, 1, 20)
 
-  // データ整形
   const processedData = history
     .map((item: any) => {
       const soldAt = parseRelativeTime(item.date, now)
@@ -219,6 +246,9 @@ async function syncSalesHistory(
         sold_at: soldAt.toISOString(),
         product_type: productType,
         user_icon_number: extractIconNumber(item.imageUrl),
+        size: item.size || null,
+        condition: item.condition || null,
+        label: item.label || null,
       }
     })
     .filter(Boolean)
@@ -227,59 +257,73 @@ async function syncSalesHistory(
     return { salesInserted: 0, salesSkipped: 0 }
   }
 
-  // 既存データ取得（重複チェック用）
+  // 既存データ取得（sold_at範囲を絞って効率化）
+  const soldAtDates = processedData.map((d: any) => new Date(d.sold_at).getTime())
+  const oldestSoldAt = new Date(Math.min(...soldAtDates) - 11 * 60 * 1000)
+
   const { data: existingData } = await supabase
     .from('snkrdunk_sales_history')
     .select('grade, price, sold_at, user_icon_number')
     .eq('card_id', cardId)
+    .gte('sold_at', oldestSoldAt.toISOString())
     .order('sold_at', { ascending: false })
-    .limit(100)
 
-  let insertedCount = 0
-  let skippedCount = 0
-
-  for (const sale of processedData) {
-    let isDuplicate = false
-
+  // JS側で重複チェック → 新規レコードのみ抽出
+  const newSales = processedData.filter((sale: any) => {
     if (sale.user_icon_number) {
-      isDuplicate = existingData?.some(existing =>
+      return !existingData?.some(existing =>
         existing.grade === sale.grade &&
         existing.price === sale.price &&
         existing.user_icon_number === sale.user_icon_number &&
         isSameTransaction(existing.sold_at, sale.sold_at)
-      ) || false
+      )
     } else {
-      isDuplicate = existingData?.some(existing =>
+      return !existingData?.some(existing =>
         existing.grade === sale.grade &&
         existing.price === sale.price &&
         isSameTransaction(existing.sold_at, sale.sold_at) &&
         !existing.user_icon_number
-      ) || false
+      )
     }
+  })
 
-    if (isDuplicate) {
-      skippedCount++
-    } else {
-      const { error } = await supabase
-        .from('snkrdunk_sales_history')
-        .insert(sale)
-      if (!error) {
-        insertedCount++
-      } else if (error.code === '23505') {
-        // ユニーク制約違反 → 既存データ
-        skippedCount++
-      } else {
-        console.error(`[snkrdunk-sync] Insert error:`, error.message)
-        skippedCount++
-      }
-    }
+  const skippedCount = processedData.length - newSales.length
+
+  if (newSales.length === 0) {
+    return { salesInserted: 0, salesSkipped: skippedCount }
   }
 
-  return { salesInserted: insertedCount, salesSkipped: skippedCount }
+  // バッチINSERT（ユニーク制約違反時はフォールバック）
+  const { error } = await supabase
+    .from('snkrdunk_sales_history')
+    .insert(newSales)
+
+  if (!error) {
+    return { salesInserted: newSales.length, salesSkipped: skippedCount }
+  }
+
+  if (error.code === '23505') {
+    // 部分的にユニーク制約違反 → 1件ずつフォールバック
+    let insertedCount = 0
+    for (const sale of newSales) {
+      const { error: singleErr } = await supabase
+        .from('snkrdunk_sales_history')
+        .insert(sale)
+      if (!singleErr) {
+        insertedCount++
+      } else if (singleErr.code !== '23505') {
+        console.error(`[snkrdunk-sync] Insert error:`, singleErr.message)
+      }
+    }
+    return { salesInserted: insertedCount, salesSkipped: processedData.length - insertedCount }
+  }
+
+  console.error(`[snkrdunk-sync] Batch insert error:`, error.message)
+  return { salesInserted: 0, salesSkipped: processedData.length }
 }
 
 /**
- * 出品一覧の同期: sale_prices にグレード別最安値を記録
+ * 出品一覧の同期: sale_prices にグレード別最安値をバッチINSERT
  */
 async function syncListingPrices(
   cardId: string,
@@ -314,10 +358,11 @@ async function syncListingPrices(
     }
   }
 
-  // sale_prices に記録
+  // sale_prices にバッチINSERT
+  const salePriceRows: any[] = []
+
   if (overallMin !== null) {
-    // 全体最安値
-    await supabase.from('sale_prices').insert({
+    salePriceRows.push({
       card_id: cardId,
       site_id: siteId,
       price: overallMin,
@@ -328,7 +373,7 @@ async function syncListingPrices(
 
   for (const gp of gradePrices) {
     if (!gp.price || gp.price <= 0) continue
-    const { error } = await supabase.from('sale_prices').insert({
+    salePriceRows.push({
       card_id: cardId,
       site_id: siteId,
       price: gp.price,
@@ -336,18 +381,20 @@ async function syncListingPrices(
       stock: gp.stock ?? null,
       top_prices: gp.topPrices ?? null,
     })
+  }
+
+  if (salePriceRows.length > 0) {
+    const { error } = await supabase.from('sale_prices').insert(salePriceRows)
     if (error) {
-      // top_prices カラムが存在しない場合のフォールバック
       if (error.message?.includes('top_prices') || error.code === '42703') {
-        await supabase.from('sale_prices').insert({
-          card_id: cardId,
-          site_id: siteId,
-          price: gp.price,
-          grade: gp.grade,
-          stock: gp.stock ?? null,
-        })
+        // top_prices カラム未存在時: カラムを除去してリトライ
+        const rowsWithoutTopPrices = salePriceRows.map(({ top_prices, ...rest }: any) => rest)
+        const { error: retryErr } = await supabase.from('sale_prices').insert(rowsWithoutTopPrices)
+        if (retryErr) {
+          console.error(`[snkrdunk-sync] sale_prices batch insert error (fallback):`, retryErr.message)
+        }
       } else {
-        console.error(`[snkrdunk-sync] sale_prices insert error (grade=${gp.grade}):`, error.message)
+        console.error(`[snkrdunk-sync] sale_prices batch insert error:`, error.message)
       }
     }
   }

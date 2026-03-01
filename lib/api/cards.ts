@@ -26,7 +26,6 @@ export async function getCards(options?: {
     .select(`
       *,
       category_large:category_large_id(name, icon),
-      category_detail:category_detail_id(name),
       rarities:rarity_id(name)
     `)
     .order('created_at', { ascending: false })
@@ -115,9 +114,6 @@ export async function getCard(id: string): Promise<CardWithRelations | null> {
     .select(`
       *,
       category_large:category_large_id(name, icon),
-      category_medium:category_medium_id(name),
-      category_small:category_small_id(name),
-      category_detail:category_detail_id(name),
       rarities:rarity_id(name)
     `)
     .eq('id', id)

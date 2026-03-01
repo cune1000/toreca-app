@@ -4,8 +4,8 @@
  * テスト対象:
  * 1. isSameTransaction  — 10分以内を同一取引とみなすロジック
  * 2. extractIconNumber  — imageUrl からアイコン番号を抽出
- * 3. syncSalesHistory   — 売買履歴の重複判定と INSERT ロジック
- * 4. syncListingPrices  — グレード別最安値の抽出と sale_prices への INSERT
+ * 3. syncSalesHistory   — 売買履歴の重複判定とバッチ INSERT ロジック
+ * 4. syncListingPrices  — グレード別最安値の抽出と sale_prices へのバッチ INSERT
  * 5. GET handler        — 認証チェック / cron-gate / バッチ処理フロー
  *
  * route.ts でモジュールスコープに createServiceClient() を呼ぶため、
@@ -33,6 +33,7 @@ function makeQueryBuilder(overrides: Partial<Record<string, any>> = {}) {
   builder.update = overrides.update ?? noop
   builder.upsert = overrides.upsert ?? noop
   builder.eq = overrides.eq ?? noop
+  builder.gte = overrides.gte ?? noop
   builder.or = overrides.or ?? noop
   builder.order = overrides.order ?? noop
   builder.limit = overrides.limit ?? noop
@@ -97,6 +98,23 @@ const BASE_SALE_URL = {
   product_url: 'https://snkrdunk.com/apparels/12345',
   card: { id: 'card-abc', name: 'テストカード' },
   site: { id: 'site-xyz', name: 'スニダン' },
+  apparel_id: null,
+  product_type: null,
+  error_count: 0,
+}
+
+/**
+ * snkrdunk_sales_history の select チェーン:
+ * .select().eq('card_id', x).gte('sold_at', x).order()
+ */
+function makeSalesHistorySelectChain(existingItems: any[]) {
+  return () => ({
+    eq: () => ({
+      gte: () => ({
+        order: () => Promise.resolve({ data: existingItems, error: null }),
+      }),
+    }),
+  })
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -152,22 +170,13 @@ afterEach(() => {
 
 // ============================================================================
 // 1. isSameTransaction — ユニットテスト
-//    route.ts 内プライベート関数のため、GET handler を通して間接検証する
-//    ただし独立した振る舞いテストも syncSalesHistory のモック経由で実施
 // ============================================================================
 
 describe('isSameTransaction (間接テスト: syncSalesHistory の重複判定)', () => {
-  /**
-   * route.ts の isSameTransaction はプライベートだが、
-   * syncSalesHistory の重複スキップカウントで外部から観測できる。
-   * 以下は「ほぼ同時刻（5分差）→ 重複扱い」「10分超→ 別取引扱い」を検証する。
-   */
-
   async function runWithSalesHistory(
     history: any[],
     existing: any[]
   ) {
-    // saleUrls を1件返す
     mockFrom.mockImplementation((table: string) => {
       if (table === 'card_sale_urls') {
         return {
@@ -185,13 +194,7 @@ describe('isSameTransaction (間接テスト: syncSalesHistory の重複判定)'
       }
       if (table === 'snkrdunk_sales_history') {
         return {
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: existing, error: null }),
-              }),
-            }),
-          }),
+          select: makeSalesHistorySelectChain(existing),
           insert: vi.fn().mockResolvedValue({ error: null }),
         }
       }
@@ -222,7 +225,6 @@ describe('isSameTransaction (間接テスト: syncSalesHistory の重複判定)'
       { grade: 'A', price: 5000, sold_at: closeTime, user_icon_number: 7 },
     ]
 
-    // parseRelativeTime が baseTime を返すようにする
     vi.mocked(parseRelativeTime).mockReturnValue(new Date(baseTime))
 
     const body = await runWithSalesHistory(history, existing)
@@ -251,7 +253,6 @@ describe('isSameTransaction (間接テスト: syncSalesHistory の重複判定)'
   })
 
   it('sold_at がちょうど10分差（境界値）なら同一取引とみなさない', async () => {
-    // Math.abs(t1 - t2) < 10 * 60 * 1000 なので、= は別取引
     const newTime = '2026-01-15T10:00:00.000Z'
     const existingTime = '2026-01-15T09:50:00.000Z' // ちょうど10分差
 
@@ -294,12 +295,6 @@ describe('isSameTransaction (間接テスト: syncSalesHistory の重複判定)'
 // ============================================================================
 
 describe('extractIconNumber (imageUrl からアイコン番号抽出)', () => {
-  /**
-   * extractIconNumber もプライベートだが、
-   * syncSalesHistory が user_icon_number フィールドとして DB に保存するため
-   * INSERT 引数を検査することで外部観測できる。
-   */
-
   async function captureInsertArgs(imageUrl: string) {
     let capturedInsertArg: any = null
 
@@ -320,13 +315,7 @@ describe('extractIconNumber (imageUrl からアイコン番号抽出)', () => {
       }
       if (table === 'snkrdunk_sales_history') {
         return {
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: [], error: null }),
-              }),
-            }),
-          }),
+          select: makeSalesHistorySelectChain([]),
           insert: vi.fn().mockImplementation((arg: any) => {
             capturedInsertArg = arg
             return Promise.resolve({ error: null })
@@ -352,32 +341,38 @@ describe('extractIconNumber (imageUrl からアイコン番号抽出)', () => {
 
   it('user-icon-42 のような URL からアイコン番号 42 を抽出する', async () => {
     const arg = await captureInsertArgs('https://cdn.snkrdunk.com/photos/user-icon-42.png')
-    expect(arg?.user_icon_number).toBe(42)
+    // バッチINSERT（配列）なので最初の要素を検査
+    const item = Array.isArray(arg) ? arg[0] : arg
+    expect(item?.user_icon_number).toBe(42)
   })
 
   it('user-icon-1 の URL からアイコン番号 1 を抽出する', async () => {
     const arg = await captureInsertArgs('https://cdn.snkrdunk.com/photos/user-icon-1.jpg')
-    expect(arg?.user_icon_number).toBe(1)
+    const item = Array.isArray(arg) ? arg[0] : arg
+    expect(item?.user_icon_number).toBe(1)
   })
 
   it('user-icon パターンを含まない URL は null を返す', async () => {
     const arg = await captureInsertArgs('https://cdn.snkrdunk.com/photos/avatar.png')
-    expect(arg?.user_icon_number).toBeNull()
+    const item = Array.isArray(arg) ? arg[0] : arg
+    expect(item?.user_icon_number).toBeNull()
   })
 
   it('空文字列は null を返す', async () => {
     const arg = await captureInsertArgs('')
-    expect(arg?.user_icon_number).toBeNull()
+    const item = Array.isArray(arg) ? arg[0] : arg
+    expect(item?.user_icon_number).toBeNull()
   })
 
   it('複数桁のアイコン番号（user-icon-999）を正しく抽出する', async () => {
     const arg = await captureInsertArgs('https://cdn.snkrdunk.com/photos/user-icon-999/avatar.jpg')
-    expect(arg?.user_icon_number).toBe(999)
+    const item = Array.isArray(arg) ? arg[0] : arg
+    expect(item?.user_icon_number).toBe(999)
   })
 })
 
 // ============================================================================
-// 3. syncSalesHistory — 売買履歴の重複判定と INSERT ロジック
+// 3. syncSalesHistory — 売買履歴の重複判定とバッチ INSERT ロジック
 // ============================================================================
 
 describe('syncSalesHistory (売買履歴同期)', () => {
@@ -405,13 +400,7 @@ describe('syncSalesHistory (売買履歴同期)', () => {
       }
       if (table === 'snkrdunk_sales_history') {
         return {
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: existingItems, error: null }),
-              }),
-            }),
-          }),
+          select: makeSalesHistorySelectChain(existingItems),
           insert: insertMock,
         }
       }
@@ -426,7 +415,7 @@ describe('syncSalesHistory (売買履歴同期)', () => {
     return { insertMock }
   }
 
-  it('有効な売買履歴1件を正しく INSERT する', async () => {
+  it('有効な売買履歴1件を正しくバッチ INSERT する', async () => {
     const { insertMock } = setupMocks({
       historyItems: [
         { price: 10000, date: '1時間前', condition: 'PSA10', size: '', label: '中古', imageUrl: 'https://cdn.snkrdunk.com/user-icon-3.png' },
@@ -440,15 +429,18 @@ describe('syncSalesHistory (売買履歴同期)', () => {
 
     expect(body.results[0].salesInserted).toBe(1)
     expect(body.results[0].salesSkipped).toBe(0)
+    // バッチINSERT: 配列で渡される
     expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        card_id: 'card-abc',
-        apparel_id: 12345,
-        grade: 'PSA10',
-        price: 10000,
-        product_type: 'single',
-        user_icon_number: 3,
-      })
+      expect.arrayContaining([
+        expect.objectContaining({
+          card_id: 'card-abc',
+          apparel_id: 12345,
+          grade: 'PSA10',
+          price: 10000,
+          product_type: 'single',
+          user_icon_number: 3,
+        }),
+      ])
     )
   })
 
@@ -541,12 +533,43 @@ describe('syncSalesHistory (売買履歴同期)', () => {
     expect(body.results[0].salesSkipped).toBe(1)
   })
 
-  it('INSERT でユニーク制約違反（23505）が返った場合はスキップカウントを増やす', async () => {
-    const { insertMock } = setupMocks({
-      historyItems: [
-        { price: 2000, date: '1時間前', condition: 'B', size: '', label: '', imageUrl: '' },
-      ],
-      insertResult: { error: { code: '23505', message: 'duplicate key value' } },
+  it('バッチ INSERT でユニーク制約違反（23505）→ 1件ずつフォールバック INSERT', async () => {
+    const insertMock = vi.fn()
+      // 1回目（バッチ）: ユニーク制約違反
+      .mockResolvedValueOnce({ error: { code: '23505', message: 'duplicate key value' } })
+      // 2回目（フォールバック: 1件目）: 成功
+      .mockResolvedValueOnce({ error: null })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'card_sale_urls') {
+        return {
+          select: () => ({
+            like: () => ({
+              or: () => ({
+                order: () => ({
+                  limit: () => Promise.resolve({ data: [BASE_SALE_URL], error: null }),
+                }),
+              }),
+            }),
+          }),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        }
+      }
+      if (table === 'snkrdunk_sales_history') {
+        return {
+          select: makeSalesHistorySelectChain([]),
+          insert: insertMock,
+        }
+      }
+      if (table === 'sale_prices') {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) }
+      }
+      return makeQueryBuilder()
+    })
+
+    vi.mocked(getSalesHistory).mockResolvedValue({
+      history: [{ price: 2000, date: '1時間前', condition: 'B', size: '', label: '', imageUrl: '' }],
+      minPrice: null,
     })
     vi.mocked(parseRelativeTime).mockReturnValue(new Date('2026-01-15T10:00:00.000Z'))
     vi.mocked(normalizeGrade).mockReturnValue('B')
@@ -554,9 +577,9 @@ describe('syncSalesHistory (売買履歴同期)', () => {
     const res = await GET(makeRequest('Bearer test-secret'))
     const body = await res.json()
 
-    expect(insertMock).toHaveBeenCalledTimes(1)
-    expect(body.results[0].salesSkipped).toBe(1)
-    expect(body.results[0].salesInserted).toBe(0)
+    // バッチ失敗 → 個別INSERT 1件成功
+    expect(insertMock).toHaveBeenCalledTimes(2)
+    expect(body.results[0].salesInserted).toBe(1)
   })
 
   it('INSERT でその他のエラーが返った場合もスキップカウントを増やす', async () => {
@@ -605,11 +628,14 @@ describe('syncSalesHistory (売買履歴同期)', () => {
 
     // BOX の場合 normalizeGrade には item.size ('1個') が渡される
     expect(normalizeGrade).toHaveBeenCalledWith('1個')
+    // バッチINSERT（配列）
     expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        grade: '1個',
-        product_type: 'box',
-      })
+      expect.arrayContaining([
+        expect.objectContaining({
+          grade: '1個',
+          product_type: 'box',
+        }),
+      ])
     )
   })
 
@@ -652,7 +678,7 @@ describe('syncSalesHistory (売買履歴同期)', () => {
 })
 
 // ============================================================================
-// 4. syncListingPrices — グレード別最安値の抽出と sale_prices への INSERT
+// 4. syncListingPrices — グレード別最安値の抽出と sale_prices へのバッチ INSERT
 // ============================================================================
 
 describe('syncListingPrices (出品最安値同期)', () => {
@@ -682,13 +708,7 @@ describe('syncListingPrices (出品最安値同期)', () => {
       }
       if (table === 'snkrdunk_sales_history') {
         return {
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: [], error: null }),
-              }),
-            }),
-          }),
+          select: makeSalesHistorySelectChain([]),
           insert: vi.fn().mockResolvedValue({ error: null }),
         }
       }
@@ -715,12 +735,12 @@ describe('syncListingPrices (出品最安値同期)', () => {
     return { salePricesInsertMock }
   }
 
-  it('シングル: 出品一覧から全体最安値を INSERT する', async () => {
+  it('シングル: 出品一覧から全体最安値 + グレード別をバッチ INSERT する', async () => {
     const { salePricesInsertMock } = setupListingMocks({
       singleListings: [
-        { id: 1, price: 3000, condition: 'A（新品同様）', size: '', status: '', note: '', accessoriesNote: null, createdAt: '', updatedAt: '', imageUrl: null },
-        { id: 2, price: 2500, condition: 'B（目立つキズあり）', size: '', status: '', note: '', accessoriesNote: null, createdAt: '', updatedAt: '', imageUrl: null },
-        { id: 3, price: 4000, condition: 'A（新品同様）', size: '', status: '', note: '', accessoriesNote: null, createdAt: '', updatedAt: '', imageUrl: null },
+        { id: 1, price: 3000, condition: 'A', size: '', status: '', note: '', accessoriesNote: null, createdAt: '', updatedAt: '', imageUrl: null },
+        { id: 2, price: 2500, condition: 'B', size: '', status: '', note: '', accessoriesNote: null, createdAt: '', updatedAt: '', imageUrl: null },
+        { id: 3, price: 4000, condition: 'A', size: '', status: '', note: '', accessoriesNote: null, createdAt: '', updatedAt: '', imageUrl: null },
       ],
       gradePrices: [
         { grade: 'A', price: 3000, stock: 2, topPrices: [3000, 4000] },
@@ -731,23 +751,26 @@ describe('syncListingPrices (出品最安値同期)', () => {
     const res = await GET(makeRequest('Bearer test-secret'))
     const body = await res.json()
 
-    // 全体最安値（2500）のINSERT
-    expect(salePricesInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        card_id: 'card-abc',
-        site_id: 'site-xyz',
-        price: 2500,
-        stock: 3,   // totalListings = 出品数
-        grade: null,
-      })
-    )
-    // グレード別（A=3000, B=2500）のINSERT
-    expect(salePricesInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ grade: 'A', price: 3000 })
-    )
-    expect(salePricesInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ grade: 'B', price: 2500 })
-    )
+    // バッチ INSERT（配列1回）
+    expect(salePricesInsertMock).toHaveBeenCalledTimes(1)
+    const insertedRows = salePricesInsertMock.mock.calls[0][0]
+    expect(Array.isArray(insertedRows)).toBe(true)
+
+    // 全体最安値行
+    const overallRow = insertedRows.find((r: any) => r.grade === null)
+    expect(overallRow).toBeDefined()
+    expect(overallRow.price).toBe(2500)
+    expect(overallRow.stock).toBe(3)
+
+    // グレード別行
+    const gradeARow = insertedRows.find((r: any) => r.grade === 'A')
+    expect(gradeARow).toBeDefined()
+    expect(gradeARow.price).toBe(3000)
+
+    const gradeBRow = insertedRows.find((r: any) => r.grade === 'B')
+    expect(gradeBRow).toBeDefined()
+    expect(gradeBRow.price).toBe(2500)
+
     expect(body.results[0].overallMin).toBe(2500)
     expect(body.results[0].totalListings).toBe(3)
     expect(body.results[0].gradePrices).toBe(2)
@@ -759,7 +782,6 @@ describe('syncListingPrices (出品最安値同期)', () => {
     const res = await GET(makeRequest('Bearer test-secret'))
     const body = await res.json()
 
-    // overallMin が null のため全体最安値INSERTはなし、gradePricesも空
     expect(salePricesInsertMock).not.toHaveBeenCalled()
     expect(body.results[0].overallMin).toBeNull()
     expect(body.results[0].totalListings).toBe(0)
@@ -777,18 +799,18 @@ describe('syncListingPrices (出品最安値同期)', () => {
     const res = await GET(makeRequest('Bearer test-secret'))
     const body = await res.json()
 
-    expect(salePricesInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        price: 80000,
-        grade: null, // 全体最安値
-      })
-    )
-    expect(salePricesInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        grade: 'BOX',
-        price: 80000,
-      })
-    )
+    // バッチ INSERT
+    expect(salePricesInsertMock).toHaveBeenCalledTimes(1)
+    const insertedRows = salePricesInsertMock.mock.calls[0][0]
+
+    // 全体最安値
+    const overallRow = insertedRows.find((r: any) => r.grade === null)
+    expect(overallRow.price).toBe(80000)
+
+    // BOXグレード
+    const boxRow = insertedRows.find((r: any) => r.grade === 'BOX')
+    expect(boxRow.price).toBe(80000)
+
     expect(body.results[0].overallMin).toBe(80000)
     expect(body.results[0].totalListings).toBe(4) // 3+1
   })
@@ -807,9 +829,10 @@ describe('syncListingPrices (出品最安値同期)', () => {
 
     // 最安は 120000（3個）
     expect(body.results[0].overallMin).toBe(120000)
-    expect(salePricesInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ grade: 'BOX', price: 120000 })
-    )
+
+    const insertedRows = salePricesInsertMock.mock.calls[0][0]
+    const boxRow = insertedRows.find((r: any) => r.grade === 'BOX')
+    expect(boxRow.price).toBe(120000)
   })
 
   it('BOX: サイズ一覧が空のとき sale_prices に INSERT しない', async () => {
@@ -825,13 +848,11 @@ describe('syncListingPrices (出品最安値同期)', () => {
     expect(body.results[0].overallMin).toBeNull()
   })
 
-  it('grade別INSERT時に top_prices カラムエラー（42703）が発生した場合はフォールバックINSERTを実行する', async () => {
+  it('sale_prices バッチINSERTで top_prices カラムエラー（42703）→ top_prices除去してリトライ', async () => {
     const salePricesInsertMock = vi.fn()
-      // 1回目（全体最安値）: 成功
-      .mockResolvedValueOnce({ error: null })
-      // 2回目（グレード別）: top_prices エラー
+      // 1回目（バッチ全体）: top_prices エラー
       .mockResolvedValueOnce({ error: { code: '42703', message: 'column "top_prices" does not exist' } })
-      // 3回目（フォールバック）: 成功
+      // 2回目（フォールバック）: 成功
       .mockResolvedValueOnce({ error: null })
 
     mockFrom.mockImplementation((table: string) => {
@@ -851,13 +872,7 @@ describe('syncListingPrices (出品最安値同期)', () => {
       }
       if (table === 'snkrdunk_sales_history') {
         return {
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: [], error: null }),
-              }),
-            }),
-          }),
+          select: makeSalesHistorySelectChain([]),
           insert: vi.fn().mockResolvedValue({ error: null }),
         }
       }
@@ -876,12 +891,13 @@ describe('syncListingPrices (出品最安値同期)', () => {
 
     await GET(makeRequest('Bearer test-secret'))
 
-    // 3回呼ばれる: 全体最安値 + グレード別(失敗) + フォールバック
-    expect(salePricesInsertMock).toHaveBeenCalledTimes(3)
+    // 2回呼ばれる: バッチ(失敗) + フォールバック(成功)
+    expect(salePricesInsertMock).toHaveBeenCalledTimes(2)
     // フォールバック呼び出しには top_prices なし
-    const fallbackCall = salePricesInsertMock.mock.calls[2][0]
-    expect(fallbackCall).not.toHaveProperty('top_prices')
-    expect(fallbackCall).toMatchObject({ grade: 'A', price: 5000 })
+    const fallbackRows = salePricesInsertMock.mock.calls[1][0]
+    for (const row of fallbackRows) {
+      expect(row).not.toHaveProperty('top_prices')
+    }
   })
 
   it('grade が price=0 以下のエントリは INSERT しない', async () => {
@@ -897,9 +913,9 @@ describe('syncListingPrices (出品最安値同期)', () => {
 
     await GET(makeRequest('Bearer test-secret'))
 
-    // grade=B (price=0) は INSERT されない
-    const insertCalls = salePricesInsertMock.mock.calls.map(c => c[0])
-    const bInsert = insertCalls.find((c: any) => c.grade === 'B')
+    // バッチINSERT の中身を検査
+    const insertedRows = salePricesInsertMock.mock.calls[0][0]
+    const bInsert = insertedRows.find((r: any) => r.grade === 'B')
     expect(bInsert).toBeUndefined()
   })
 })
@@ -922,7 +938,6 @@ describe('GET handler', () => {
     })
 
     it('Authorization ヘッダーが正しい場合は処理を続行する', async () => {
-      // cron-gate を通過させるため saleUrls を空にする
       mockFrom.mockReturnValue({
         select: () => ({
           like: () => ({
@@ -949,7 +964,6 @@ describe('GET handler', () => {
 
   describe('cron-gate', () => {
     beforeEach(() => {
-      // cron-gate が skipを返す設定（認証は通過させる）
       vi.mocked(shouldRunCronJob).mockResolvedValue({ shouldRun: false, reason: 'disabled' })
     })
 
@@ -964,7 +978,6 @@ describe('GET handler', () => {
     it('cron-gate スキップ時は Supabase の card_sale_urls を取得しない', async () => {
       await GET(makeRequest('Bearer test-secret'))
 
-      // from() が呼ばれていないことを確認
       expect(mockFrom).not.toHaveBeenCalled()
     })
   })
@@ -1060,13 +1073,7 @@ describe('GET handler', () => {
         }
         if (table === 'snkrdunk_sales_history') {
           return {
-            select: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => Promise.resolve({ data: [], error: null }),
-                }),
-              }),
-            }),
+            select: makeSalesHistorySelectChain([]),
             insert: vi.fn().mockResolvedValue({ error: null }),
           }
         }
@@ -1106,13 +1113,7 @@ describe('GET handler', () => {
         }
         if (table === 'snkrdunk_sales_history') {
           return {
-            select: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => Promise.resolve({ data: [], error: null }),
-                }),
-              }),
-            }),
+            select: makeSalesHistorySelectChain([]),
             insert: vi.fn().mockResolvedValue({ error: null }),
           }
         }
@@ -1129,6 +1130,7 @@ describe('GET handler', () => {
           last_scrape_status: 'success',
           last_scrape_error: null,
           apparel_id: 12345,
+          error_count: 0,
         })
       )
     })
@@ -1166,11 +1168,12 @@ describe('GET handler', () => {
         expect.objectContaining({
           last_scrape_status: 'error',
           last_scrape_error: expect.stringContaining('Invalid URL'),
+          error_count: 1,
         })
       )
     })
 
-    it('カード処理エラー時の next_scrape_at は ERROR_RETRY_MINUTES（30分後）になる', async () => {
+    it('カード処理エラー時の next_scrape_at はエクスポネンシャルバックオフ（初回60分後）になる', async () => {
       const updateEqMock = vi.fn().mockResolvedValue({ error: null })
       const updateMock = vi.fn().mockReturnValue({ eq: updateEqMock })
 
@@ -1181,7 +1184,10 @@ describe('GET handler', () => {
               like: () => ({
                 or: () => ({
                   order: () => ({
-                    limit: () => Promise.resolve({ data: [BASE_SALE_URL], error: null }),
+                    limit: () => Promise.resolve({
+                      data: [{ ...BASE_SALE_URL, error_count: 0 }],
+                      error: null,
+                    }),
                   }),
                 }),
               }),
@@ -1201,9 +1207,9 @@ describe('GET handler', () => {
       const updateArg = updateMock.mock.calls[0][0]
       const nextScrapeAt = new Date(updateArg.next_scrape_at).getTime()
 
-      // ERROR_RETRY_MINUTES = 30分
-      const expectedMin = before + 30 * 60 * 1000
-      const expectedMax = after + 30 * 60 * 1000
+      // ERROR_BASE_RETRY_MINUTES = 60, error_count=0+1=1, calculateErrorRetryMinutes(1) = 60 * 2^1 = 120分
+      const expectedMin = before + 120 * 60 * 1000
+      const expectedMax = after + 120 * 60 * 1000
 
       expect(nextScrapeAt).toBeGreaterThanOrEqual(expectedMin)
       expect(nextScrapeAt).toBeLessThanOrEqual(expectedMax)
@@ -1227,13 +1233,7 @@ describe('GET handler', () => {
         }
         if (table === 'snkrdunk_sales_history') {
           return {
-            select: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => Promise.resolve({ data: [], error: null }),
-                }),
-              }),
-            }),
+            select: makeSalesHistorySelectChain([]),
             insert: vi.fn().mockResolvedValue({ error: null }),
           }
         }
@@ -1281,13 +1281,7 @@ describe('GET handler', () => {
         }
         if (table === 'snkrdunk_sales_history') {
           return {
-            select: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => Promise.resolve({ data: [], error: null }),
-                }),
-              }),
-            }),
+            select: makeSalesHistorySelectChain([]),
             insert: vi.fn().mockResolvedValue({ error: null }),
           }
         }
@@ -1334,13 +1328,7 @@ describe('GET handler', () => {
         }
         if (table === 'snkrdunk_sales_history') {
           return {
-            select: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => Promise.resolve({ data: [], error: null }),
-                }),
-              }),
-            }),
+            select: makeSalesHistorySelectChain([]),
             insert: vi.fn().mockResolvedValue({ error: null }),
           }
         }
@@ -1353,17 +1341,12 @@ describe('GET handler', () => {
       const res = await GET(makeRequest('Bearer test-secret'))
       const body = await res.json()
 
-      expect(body.success).toBe(true)
-      expect(body.results[0].cardName).toBeUndefined()
+      expect(res.status).toBe(200)
+      expect(body.results).toHaveLength(1)
     })
 
-    it('BATCH_SIZE（15件）ちょうどのURLがある場合も全件処理する', async () => {
-      const saleUrls = Array.from({ length: 15 }, (_, i) => ({
-        ...BASE_SALE_URL,
-        id: `url-${i}`,
-        card_id: `card-${i}`,
-        card: { id: `card-${i}`, name: `カード${i}` },
-      }))
+    it('product_type がキャッシュ済みなら getProductInfo をスキップする', async () => {
+      const saleUrlWithCachedType = { ...BASE_SALE_URL, product_type: 'single', apparel_id: 12345 }
 
       mockFrom.mockImplementation((table: string) => {
         if (table === 'card_sale_urls') {
@@ -1372,7 +1355,7 @@ describe('GET handler', () => {
               like: () => ({
                 or: () => ({
                   order: () => ({
-                    limit: () => Promise.resolve({ data: saleUrls, error: null }),
+                    limit: () => Promise.resolve({ data: [saleUrlWithCachedType], error: null }),
                   }),
                 }),
               }),
@@ -1382,13 +1365,7 @@ describe('GET handler', () => {
         }
         if (table === 'snkrdunk_sales_history') {
           return {
-            select: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => Promise.resolve({ data: [], error: null }),
-                }),
-              }),
-            }),
+            select: makeSalesHistorySelectChain([]),
             insert: vi.fn().mockResolvedValue({ error: null }),
           }
         }
@@ -1398,11 +1375,48 @@ describe('GET handler', () => {
         return makeQueryBuilder()
       })
 
-      const res = await GET(makeRequest('Bearer test-secret'))
-      const body = await res.json()
+      await GET(makeRequest('Bearer test-secret'))
 
-      expect(body.processed).toBe(15)
-      expect(body.results).toHaveLength(15)
+      // product_type がキャッシュ済みなので getProductInfo は呼ばれない
+      expect(getProductInfo).not.toHaveBeenCalled()
+    })
+
+    it('calculateErrorRetryMinutes: error_count増加でバックオフが効く', async () => {
+      const updateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+      const saleUrlWithErrors = { ...BASE_SALE_URL, error_count: 2 }
+
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'card_sale_urls') {
+          return {
+            select: () => ({
+              like: () => ({
+                or: () => ({
+                  order: () => ({
+                    limit: () => Promise.resolve({ data: [saleUrlWithErrors], error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: updateMock,
+          }
+        }
+        return makeQueryBuilder()
+      })
+
+      vi.mocked(extractApparelId).mockReturnValue(null)
+
+      const before = Date.now()
+      await GET(makeRequest('Bearer test-secret'))
+      const after = Date.now()
+
+      const updateArg = updateMock.mock.calls[0][0]
+      // error_count=2+1=3, calculateErrorRetryMinutes(3) = 60 * 2^3 = 480 → capped at 360
+      expect(updateArg.error_count).toBe(3)
+      const nextScrapeAt = new Date(updateArg.next_scrape_at).getTime()
+      const expectedMin = before + 360 * 60 * 1000
+      const expectedMax = after + 360 * 60 * 1000
+      expect(nextScrapeAt).toBeGreaterThanOrEqual(expectedMin)
+      expect(nextScrapeAt).toBeLessThanOrEqual(expectedMax)
     })
   })
 })

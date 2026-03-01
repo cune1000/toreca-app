@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
-import type { Shop, CategoryLarge, CategoryMedium, CategorySmall, Rarity } from '@/lib/types'
+import type { Shop, CategoryLarge, Rarity } from '@/lib/types'
 
 interface Props {
     shop: Shop
@@ -57,8 +57,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
     // 買取価格タブ用: カテゴリ・ページネーション
     const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('')
     const [purchaseFilterLarge, setPurchaseFilterLarge] = useState('')
-    const [purchaseFilterMedium, setPurchaseFilterMedium] = useState('')
-    const [purchaseFilterSmall, setPurchaseFilterSmall] = useState('')
     const [purchaseFilterRarity, setPurchaseFilterRarity] = useState('')
     const [purchasePage, setPurchasePage] = useState(1)
     const [purchaseTotalCount, setPurchaseTotalCount] = useState(0)
@@ -66,8 +64,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
     // カテゴリデータ
     const [categories, setCategories] = useState<CategoryLarge[]>([])
-    const [mediumCategories, setMediumCategories] = useState<CategoryMedium[]>([])
-    const [smallCategories, setSmallCategories] = useState<CategorySmall[]>([])
     const [rarities, setRarities] = useState<Rarity[]>([])
 
     useEffect(() => {
@@ -85,49 +81,16 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
         setRarities(rarRes.data || [])
     }
 
-    // 大カテゴリ変更 → 中カテゴリ取得
-    useEffect(() => {
-        if (purchaseFilterLarge && purchaseFilterLarge !== UNSET) {
-            const fetchMedium = async () => {
-                const { data } = await supabase
-                    .from('category_medium').select('id, name, large_id')
-                    .eq('large_id', purchaseFilterLarge).order('sort_order')
-                setMediumCategories(data || [])
-            }
-            fetchMedium()
-        } else {
-            setMediumCategories([])
-        }
-        setPurchaseFilterMedium('')
-        setPurchaseFilterSmall('')
-    }, [purchaseFilterLarge])
-
-    // 中カテゴリ変更 → 小カテゴリ取得
-    useEffect(() => {
-        if (purchaseFilterMedium && purchaseFilterMedium !== UNSET) {
-            const fetchSmall = async () => {
-                const { data } = await supabase
-                    .from('category_small').select('id, name, medium_id')
-                    .eq('medium_id', purchaseFilterMedium).order('sort_order')
-                setSmallCategories(data || [])
-            }
-            fetchSmall()
-        } else {
-            setSmallCategories([])
-        }
-        setPurchaseFilterSmall('')
-    }, [purchaseFilterMedium])
-
     // フィルタ変更時 → 1ページ目に戻る
     useEffect(() => {
         setPurchasePage(1)
-    }, [purchaseSearchQuery, purchaseFilterLarge, purchaseFilterMedium, purchaseFilterSmall, purchaseFilterRarity])
+    }, [purchaseSearchQuery, purchaseFilterLarge, purchaseFilterRarity])
 
     // 買取価格データ取得（2ステップ: カード絞り込み → 買取価格取得）
     const fetchPurchases = useCallback(async () => {
         setPurchaseLoading(true)
 
-        const hasCardFilter = purchaseFilterLarge || purchaseFilterMedium || purchaseFilterSmall || purchaseFilterRarity || purchaseSearchQuery.length >= 2
+        const hasCardFilter = purchaseFilterLarge || purchaseFilterRarity || purchaseSearchQuery.length >= 2
 
         let cardIds: string[] | null = null
 
@@ -139,16 +102,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                 cardQuery = cardQuery.is('category_large_id', null)
             } else if (purchaseFilterLarge) {
                 cardQuery = cardQuery.eq('category_large_id', purchaseFilterLarge)
-            }
-            if (purchaseFilterMedium === UNSET) {
-                cardQuery = cardQuery.is('category_medium_id', null)
-            } else if (purchaseFilterMedium) {
-                cardQuery = cardQuery.eq('category_medium_id', purchaseFilterMedium)
-            }
-            if (purchaseFilterSmall === UNSET) {
-                cardQuery = cardQuery.is('category_small_id', null)
-            } else if (purchaseFilterSmall) {
-                cardQuery = cardQuery.eq('category_small_id', purchaseFilterSmall)
             }
             if (purchaseFilterRarity === UNSET) {
                 cardQuery = cardQuery.is('rarity_id', null)
@@ -194,7 +147,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
             setPurchaseTotalCount(count || 0)
         }
         setPurchaseLoading(false)
-    }, [shop.id, purchaseSearchQuery, purchaseFilterLarge, purchaseFilterMedium, purchaseFilterSmall, purchaseFilterRarity, purchasePage])
+    }, [shop.id, purchaseSearchQuery, purchaseFilterLarge, purchaseFilterRarity, purchasePage])
 
     // 買取価格タブ: フィルタ変更時にデータ再取得
     useEffect(() => {
@@ -562,30 +515,6 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                                     <option value={UNSET}>⚠️ 未設定</option>
                                     {categories.map(cat => (
                                         <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={purchaseFilterMedium}
-                                    onChange={(e) => setPurchaseFilterMedium(e.target.value)}
-                                    className="px-3 py-1.5 border rounded-lg text-sm"
-                                    disabled={!purchaseFilterLarge || purchaseFilterLarge === UNSET}
-                                >
-                                    <option value="">全世代</option>
-                                    <option value={UNSET}>⚠️ 未設定</option>
-                                    {mediumCategories.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={purchaseFilterSmall}
-                                    onChange={(e) => setPurchaseFilterSmall(e.target.value)}
-                                    className="px-3 py-1.5 border rounded-lg text-sm"
-                                    disabled={!purchaseFilterMedium || purchaseFilterMedium === UNSET}
-                                >
-                                    <option value="">全パック</option>
-                                    <option value={UNSET}>⚠️ 未設定</option>
-                                    {smallCategories.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
                                     ))}
                                 </select>
                                 <select

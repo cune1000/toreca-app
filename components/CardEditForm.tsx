@@ -11,8 +11,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   const [isDragging, setIsDragging] = useState(false)
   const [categories, setCategories] = useState([])
   const [rarities, setRarities] = useState([])
-  const [mediumCategories, setMediumCategories] = useState([])
-  const [smallCategories, setSmallCategories] = useState([])
   const [imagePreview, setImagePreview] = useState(card?.image_url || null)
   const [expansionSuggestions, setExpansionSuggestions] = useState<string[]>([])
   const [raritySuggestions, setRaritySuggestions] = useState<string[]>([])
@@ -35,8 +33,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     pricecharting_name: card?.pricecharting_name || '',
     card_number: card?.card_number || '',
     category_large_id: card?.category_large_id || '',
-    category_medium_id: card?.category_medium_id || '',
-    category_small_id: card?.category_small_id || '',
     rarity_id: card?.rarity_id || '',
     rarity: getRarityString(card?.rarity),
     expansion: card?.expansion || '',
@@ -86,13 +82,11 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     fetchSuggestions()
   }, [])
 
-  // 大カテゴリが変わったらレアリティと中カテゴリを取得
+  // 大カテゴリが変わったらレアリティを取得
   useEffect(() => {
     async function fetchRarities() {
       if (!form.category_large_id) {
         setRarities([])
-        setMediumCategories([])
-        setSmallCategories([])
         return
       }
 
@@ -102,33 +96,9 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         .eq('large_id', form.category_large_id)
         .order('sort_order')
       setRarities(rarityData || [])
-
-      const { data: mediumData } = await supabase
-        .from('category_medium')
-        .select('*')
-        .eq('large_id', form.category_large_id)
-        .order('sort_order')
-      setMediumCategories(mediumData || [])
     }
     fetchRarities()
   }, [form.category_large_id])
-
-  // 中カテゴリが変わったら小カテゴリを取得
-  useEffect(() => {
-    async function fetchSmallCategories() {
-      if (!form.category_medium_id) {
-        setSmallCategories([])
-        return
-      }
-      const { data } = await supabase
-        .from('category_small')
-        .select('*')
-        .eq('medium_id', form.category_medium_id)
-        .order('sort_order')
-      setSmallCategories(data || [])
-    }
-    fetchSmallCategories()
-  }, [form.category_medium_id])
 
   // 画像リサイズ（Vercel 4.5MB制限対策）
   const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
@@ -233,8 +203,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         pricecharting_name: form.pricecharting_name || null,
         card_number: form.card_number || null,
         category_large_id: form.category_large_id || null,
-        category_medium_id: form.category_medium_id || null,
-        category_small_id: form.category_small_id || null,
         rarity_id: form.rarity_id || null,
         rarity: form.rarity || null,
         expansion: form.expansion || null,
@@ -458,14 +426,14 @@ export default function CardEditForm({ card, onClose, onSaved }) {
             )}
           </div>
 
-          {/* 大カテゴリ */}
+          {/* ゲーム */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              大カテゴリ
+              ゲーム
             </label>
             <select
               value={form.category_large_id}
-              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, category_medium_id: '', category_small_id: '', rarity_id: '' })}
+              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, rarity_id: '' })}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
@@ -474,44 +442,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
               ))}
             </select>
           </div>
-
-          {/* 中カテゴリ */}
-          {mediumCategories.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                中カテゴリ
-              </label>
-              <select
-                value={form.category_medium_id}
-                onChange={(e) => setForm({ ...form, category_medium_id: e.target.value, category_small_id: '' })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">選択してください</option>
-                {mediumCategories.map((cat: any) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 小カテゴリ */}
-          {smallCategories.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                小カテゴリ（パック）
-              </label>
-              <select
-                value={form.category_small_id}
-                onChange={(e) => setForm({ ...form, category_small_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">選択してください</option>
-                {smallCategories.map((cat: any) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {/* レアリティ（ボタン選択）- カテゴリに紐づくもの */}
           {rarities.length > 0 && (

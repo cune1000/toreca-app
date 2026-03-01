@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, ExternalLink, Edit, Store, Globe, Package, TrendingUp, TrendingDown, ShoppingCart } from 'lucide-react'
+import { getRarityDisplayName } from '@/lib/rarity-mapping'
 
 interface PriceDiff {
   label: string
@@ -187,7 +188,7 @@ export default function CardDetailHeader({
               )}
               {card?.rarity && (
                 <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
-                  {typeof card.rarity === 'object' ? card.rarity.name : card.rarity}
+                  {getRarityDisplayName(card.rarity)}
                 </span>
               )}
               {card?.set_code && (

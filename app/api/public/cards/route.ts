@@ -34,9 +34,8 @@ export async function GET(req: Request) {
         let query = supabase
             .from('cards')
             .select(`
-                id, name, card_number, image_url, expansion,
+                id, name, card_number, image_url, expansion, set_code,
                 category_large:category_large_id(id, name),
-                category_medium:category_medium_id(id, name),
                 rarity:rarity_id(id, name)
             `, { count: 'exact' })
 
@@ -85,8 +84,8 @@ export async function GET(req: Request) {
             card_number: card.card_number,
             image_url: card.image_url,
             expansion: card.expansion,
+            set_code: card.set_code || null,
             category: card.category_large?.name || null,
-            sub_category: card.category_medium?.name || null,
             rarity: card.rarity?.name || null,
         }))
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Database, Search, RefreshCw, Plus, Globe, CheckSquare, Square, Settings, Link, Loader2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
-import type { CardWithRelations, CategoryLarge, CategoryMedium, CategorySmall, Rarity } from '@/lib/types'
+import type { CardWithRelations, CategoryLarge, Rarity } from '@/lib/types'
 
 // =============================================================================
 // Types
@@ -43,12 +43,12 @@ export default function CardsPage({
   // State（sessionStorageに永続化）
   const [searchQuery, setSearchQuery] = useSessionState('searchQuery', '')
   const [filterCategoryLarge, setFilterCategoryLarge] = useSessionState('categoryLarge', '')
-  const [filterCategoryMedium, setFilterCategoryMedium] = useSessionState('categoryMedium', '')
-  const [filterCategorySmall, setFilterCategorySmall] = useSessionState('categorySmall', '')
+  const [filterSetCode, setFilterSetCode] = useSessionState('setCode', '')
   const [filterRarity, setFilterRarity] = useSessionState('rarity', '')
   const [filterExpansion, setFilterExpansion] = useSessionState('expansion', '')
   const [filterCardNumber, setFilterCardNumber] = useSessionState('cardNumber', '')
   const [expansions, setExpansions] = useState<string[]>([])
+  const [setCodes, setSetCodes] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useSessionState('page', 1)
 
   // マウント後にsessionStorageから全フィルタを一括復元
@@ -62,8 +62,7 @@ export default function CardsPage({
     }
     const sq = restore('searchQuery'); if (sq !== undefined) setSearchQuery(sq)
     const cl = restore('categoryLarge'); if (cl !== undefined) setFilterCategoryLarge(cl)
-    const cm = restore('categoryMedium'); if (cm !== undefined) setFilterCategoryMedium(cm)
-    const cs = restore('categorySmall'); if (cs !== undefined) setFilterCategorySmall(cs)
+    const sc = restore('setCode'); if (sc !== undefined) setFilterSetCode(sc)
     const r = restore('rarity'); if (r !== undefined) setFilterRarity(r)
     const e = restore('expansion'); if (e !== undefined) setFilterExpansion(e)
     const cn = restore('cardNumber'); if (cn !== undefined) setFilterCardNumber(cn)
@@ -77,8 +76,6 @@ export default function CardsPage({
 
   // Categories & Rarities
   const [categories, setCategories] = useState<CategoryLarge[]>([])
-  const [mediumCategories, setMediumCategories] = useState<CategoryMedium[]>([])
-  const [smallCategories, setSmallCategories] = useState<CategorySmall[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
 
   // Card monitoring statuses
@@ -96,9 +93,7 @@ export default function CardsPage({
   const [batchLoading, setBatchLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  // Batch modal categories (cascading)
-  const [batchMediumCats, setBatchMediumCats] = useState<CategoryMedium[]>([])
-  const [batchSmallCats, setBatchSmallCats] = useState<CategorySmall[]>([])
+  // Batch modal
   const [batchRarities, setBatchRarities] = useState<Rarity[]>([])
 
   // インラインURL入力
@@ -300,56 +295,21 @@ export default function CardsPage({
         .order('sort_order')
       setRarities(rarData || [])
 
-      // 収録弾の一覧を取得
+      // 収録弾 + セットコードの一覧を取得
       const { data: expData } = await supabase
         .from('cards')
-        .select('expansion')
-        .not('expansion', 'is', null)
+        .select('expansion, set_code')
         .order('expansion')
       if (expData) {
         const uniqueExps = [...new Set(expData.map(d => d.expansion).filter(Boolean))] as string[]
         setExpansions(uniqueExps)
+        const uniqueCodes = [...new Set(expData.map(d => d.set_code).filter(Boolean))] as string[]
+        uniqueCodes.sort()
+        setSetCodes(uniqueCodes)
       }
     }
     fetchFilters()
   }, [])
-
-  // 大カテゴリ変更 → 中カテゴリ取得
-  useEffect(() => {
-    if (filterCategoryLarge && filterCategoryLarge !== UNSET) {
-      const fetchMedium = async () => {
-        const { data } = await supabase
-          .from('category_medium')
-          .select('id, name, large_id')
-          .eq('large_id', filterCategoryLarge)
-          .order('sort_order')
-        setMediumCategories(data || [])
-      }
-      fetchMedium()
-    } else {
-      setMediumCategories([])
-    }
-    setFilterCategoryMedium('')
-    setFilterCategorySmall('')
-  }, [filterCategoryLarge])
-
-  // 中カテゴリ変更 → 小カテゴリ取得
-  useEffect(() => {
-    if (filterCategoryMedium && filterCategoryMedium !== UNSET) {
-      const fetchSmall = async () => {
-        const { data } = await supabase
-          .from('category_small')
-          .select('id, name, medium_id')
-          .eq('medium_id', filterCategoryMedium)
-          .order('sort_order')
-        setSmallCategories(data || [])
-      }
-      fetchSmall()
-    } else {
-      setSmallCategories([])
-    }
-    setFilterCategorySmall('')
-  }, [filterCategoryMedium])
 
   // カードステータスを取得
   useEffect(() => {
@@ -399,32 +359,25 @@ export default function CardsPage({
 
       let query = supabase
         .from('cards')
-        .select(`*, category_large:category_large_id(name, icon), category_medium:category_medium_id(name), category_small:category_small_id(name), rarities:rarity_id(name)`, { count: 'exact' })
+        .select(`*, category_large:category_large_id(name, icon), rarities:rarity_id(name)`, { count: 'exact' })
 
       // 検索条件
       if (searchQuery.length >= 2) {
         query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'card_number']))
       }
 
-      // カテゴリ大
+      // ゲーム（カテゴリ大）
       if (filterCategoryLarge === UNSET) {
         query = query.is('category_large_id', null)
       } else if (filterCategoryLarge) {
         query = query.eq('category_large_id', filterCategoryLarge)
       }
 
-      // カテゴリ中
-      if (filterCategoryMedium === UNSET) {
-        query = query.is('category_medium_id', null)
-      } else if (filterCategoryMedium) {
-        query = query.eq('category_medium_id', filterCategoryMedium)
-      }
-
-      // カテゴリ小
-      if (filterCategorySmall === UNSET) {
-        query = query.is('category_small_id', null)
-      } else if (filterCategorySmall) {
-        query = query.eq('category_small_id', filterCategorySmall)
+      // セットコード
+      if (filterSetCode === UNSET) {
+        query = query.is('set_code', null)
+      } else if (filterSetCode) {
+        query = query.eq('set_code', filterSetCode)
       }
 
       // レアリティ
@@ -487,7 +440,7 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, filterCardNumber, currentPage, refreshKey, filtersHydrated])
+  }, [searchQuery, filterCategoryLarge, filterSetCode, filterRarity, filterExpansion, filterCardNumber, currentPage, refreshKey, filtersHydrated])
 
   // フィルタ変更時は1ページ目に戻る（sessionStorage復元時はスキップ）
   const filterChangeCount = useRef(0)
@@ -498,7 +451,7 @@ export default function CardsPage({
     if (filterChangeCount.current <= 1) return
     setCurrentPage(1)
     setSelectedIds(new Set())
-  }, [searchQuery, filterCategoryLarge, filterCategoryMedium, filterCategorySmall, filterRarity, filterExpansion, filterCardNumber, filtersHydrated])
+  }, [searchQuery, filterCategoryLarge, filterSetCode, filterRarity, filterExpansion, filterCardNumber, filtersHydrated])
 
   // =============================================================================
   // Checkbox Logic
@@ -532,42 +485,21 @@ export default function CardsPage({
 
   const openBatchModal = () => {
     setBatchUpdates({})
-    setBatchMediumCats([])
-    setBatchSmallCats([])
     setBatchRarities([])
     setShowBatchModal(true)
   }
 
   const handleBatchLargeChange = async (value: string) => {
-    setBatchMediumCats([])
-    setBatchSmallCats([])
     setBatchRarities([])
     setBatchUpdates({ category_large_id: value || null })
 
     if (value) {
-      const [{ data: medData }, { data: rarData }] = await Promise.all([
-        supabase.from('category_medium').select('id, name, large_id').eq('large_id', value).order('sort_order'),
-        supabase.from('rarities').select('id, name, large_id').eq('large_id', value).order('sort_order')
-      ])
-      setBatchMediumCats(medData || [])
-      setBatchRarities(rarData || [])
-    }
-  }
-
-  const handleBatchMediumChange = async (value: string) => {
-    setBatchSmallCats([])
-    setBatchUpdates(prev => {
-      const { category_small_id, ...rest } = prev
-      return { ...rest, category_medium_id: value || null }
-    })
-
-    if (value) {
-      const { data } = await supabase
-        .from('category_small')
-        .select('id, name, medium_id')
-        .eq('medium_id', value)
+      const { data: rarData } = await supabase
+        .from('rarities')
+        .select('id, name, large_id')
+        .eq('large_id', value)
         .order('sort_order')
-      setBatchSmallCats(data || [])
+      setBatchRarities(rarData || [])
     }
   }
 
@@ -616,15 +548,7 @@ export default function CardsPage({
     const labels: string[] = []
     if (batchUpdates.category_large_id !== undefined) {
       const cat = categories.find(c => c.id === batchUpdates.category_large_id)
-      labels.push(`カテゴリ大 → ${cat?.name || '（クリア）'}`)
-    }
-    if (batchUpdates.category_medium_id !== undefined) {
-      const cat = batchMediumCats.find(c => c.id === batchUpdates.category_medium_id)
-      labels.push(`カテゴリ中 → ${cat?.name || '（クリア）'}`)
-    }
-    if (batchUpdates.category_small_id !== undefined) {
-      const cat = batchSmallCats.find(c => c.id === batchUpdates.category_small_id)
-      labels.push(`カテゴリ小 → ${cat?.name || '（クリア）'}`)
+      labels.push(`ゲーム → ${cat?.name || '（クリア）'}`)
     }
     if (batchUpdates.rarity_id !== undefined) {
       const r = batchRarities.find(r => r.id === batchUpdates.rarity_id)
@@ -750,44 +674,29 @@ export default function CardsPage({
 
           {/* フィルタ行 */}
           <div className="flex gap-2 flex-wrap items-center">
-            {/* カテゴリ大 */}
+            {/* ゲーム */}
             <select
               value={filterCategoryLarge}
               onChange={(e) => setFilterCategoryLarge(e.target.value)}
               className="px-3 py-1.5 border rounded-lg text-sm"
             >
-              <option value="">全カテゴリ</option>
+              <option value="">全ゲーム</option>
               <option value={UNSET}>⚠️ 未設定</option>
               {categories.map(cat => (
                 <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
               ))}
             </select>
 
-            {/* カテゴリ中 */}
+            {/* セットコード */}
             <select
-              value={filterCategoryMedium}
-              onChange={(e) => setFilterCategoryMedium(e.target.value)}
+              value={filterSetCode}
+              onChange={(e) => setFilterSetCode(e.target.value)}
               className="px-3 py-1.5 border rounded-lg text-sm"
-              disabled={!filterCategoryLarge || filterCategoryLarge === UNSET}
             >
-              <option value="">全世代</option>
+              <option value="">全セット</option>
               <option value={UNSET}>⚠️ 未設定</option>
-              {mediumCategories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-
-            {/* カテゴリ小 */}
-            <select
-              value={filterCategorySmall}
-              onChange={(e) => setFilterCategorySmall(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
-              disabled={!filterCategoryMedium || filterCategoryMedium === UNSET}
-            >
-              <option value="">全パック</option>
-              <option value={UNSET}>⚠️ 未設定</option>
-              {smallCategories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              {setCodes.map(code => (
+                <option key={code} value={code}>{code}</option>
               ))}
             </select>
 
@@ -836,13 +745,12 @@ export default function CardsPage({
             )}
 
             {/* フィルタリセット */}
-            {(searchQuery || filterCategoryLarge || filterCategoryMedium || filterCategorySmall || filterRarity || filterExpansion || filterCardNumber) && (
+            {(searchQuery || filterCategoryLarge || filterSetCode || filterRarity || filterExpansion || filterCardNumber) && (
               <button
                 onClick={() => {
                   setSearchQuery('')
                   setFilterCategoryLarge('')
-                  setFilterCategoryMedium('')
-                  setFilterCategorySmall('')
+                  setFilterSetCode('')
                   setFilterRarity('')
                   setFilterExpansion('')
                   setFilterCardNumber('')
@@ -875,9 +783,9 @@ export default function CardsPage({
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">サイト</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 min-w-[220px]">URL追加</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カテゴリ</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">世代</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">パック</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">ゲーム</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">セット</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">収録弾</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
@@ -963,11 +871,15 @@ export default function CardsPage({
                     <td className="px-4 py-2 text-sm text-gray-600" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
                       {card.category_large?.icon} {card.category_large?.name || <span className="text-gray-300">−</span>}
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.category_medium?.name || <span className="text-gray-300">−</span>}
+                    <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                      {card.set_code ? (
+                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-mono font-medium">{card.set_code}</span>
+                      ) : (
+                        <span className="text-gray-300 text-sm">−</span>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.category_small?.name || <span className="text-gray-300">−</span>}
+                      {card.expansion || <span className="text-gray-300">−</span>}
                     </td>
                     <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
                       {card.rarities?.name ? (
@@ -1122,9 +1034,9 @@ export default function CardsPage({
             </h3>
 
             <div className="space-y-4">
-              {/* カテゴリ大 */}
+              {/* ゲーム */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ大</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ゲーム</label>
                 <select
                   value={batchUpdates.category_large_id || ''}
                   onChange={(e) => handleBatchLargeChange(e.target.value)}
@@ -1136,40 +1048,6 @@ export default function CardsPage({
                   ))}
                 </select>
               </div>
-
-              {/* カテゴリ中 */}
-              {batchMediumCats.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ中（世代）</label>
-                  <select
-                    value={batchUpdates.category_medium_id || ''}
-                    onChange={(e) => handleBatchMediumChange(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2"
-                  >
-                    <option value="">（変更しない）</option>
-                    {batchMediumCats.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* カテゴリ小 */}
-              {batchSmallCats.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ小（パック）</label>
-                  <select
-                    value={batchUpdates.category_small_id || ''}
-                    onChange={(e) => setBatchUpdates(prev => ({ ...prev, category_small_id: e.target.value || null }))}
-                    className="w-full border rounded-lg px-3 py-2"
-                  >
-                    <option value="">（変更しない）</option>
-                    {batchSmallCats.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {/* レアリティ */}
               {batchRarities.length > 0 && (

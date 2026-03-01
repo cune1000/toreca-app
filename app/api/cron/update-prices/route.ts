@@ -141,12 +141,6 @@ async function processSingleUrl(
   results: UpdateResults,
   logPrefix: string
 ): Promise<void> {
-  // スニダンは snkrdunk-sync で処理するためスキップ
-  if (site.product_url?.includes('snkrdunk.com')) {
-    results.skipped++
-    return
-  }
-
   results.processed++
 
   const cardName = (site.card as any)?.name || 'Unknown'

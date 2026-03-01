@@ -35,9 +35,6 @@ export interface Card {
 /** カード（リレーション込み） */
 export interface CardWithRelations extends Card {
   category_large?: { name: string; icon?: string }
-  category_medium?: { name: string }
-  category_small?: { name: string }
-  category_detail?: { name: string }
   rarities?: { name: string }
 }
 

@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         }
 
         // 許可するフィールドのみ
-        const allowedFields = ['category_large_id', 'category_medium_id', 'category_small_id', 'category_detail_id', 'rarity_id']
+        const allowedFields = ['category_large_id', 'rarity_id']
         const sanitized: Record<string, any> = {}
         for (const [key, value] of Object.entries(updates)) {
             if (allowedFields.includes(key)) {

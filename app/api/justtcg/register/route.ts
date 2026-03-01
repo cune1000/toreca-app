@@ -1,39 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { getRarityShortName } from '@/lib/rarity-mapping'
 
 export const dynamic = 'force-dynamic'
-
-// JustTCG英語レアリティ名 → 日本語略称マッピング
-const RARITY_EN_TO_JA: Record<string, string> = {
-  'Common': 'C',
-  'Uncommon': 'U',
-  'Rare': 'R',
-  'Holo Rare': 'R',
-  'Double Rare': 'RR',
-  'Triple Rare': 'RRR',
-  'Secret Rare': 'SR',
-  'Ultra Rare': 'UR',
-  'Illustration Rare': 'AR',
-  'Art Rare': 'AR',
-  'Special Art Rare': 'SAR',
-  'Hyper Rare': 'HR',
-  'Promo': 'PR',
-  // 追加レアリティ
-  'Amazing Rare': 'A',
-  'Shiny Rare': 'S',
-  'Character Rare': 'CHR',
-  'Character Super Rare': 'CSR',
-  'Ace Spec Rare': 'ACE',
-  'Rare Holo V': 'V',
-  'Rare Holo VMAX': 'VMAX',
-  'Rare Holo VSTAR': 'VSTAR',
-  'Rare Holo GX': 'GX',
-  'Rare BREAK': 'BREAK',
-  'Rare Holo EX': 'EX',
-  'Trainer Gallery Rare Holo': 'CHR',
-  'Radiant Rare': 'K',
-  'Super Rare': 'SR',
-}
 
 // レート制限（IPごとに5秒間隔）
 const lastRegisterMap = new Map<string, number>()
@@ -171,7 +140,7 @@ export async function POST(request: NextRequest) {
     let rarityId: string | null = null
     const rarityStr = str(rarity, 50)
     if (rarityStr && category?.id) {
-      const jaRarity = RARITY_EN_TO_JA[rarityStr] || rarityStr
+      const jaRarity = getRarityShortName(rarityStr) || rarityStr
       const { data: rarityRow } = await supabase
         .from('rarities')
         .select('id')

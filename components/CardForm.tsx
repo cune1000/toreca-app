@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getLargeCategories, getMediumCategories, getSmallCategories, getRarities } from '@/lib/api/categories'
+import { getLargeCategories, getRarities } from '@/lib/api/categories'
 import { addCard } from '@/lib/api/cards'
 import { Plus, X, RefreshCw, Image } from 'lucide-react'
 
@@ -21,8 +21,6 @@ interface FormData {
   name: string
   card_number: string
   category_large_id: string
-  category_medium_id: string
-  category_small_id: string
   rarity_id: string
   rarity: string
   expansion: string
@@ -39,8 +37,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
   const [uploading, setUploading] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
-  const [mediumCategories, setMediumCategories] = useState<Category[]>([])
-  const [smallCategories, setSmallCategories] = useState<Category[]>([])
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [expansionSuggestions, setExpansionSuggestions] = useState<string[]>([])
   const [raritySuggestions, setRaritySuggestions] = useState<string[]>([])
@@ -55,8 +51,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
     name: '',
     card_number: '',
     category_large_id: '',
-    category_medium_id: '',
-    category_small_id: '',
     rarity_id: '',
     rarity: '',
     expansion: '',
@@ -102,38 +96,18 @@ export default function CardForm({ onClose, onSaved }: Props) {
     fetchSuggestions()
   }, [])
 
-  // 大カテゴリが変わったらレアリティと中カテゴリを取得
+  // 大カテゴリが変わったらレアリティを取得
   useEffect(() => {
-    async function fetchRelatedData() {
+    async function fetchRarities() {
       if (!form.category_large_id) {
         setRarities([])
-        setMediumCategories([])
         return
       }
-
-      const [rarityData, mediumData] = await Promise.all([
-        getRarities(form.category_large_id),
-        getMediumCategories(form.category_large_id)
-      ])
-
+      const rarityData = await getRarities(form.category_large_id)
       setRarities(rarityData)
-      setMediumCategories(mediumData)
     }
-    fetchRelatedData()
+    fetchRarities()
   }, [form.category_large_id])
-
-  // 中カテゴリが変わったら小カテゴリを取得
-  useEffect(() => {
-    async function fetchSmallCategories() {
-      if (!form.category_medium_id) {
-        setSmallCategories([])
-        return
-      }
-      const data = await getSmallCategories(form.category_medium_id)
-      setSmallCategories(data)
-    }
-    fetchSmallCategories()
-  }, [form.category_medium_id])
 
   // 画像リサイズ（Vercel 4.5MB制限対策）
   const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
@@ -221,8 +195,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
       name: form.name,
       card_number: form.card_number || undefined,
       category_large_id: form.category_large_id || undefined,
-      category_medium_id: form.category_medium_id || undefined,
-      category_small_id: form.category_small_id || undefined,
       rarity_id: form.rarity_id || undefined,
       rarity: form.rarity || undefined,
       expansion: form.expansion || undefined,
@@ -387,14 +359,14 @@ export default function CardForm({ onClose, onSaved }: Props) {
             )}
           </div>
 
-          {/* 大カテゴリ */}
+          {/* ゲーム */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              大カテゴリ
+              ゲーム
             </label>
             <select
               value={form.category_large_id}
-              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, category_medium_id: '', category_small_id: '', rarity_id: '' })}
+              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, rarity_id: '' })}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
@@ -403,44 +375,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
               ))}
             </select>
           </div>
-
-          {/* 中カテゴリ */}
-          {mediumCategories.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                中カテゴリ
-              </label>
-              <select
-                value={form.category_medium_id}
-                onChange={(e) => setForm({ ...form, category_medium_id: e.target.value, category_small_id: '' })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">選択してください</option>
-                {mediumCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 小カテゴリ */}
-          {smallCategories.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                小カテゴリ
-              </label>
-              <select
-                value={form.category_small_id}
-                onChange={(e) => setForm({ ...form, category_small_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">選択してください</option>
-                {smallCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {/* レアリティ（ボタン選択）- カテゴリに紐づくもの */}
           {rarities.length > 0 && (
