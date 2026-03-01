@@ -22,6 +22,7 @@ export default function CardDetailPage({ params }: Props) {
     const [priceData, setPriceData] = useState<Record<string, PricePoint[]>>({})
     const [loading, setLoading] = useState(true)
     const [cardId, setCardId] = useState<string>('')
+    const [showImageModal, setShowImageModal] = useState(false)
 
     useEffect(() => {
         params.then(p => setCardId(p.id))
@@ -116,13 +117,16 @@ export default function CardDetailPage({ params }: Props) {
                 <div className="bg-white px-4 pt-4 pb-5">
                     <div className="flex gap-4">
                         {/* カード画像 */}
-                        <div className="flex-shrink-0 w-24 h-32 sm:w-32 sm:h-44 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden shadow-lg border border-gray-100">
+                        <button
+                            onClick={() => card.image_url && setShowImageModal(true)}
+                            className="flex-shrink-0 w-24 h-32 sm:w-32 sm:h-44 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden shadow-lg border border-gray-100 cursor-zoom-in"
+                        >
                             {card.image_url ? (
                                 <img src={card.image_url} alt={card.name} className="h-full object-contain" />
                             ) : (
                                 <span className="text-5xl text-gray-200">🃏</span>
                             )}
-                        </div>
+                        </button>
 
                         {/* 基本情報 */}
                         <div className="flex-1 min-w-0">
@@ -175,7 +179,7 @@ export default function CardDetailPage({ params }: Props) {
 
                     {/* 価格サマリーカード (Bento UI風) */}
                     <div className="grid grid-cols-2 gap-2.5 mt-5">
-                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl px-4 py-3 border border-green-100">
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl px-4 py-3 border border-green-100">
                             <p className="text-xs text-green-500 font-medium">PSA10 海外相場</p>
                             <p className="text-lg font-black text-green-600 mt-1 tabular-nums">
                                 {card.graded_price_jpy ? formatPrice(card.graded_price_jpy) : '-'}
@@ -184,7 +188,7 @@ export default function CardDetailPage({ params }: Props) {
                                 <p className="text-xs text-green-400 tabular-nums">{formatUsd(card.graded_price_usd)}</p>
                             )}
                         </div>
-                        <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-2xl px-4 py-3 border border-gray-100">
+                        <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl px-4 py-3 border border-gray-100">
                             <p className="text-xs text-gray-400 font-medium">最高値 / 最安値</p>
                             <div className="mt-1">
                                 <span className="text-sm font-bold text-red-500 tabular-nums">
@@ -201,13 +205,13 @@ export default function CardDetailPage({ params }: Props) {
                     {/* 買取価格サマリー */}
                     {(card.purchase_loose_best || card.purchase_psa10_best) && (
                         <div className="grid grid-cols-2 gap-2.5 mt-2.5">
-                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl px-4 py-3 border border-blue-100">
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl px-4 py-3 border border-blue-100">
                                 <p className="text-xs text-blue-400 font-medium">買取最高値（素体）</p>
                                 <p className="text-lg font-black text-blue-600 mt-1 tabular-nums">
                                     {card.purchase_loose_best ? formatPrice(card.purchase_loose_best) : '-'}
                                 </p>
                             </div>
-                            <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 rounded-2xl px-4 py-3 border border-purple-100">
+                            <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 rounded-xl px-4 py-3 border border-purple-100">
                                 <p className="text-xs text-purple-400 font-medium">買取最高値（PSA10）</p>
                                 <p className="text-lg font-black text-purple-600 mt-1 tabular-nums">
                                     {card.purchase_psa10_best ? formatPrice(card.purchase_psa10_best) : '-'}
@@ -266,6 +270,20 @@ export default function CardDetailPage({ params }: Props) {
                     </div>
                 </div>
             </main>
+
+            {/* 画像拡大モーダル */}
+            {showImageModal && card.image_url && (
+                <div
+                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+                    onClick={() => setShowImageModal(false)}
+                >
+                    <img
+                        src={card.image_url}
+                        alt={card.name}
+                        className="max-w-full max-h-[85vh] object-contain rounded-lg"
+                    />
+                </div>
+            )}
 
             {/* フッター */}
             <footer className="border-t border-gray-100 mt-8 py-6 text-center text-xs text-gray-400">

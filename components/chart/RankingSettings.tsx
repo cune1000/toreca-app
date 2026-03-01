@@ -50,7 +50,7 @@ export default function RankingSettings({ visible, onSave, onClose }: Props) {
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-t-2xl md:rounded-2xl w-full md:w-[520px] max-h-[90vh] md:max-h-[85vh] overflow-hidden shadow-2xl"
+                className="bg-white rounded-t-2xl md:rounded-xl w-full md:w-[520px] max-h-[90vh] md:max-h-[85vh] overflow-hidden shadow-2xl"
                 onClick={e => e.stopPropagation()}
             >
                 {/* ドラッグハンドル(モバイル) */}

@@ -26,7 +26,7 @@ export default function RankingCard({ card, rank, color }: Props) {
     return (
         <Link
             href={`/chart/card/${card.id}`}
-            className="flex-shrink-0 w-[168px] bg-white rounded-2xl border border-gray-100 overflow-hidden
+            className="flex-shrink-0 w-[168px] bg-white rounded-xl border border-gray-100 overflow-hidden
                 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
         >
             {/* ランク番号 + 変動率バッジ */}
