@@ -8,6 +8,7 @@ import { PricePoint } from '@/lib/chart/types'
 import { formatPrice, formatDate, formatUsd } from '@/lib/chart/format'
 
 const PERIODS = [
+    { key: '7d', label: '7日' },
     { key: '30d', label: '30日' },
     { key: '90d', label: '90日' },
     { key: '1y', label: '1年' },
@@ -43,7 +44,7 @@ function CustomTooltip({ active, payload }: any) {
     )
 }
 
-export default function PriceGraph({ data, onPeriodChange, initialPeriod = '30d' }: Props) {
+export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' }: Props) {
     const [period, setPeriod] = useState(initialPeriod)
     const [showGraded, setShowGraded] = useState(true)
 
@@ -67,7 +68,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '30d'
     return (
         <div>
             {/* 期間切り替え */}
-            <div className="grid grid-cols-4 gap-1.5 mb-4">
+            <div className="grid grid-cols-5 gap-1.5 mb-4">
                 {PERIODS.map(p => (
                     <button
                         key={p.key}

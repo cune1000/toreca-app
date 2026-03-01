@@ -9,6 +9,7 @@ export async function GET(
     const period = req.nextUrl.searchParams.get('period') || '30d'
 
     const periodDays: Record<string, number> = {
+        '7d': 7,
         '30d': 30,
         '90d': 90,
         '1y': 365,

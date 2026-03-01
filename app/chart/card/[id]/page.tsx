@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Share2, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Share2 } from 'lucide-react'
 import ChartLayoutComponent from '@/components/chart/ChartLayout'
 import PriceGraph from '@/components/chart/PriceGraph'
 import PurchasePriceTable from '@/components/chart/PurchasePriceTable'
@@ -33,8 +33,9 @@ export default function CardDetailPage({ params }: Props) {
         async function fetchData() {
             setLoading(true)
 
-            const [cardData, history30, history90, history1y, historyAll] = await Promise.all([
+            const [cardData, history7, history30, history90, history1y, historyAll] = await Promise.all([
                 getCardDetail(cardId),
+                getPriceHistory(cardId, '7d'),
                 getPriceHistory(cardId, '30d'),
                 getPriceHistory(cardId, '90d'),
                 getPriceHistory(cardId, '1y'),
@@ -43,6 +44,7 @@ export default function CardDetailPage({ params }: Props) {
 
             setCard(cardData)
             setPriceData({
+                '7d': history7,
                 '30d': history30,
                 '90d': history90,
                 '1y': history1y,
@@ -229,22 +231,6 @@ export default function CardDetailPage({ params }: Props) {
                                 店舗別 買取価格
                             </h3>
                             <PurchasePriceTable prices={card.purchase_prices} />
-                        </div>
-                    )}
-
-                    {/* PriceChartingリンク */}
-                    {card.pricecharting_id && (
-                        <div className="mt-3">
-                            <a
-                                href={card.pricecharting_url || `https://www.pricecharting.com/game/${card.pricecharting_id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5
-                                    text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                            >
-                                <ExternalLink size={14} />
-                                PriceChartingで詳細を見る
-                            </a>
                         </div>
                     )}
 
