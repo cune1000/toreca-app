@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { getSetNameJa, extractSetCode, extractReleaseYear } from '@/lib/justtcg-set-names'
+import { getSetNameJa, extractSetCode, extractReleaseYear, getRegulationFromSetCode } from '@/lib/justtcg-set-names'
 import type { JTCard, JTSet, PCMatch } from './useJustTcgState'
 
 export function useRegistration(
@@ -151,6 +151,7 @@ export function useRegistration(
           pricecharting_id: pc?.id ? String(pc.id) : null,
           pricecharting_name: pc?.name || card.name, // PC名優先、なければJustTCG英語名
           pricecharting_url: pc?.pricechartingUrl || null,
+          regulation: getRegulationFromSetCode(setCode) || null,
           game: selectedGameRef.current,
         }),
       })

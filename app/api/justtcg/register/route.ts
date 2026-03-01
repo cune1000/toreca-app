@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       pricecharting_id,
       pricecharting_name,
       pricecharting_url,
+      regulation,
       game,
     } = body
 
@@ -176,6 +177,7 @@ export async function POST(request: NextRequest) {
       if (category?.id) updateFields.category_large_id = category.id
       if (rarityId) updateFields.rarity_id = rarityId
       if (url(image_url)) updateFields.image_url = url(image_url)
+      if (str(regulation, 10)) updateFields.regulation = str(regulation, 10)
 
       const { data: updated, error: updateError } = await supabase
         .from('cards')
@@ -254,6 +256,7 @@ export async function POST(request: NextRequest) {
       if (category?.id) updateFields.category_large_id = category.id
       if (rarityId) updateFields.rarity_id = rarityId
       if (url(image_url)) updateFields.image_url = url(image_url)
+      if (str(regulation, 10)) updateFields.regulation = str(regulation, 10)
 
       const { data: merged, error: mergeError } = await supabase
         .from('cards')
@@ -291,6 +294,7 @@ export async function POST(request: NextRequest) {
         pricecharting_id: str(pricecharting_id, 100),
         pricecharting_name: str(pricecharting_name, 200),
         pricecharting_url: url(pricecharting_url),
+        regulation: str(regulation, 10),
         category_large_id: category?.id || null,
       })
       .select()
@@ -316,6 +320,7 @@ export async function POST(request: NextRequest) {
           if (pcId) fallbackFields.pricecharting_id = pcId
           if (category?.id) fallbackFields.category_large_id = category.id
           if (url(image_url)) fallbackFields.image_url = url(image_url)
+          if (str(regulation, 10)) fallbackFields.regulation = str(regulation, 10)
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('cards')
             .update(fallbackFields)

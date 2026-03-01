@@ -195,6 +195,7 @@ export default function JustTcgExplorer() {
               card={card}
               open={!!card}
               onClose={handleClosePanel}
+              selectedSet={state.selectedSet}
               showRegistration={state.showRegistration}
               pcMatch={card ? state.pcMatches[card.id] : undefined}
               pcLoading={card ? state.pcLoading[card.id] : false}
@@ -245,6 +246,7 @@ export default function JustTcgExplorer() {
               onClose={handleClosePanel}
               scrollable={false}
               className="w-full"
+              selectedSet={state.selectedSet}
               showRegistration={state.showRegistration}
               pcMatch={state.pcMatches[card.id]}
               pcLoading={state.pcLoading[card.id] || false}

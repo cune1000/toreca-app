@@ -5,9 +5,9 @@ import { X, ChevronDown, ChevronUp, Search as SearchIcon, ExternalLink } from 'l
 import RarityBadge from './RarityBadge'
 import VariantRow from './VariantRow'
 import PriceHistoryChart from './PriceHistoryChart'
-import type { JTCard, PCMatch } from '../hooks/useJustTcgState'
+import type { JTCard, JTSet, PCMatch } from '../hooks/useJustTcgState'
 import { getNmVariant, formatUpdated, isValidPrice } from '../hooks/useJustTcgState'
-import { getSetNameJa } from '@/lib/justtcg-set-names'
+import { getSetNameJa, extractSetCode, getSeriesFromSetCode, getRegulationFromSetCode } from '@/lib/justtcg-set-names'
 
 const EMPTY_HISTORY: Array<{ p: number; t: number }> = []
 
@@ -32,6 +32,8 @@ interface RightPanelProps {
   onRegister?: () => void
   /** false でスクロールを外部コンテナに委任（モバイルボトムシート用） */
   scrollable?: boolean
+  /** セット情報（発売日表示用） */
+  selectedSet?: JTSet | null
 }
 
 export default memo(function RightPanel({
@@ -52,6 +54,7 @@ export default memo(function RightPanel({
   registerError,
   onRegister,
   scrollable = true,
+  selectedSet,
 }: RightPanelProps) {
   const [showChart, setShowChart] = useState(false)
 
@@ -102,6 +105,33 @@ export default memo(function RightPanel({
               <RarityBadge rarity={card.rarity} />
             </div>
             <p className="text-[10px] text-[var(--jtcg-text-muted)] mt-0.5">{getSetNameJa(card.set, card.set_name)}</p>
+            {/* シリーズ・発売日・レギュレーション */}
+            {(() => {
+              const setCode = extractSetCode(card.set)
+              const series = getSeriesFromSetCode(setCode)
+              const regulation = getRegulationFromSetCode(setCode)
+              const releaseDate = selectedSet?.release_date?.slice(0, 10)
+              if (!series && !releaseDate && !regulation) return null
+              return (
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {series && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                      {series}
+                    </span>
+                  )}
+                  {releaseDate && (
+                    <span className="text-[10px] text-[var(--jtcg-text-muted)]">
+                      {releaseDate}
+                    </span>
+                  )}
+                  {regulation && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300">
+                      {regulation}
+                    </span>
+                  )}
+                </div>
+              )
+            })()}
           </div>
           <button
             onClick={onClose}

@@ -497,3 +497,142 @@ export function extractReleaseYear(releaseDate: string | null): number | null {
   const year = parseInt(m[1])
   return (year >= 1996 && year <= 2100) ? year : null
 }
+
+/**
+ * セットコードからシリーズを判定
+ * "SV10" → "SV", "S12A" → "S", "SM8B" → "SM", "M3" → "M"
+ * S系サブセット（SS, SC, SD, SF, SB等）は全て "S" に統合
+ * SM系サブセット（SMA~SMI, SMJ等）は全て "SM" に統合
+ */
+export function getSeriesFromSetCode(code: string | null): string | null {
+  if (!code) return null
+  const c = code.toUpperCase()
+
+  // SV系: SV*, SVN, SVM (ただしSM系を先に除外)
+  if (/^SV/.test(c) || c === 'SVN' || c === 'SVM') return 'SV'
+
+  // SM系: SM0~SM12A + サブセット (SMA~SMI, SMJ~SML, SMM, SMP*)
+  // 注意: SM は SV の前にチェックしない（SVが先にマッチするため安全）
+  if (/^SM/.test(c)) return 'SM'
+
+  // S系（SV/SM以外の S 始まり全て）: S0~S12A + 全サブセット
+  // SS, SC*, SD, SF, SB, SK, SJ, SN, SLD, SLL, SEF, SEK, SH, SP*, SI, SPD, SPZ, SA, S0, S8A-P
+  if (/^S/.test(c)) return 'S'
+
+  // M系: M1~M3, MP*, MBD, MBG, M-P
+  if (/^M/.test(c)) return 'M'
+
+  // XY系: XY*, XYA~XYH, CP* (コンセプトパック), SNP (BREAK進化パック)
+  if (/^XY/.test(c) || /^CP/.test(c)) return 'XY'
+
+  // BW系: BW*, BK* (バトル強化デッキ), CS1
+  if (/^BW/.test(c) || /^BK/.test(c) || /^CS/.test(c)) return 'BW'
+
+  // L系: L1~L3, LL, L-P
+  if (/^L/.test(c)) return 'L'
+
+  // PT系: PT1~PT4, PTS, PTR, PTM
+  if (/^PT/.test(c)) return 'PT'
+
+  // DP系: DP1~DP5, DPT*, DP-P
+  if (/^DP/.test(c)) return 'DP'
+
+  // OP系 (One Piece): OP*
+  if (/^OP/.test(c)) return 'OP'
+
+  // WCS: ワールドチャンピオンシップ
+  if (/^WCS/.test(c)) return 'WCS'
+
+  return null
+}
+
+/**
+ * セットIDからシリーズを判定（setCodeが抽出できない旧裏等にも対応）
+ */
+export function getSeriesFromSetId(setId: string): string | null {
+  const code = extractSetCode(setId)
+  if (code) return getSeriesFromSetCode(code)
+
+  // setIdベースのフォールバック（旧裏・e-card・PCG/ADV時代）
+  if (setId.includes('pokemon-japan')) {
+    // e-card時代のキーワード
+    if (/^(base-expansion|pokemon-e-|mcdonald|wind-from|split-earth|mysterious-mountains|the-town-on-no-map|theater-limited)/.test(setId)) return 'e-card'
+    // PCG/ADV時代
+    if (/^(adv-|holon-|mirage-|golden-sky|pokepark|offense-and-defense|miracle-crystal|earth-s-|ocean-s-|imprison-|shockwave-|rocket-gang-strikes|clash-of-the-blue|flight-of-legends|undone-seal|rulers-of-the-heavens|miracle-of-the-desert|magma-vs-aqua|movie-commemoration-vs-pack-sky|movie-commemoration-vs-pack-aura|rayquaza-constructed|deoxys-constructed|metagross-constructed|salamence-constructed|flygon-constructed|torchic-constructed|treecko-constructed|mudkip-constructed|gift-box-mew|gift-box-lati|emerald-gift|aqua-deck|magma-deck|black-deck|silver-deck|master-kit|meganium-constructed|typhlosion-constructed|feraligatr-constructed|pcg-p|play-promotional|adv-p)/.test(setId)) return 'ADV/PCG'
+    // 旧裏面
+    if (/^(expansion-pack|pokemon-jungle|mystery-of-the-fossils|rocket-gang|gym-challenge|challenge-from-the-darkness|leaders-stadium|gold-silver|crossing-the-ruins|awakening-legends|darkness-and-to-light|pokemon-web|pokemon-vs|southern-island|japanese-cd|corocoro-|intro-pack|neo-premium|quick-starter|city-gym|world-hobby|unnumbered-|champion-road|pokemon-card-fan|battle-road|pokemon-card-information|vending-machine)/.test(setId)) return '旧裏'
+  }
+
+  // One Piece
+  if (setId.includes('one-piece')) return 'OP'
+
+  return null
+}
+
+// S系サブセットの時代分類（レギュレーション判定用）
+// E期: S1W~S4A + 初期サブセット
+const S_REG_E = new Set([
+  'S1W', 'S1H', 'S1A', 'S2', 'S2A', 'S3', 'S3A', 'S4', 'S4A',
+  'SD', 'SC', 'SC2', 'SP1', 'SB', 'SA',
+])
+// F期: S5I~S12A + 後期サブセット
+const S_REG_F = new Set([
+  'S5I', 'S5R', 'S5A', 'S6H', 'S6K', 'S6A', 'S7D', 'S7R',
+  'S8', 'S8A', 'S8A-G', 'S8A-P', 'S8B', 'S9', 'S9A',
+  'S10D', 'S10P', 'S10A', 'S10B', 'S11', 'S11A', 'S12', 'S12A',
+  'SP2', 'SP4', 'SP5', 'SP5-V', 'SP6', 'SS', 'SF', 'SK', 'SJ',
+  'SLD', 'SLL', 'SEF', 'SEK', 'SH', 'SPD', 'SPZ', 'SI', 'S0', 'SN', 'S-P',
+])
+
+// SV系の時代分類
+const SV_REG_G = new Set([
+  'SV1S', 'SV1V', 'SV1A', 'SV2D', 'SV2P', 'SV2A', 'SV3', 'SV3A',
+])
+const SV_REG_H = new Set([
+  'SV4K', 'SV4M', 'SV4A', 'SV5K', 'SV5M', 'SV5A', 'SV6', 'SV6A',
+  'SV7', 'SV7A', 'SV8', 'SV8A', 'SVM',
+])
+// I期: SV9以降（SVN含む）
+const SV_REG_I = new Set([
+  'SV9', 'SV9A', 'SV10', 'SV11B', 'SV11W', 'SVN',
+])
+
+/**
+ * セットコードからレギュレーションマークを判定（ポケモンカード日本版のみ）
+ * "SV10" → "I", "S12A" → "F", "SM8B" → "D"
+ * ワンピース・旧時代（BW以前）はnull
+ */
+export function getRegulationFromSetCode(code: string | null): string | null {
+  if (!code) return null
+  const c = code.toUpperCase()
+
+  const series = getSeriesFromSetCode(c)
+
+  // SM系 → D
+  if (series === 'SM') return 'D'
+
+  // S系 → E or F
+  if (series === 'S') {
+    if (S_REG_E.has(c)) return 'E'
+    if (S_REG_F.has(c)) return 'F'
+    // 未分類のS系はFにフォールバック（後期が多い）
+    return 'F'
+  }
+
+  // SV系 → G, H, or I
+  if (series === 'SV') {
+    if (SV_REG_G.has(c)) return 'G'
+    if (SV_REG_H.has(c)) return 'H'
+    if (SV_REG_I.has(c)) return 'I'
+    // SV系プロモ・スターターセット等 → コードから判定不能な場合
+    // SV-P, SV-EX 等のサブセットはGにフォールバック
+    return 'G'
+  }
+
+  // M系 → 新レギュレーション（仮にJ）
+  // 公式発表待ちだが、M時代は最新なので暫定値
+  if (series === 'M') return null
+
+  // XY以前、OP、WCS → null（レギュレーション対象外）
+  return null
+}
