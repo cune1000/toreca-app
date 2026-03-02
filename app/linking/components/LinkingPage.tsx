@@ -109,6 +109,13 @@ export default function LinkingPage({ config }: LinkingPageProps) {
           setSort={state.setSort}
           stats={state.stats}
           loading={state.loading}
+          itemFilter={state.itemFilter}
+          setExcludeLangs={state.setExcludeLangs}
+          setMinPrice={state.setMinPrice}
+          setExcludeNoPrice={state.setExcludeNoPrice}
+          setSetCode={state.setSetCode}
+          setCodes={state.setCodes}
+          sourceKey={config.key}
           className="w-52 shrink-0 hidden lg:block"
         />
         <CenterPanel
@@ -159,6 +166,13 @@ export default function LinkingPage({ config }: LinkingPageProps) {
               setSort={state.setSort}
               stats={state.stats}
               loading={state.loading}
+              itemFilter={state.itemFilter}
+              setExcludeLangs={state.setExcludeLangs}
+              setMinPrice={state.setMinPrice}
+              setExcludeNoPrice={state.setExcludeNoPrice}
+              setSetCode={state.setSetCode}
+              setCodes={state.setCodes}
+              sourceKey={config.key}
               className="flex-1 min-h-0 overflow-y-auto"
             />
           </div>

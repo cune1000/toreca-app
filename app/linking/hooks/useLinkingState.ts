@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import type { ExternalItem, LinkFilter, SortConfig, PaginationInfo, SourceConfig } from '../lib/types'
+import type { ExternalItem, LinkFilter, SortConfig, PaginationInfo, SourceConfig, ItemFilterConfig, SetCodeInfo } from '../lib/types'
+
+const DEFAULT_EXCLUDE_LANGS = ['CN', 'EN', 'KR', 'TW', 'ID', 'TH']
 
 interface UseLinkingStateReturn {
   items: ExternalItem[]
@@ -25,6 +27,14 @@ interface UseLinkingStateReturn {
   fetchItems: () => Promise<void>
   updateItemLink: (itemId: string, cardId: string | null, cardName: string | null) => void
   stats: { total: number; linked: number; unlinked: number }
+  // 除外フィルタ
+  itemFilter: ItemFilterConfig
+  setExcludeLangs: (langs: string[]) => void
+  setMinPrice: (price: number | null) => void
+  setExcludeNoPrice: (v: boolean) => void
+  setSetCode: (code: string | null) => void
+  // 収録弾一覧
+  setCodes: SetCodeInfo[]
 }
 
 export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
@@ -37,6 +47,13 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
   const [sort, setSortState] = useState<SortConfig>({ field: 'name', order: 'asc' })
   const [selectedItem, setSelectedItem] = useState<ExternalItem | null>(null)
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set())
+  const [itemFilter, setItemFilter] = useState<ItemFilterConfig>({
+    excludeLangs: DEFAULT_EXCLUDE_LANGS,
+    minPrice: null,
+    excludeNoPrice: false,
+    setCode: null,
+  })
+  const [setCodes, setSetCodes] = useState<SetCodeInfo[]>([])
 
   // デバウンス用: 実際にAPIに送る検索語はrefで管理
   const debouncedSearchRef = useRef('')
@@ -74,6 +91,24 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
     setPagination(prev => ({ ...prev, page: 1 }))
   }, [])
 
+  // 除外フィルタ変更（全て page=1 リセット）
+  const setExcludeLangs = useCallback((langs: string[]) => {
+    setItemFilter(prev => ({ ...prev, excludeLangs: langs }))
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }, [])
+  const setMinPrice = useCallback((price: number | null) => {
+    setItemFilter(prev => ({ ...prev, minPrice: price }))
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }, [])
+  const setExcludeNoPrice = useCallback((v: boolean) => {
+    setItemFilter(prev => ({ ...prev, excludeNoPrice: v }))
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }, [])
+  const setSetCode = useCallback((code: string | null) => {
+    setItemFilter(prev => ({ ...prev, setCode: code }))
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }, [])
+
   // ページ変更時はcheckedItemsクリア
   const setPage = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, page }))
@@ -98,6 +133,11 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
         sort: sort.field,
         order: sort.order,
       })
+      // 除外フィルタ
+      if (itemFilter.excludeLangs.length > 0) params.set('excludeLangs', itemFilter.excludeLangs.join(','))
+      if (itemFilter.minPrice != null) params.set('minPrice', String(itemFilter.minPrice))
+      if (itemFilter.excludeNoPrice) params.set('excludeNoPrice', 'true')
+      if (itemFilter.setCode) params.set('setCode', itemFilter.setCode)
 
       const res = await fetch(`${config.itemsEndpoint}?${params}`, {
         signal: controller.signal,
@@ -118,12 +158,22 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
       setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.itemsEndpoint, pagination.page, pagination.perPage, linkFilter, sort.field, sort.order, fetchTrigger])
+  }, [config.itemsEndpoint, pagination.page, pagination.perPage, linkFilter, sort.field, sort.order, fetchTrigger,
+      itemFilter.excludeLangs.join(','), itemFilter.minPrice, itemFilter.excludeNoPrice, itemFilter.setCode])
 
   // deps変更時に再取得
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
+
+  // 収録弾一覧の取得（スニダンの場合のみ）
+  useEffect(() => {
+    if (config.key !== 'snkrdunk') return
+    fetch('/api/linking/snkrdunk/set-codes')
+      .then(r => r.json())
+      .then(data => setSetCodes(data.setCodes || []))
+      .catch(() => {})
+  }, [config.key])
 
   // クリーンアップ
   useEffect(() => {
@@ -199,5 +249,7 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
     checkedItems, toggleCheck, toggleAllFiltered,
     checkedCount: checkedItems.size,
     fetchItems, updateItemLink, stats,
+    itemFilter, setExcludeLangs, setMinPrice, setExcludeNoPrice, setSetCode,
+    setCodes,
   }
 }

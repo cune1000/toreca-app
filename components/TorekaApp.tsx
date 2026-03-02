@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import {
   Home, Database, Store, Settings,
   ChevronLeft, ChevronRight, Plus,
-  Layers, ExternalLink, BarChart3, Search, ShoppingCart, TrendingUp
+  Layers, ExternalLink, BarChart3, Search, ShoppingCart, TrendingUp, Link2
 } from 'lucide-react'
 
 // Components
@@ -164,6 +164,25 @@ const TorekaApp = () => {
             <item.icon size={20} />
             {!sidebarCollapsed && <span>{item.label}</span>}
           </button>
+        ))}
+
+        <div className="mb-2 mt-4 px-3 py-2 text-xs text-slate-400 uppercase">紐づけ</div>
+        {[
+          { href: '/linking/snkrdunk', icon: Link2, label: 'スニダン紐づけ' },
+          { href: '/linking/shinsoku', icon: Link2, label: 'シンソク紐づけ' },
+          { href: '/linking/lounge', icon: Link2, label: 'ラウンジ紐づけ' },
+        ].map(item => (
+          <a
+            key={item.href}
+            href={item.href}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors text-slate-300 hover:bg-slate-800"
+          >
+            <item.icon size={20} />
+            {!sidebarCollapsed && (
+              <span className="flex-1 text-left">{item.label}</span>
+            )}
+            {!sidebarCollapsed && <ExternalLink size={14} className="text-slate-500" />}
+          </a>
         ))}
 
         <div className="mb-2 mt-4 px-3 py-2 text-xs text-slate-400 uppercase">ツール</div>

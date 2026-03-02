@@ -122,6 +122,21 @@ export interface BulkLinkProgress {
   running: boolean
 }
 
+/** 除外フィルタ設定 */
+export interface ItemFilterConfig {
+  excludeLangs: string[]
+  minPrice: number | null
+  excludeNoPrice: boolean
+  setCode: string | null
+}
+
+/** 収録弾情報 */
+export interface SetCodeInfo {
+  code: string
+  jaName: string
+  count: number
+}
+
 /** API商品一覧レスポンス */
 export interface ItemsResponse {
   items: ExternalItem[]

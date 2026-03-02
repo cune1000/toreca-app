@@ -16,6 +16,11 @@ export async function GET(req: NextRequest) {
     const filter = searchParams.get('filter') || 'all'
     const sort = searchParams.get('sort') || 'name'
     const order = searchParams.get('order') || 'asc'
+    // 除外フィルタ
+    const excludeLangs = searchParams.get('excludeLangs')?.split(',').filter(Boolean) || []
+    const minPrice = searchParams.get('minPrice') ? parseInt(searchParams.get('minPrice')!) : null
+    const excludeNoPrice = searchParams.get('excludeNoPrice') === 'true'
+    const setCode = searchParams.get('setCode')?.trim() || ''
 
     // 1. linked/unlinkedフィルタ: 紐づけ済みapparel_idを先に取得
     let linkedApparelIds: Set<number> = new Set()
@@ -49,6 +54,26 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       query = query.ilike('name', `%${search}%`)
+    }
+
+    // 除外フィルタ: 言語
+    if (excludeLangs.length > 0) {
+      // language IS NULL（日本語扱い）は通す、指定言語のみ除外
+      // Supabase: or条件で language IS NULL OR language NOT IN (...)
+      query = query.or(`language.is.null,language.not.in.(${excludeLangs.join(',')})`)
+    }
+
+    // 除外フィルタ: 価格
+    if (excludeNoPrice) {
+      query = query.not('min_price', 'is', null).gt('min_price', 0)
+    }
+    if (minPrice != null && minPrice > 0) {
+      query = query.gte('min_price', minPrice)
+    }
+
+    // 収録弾フィルタ
+    if (setCode) {
+      query = query.eq('parsed_set_code', setCode)
     }
 
     // DB側フィルタ: linked/unlinked

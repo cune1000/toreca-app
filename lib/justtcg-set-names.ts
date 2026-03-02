@@ -613,6 +613,21 @@ export function getSetNameJa(id: string, fallbackName: string): string {
   return SET_NAME_JA[id] || fallbackName
 }
 
+/** set_code → 日本語名の逆引きマップ（遅延構築・キャッシュ） */
+let _setCodeToJaCache: Record<string, string> | null = null
+export function getSetCodeToJaMap(): Record<string, string> {
+  if (_setCodeToJaCache) return _setCodeToJaCache
+  const map: Record<string, string> = {}
+  for (const [setId, jaName] of Object.entries(SET_NAME_JA)) {
+    const code = extractSetCode(setId)
+    if (code && !map[code]) {
+      map[code] = jaName
+    }
+  }
+  _setCodeToJaCache = map
+  return map
+}
+
 /**
  * セットIDからset_code（例: "SV10", "M3", "SLD"）を抽出
  * "sv10-the-glory-of-team-rocket-pokemon-japan" → "SV10"

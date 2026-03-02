@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 import { getCategoryItems } from '@/lib/snkrdunk-api'
+import { parseExternalName } from '@/app/linking/lib/matching'
 
 export const maxDuration = 300
 
@@ -51,17 +52,22 @@ export async function GET(req: Request) {
 
       if (result.items.length === 0) break
 
-      // バッチUPSERT（snkrdunk_items_cache）
-      const rows = result.items.map(item => ({
-        apparel_id: item.id,
-        name: item.name,
-        product_number: item.productNumber || null,
-        min_price: item.minPrice,
-        total_listing_count: item.totalListingCount,
-        image_url: item.imageUrl,
-        released_at: item.releasedAt,
-        synced_at: now,
-      }))
+      // バッチUPSERT（snkrdunk_items_cache）— 名前からset_code/languageをパース
+      const rows = result.items.map(item => {
+        const parsed = parseExternalName(item.name)
+        return {
+          apparel_id: item.id,
+          name: item.name,
+          product_number: item.productNumber || null,
+          min_price: item.minPrice,
+          total_listing_count: item.totalListingCount,
+          image_url: item.imageUrl,
+          released_at: item.releasedAt,
+          parsed_set_code: parsed.setCode || null,
+          language: parsed.language || null,
+          synced_at: now,
+        }
+      })
 
       const { error, count } = await supabase
         .from('snkrdunk_items_cache')
