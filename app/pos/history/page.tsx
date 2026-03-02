@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import PosLayout from '@/components/pos/PosLayout'
 import PosSpinner from '@/components/pos/PosSpinner'
 import TransactionTypeBadge from '@/components/pos/TransactionTypeBadge'
@@ -16,6 +16,7 @@ export default function HistoryPage() {
     const [loading, setLoading] = useState(true)
     const [editingTx, setEditingTx] = useState<PosTransaction | null>(null)
     const [deletingTx, setDeletingTx] = useState<PosTransaction | null>(null)
+    const [downloading, setDownloading] = useState(false)
 
     const reload = () => {
         setLoading(true)
@@ -38,6 +39,42 @@ export default function HistoryPage() {
         }
     }, [transactions])
 
+    const downloadCsv = useCallback(async () => {
+        setDownloading(true)
+        try {
+            const res = await getTransactions({ type: typeFilter === 'all' ? undefined : typeFilter, limit: 100000 })
+            const rows = res.data
+            const headers = ['日時', '種別', '商品名', '状態', '数量', '単価', '合計', '費用', '利益', '利益率(%)', 'メモ']
+            const csvRows = rows.map(tx => [
+                new Date(tx.transaction_date).toLocaleDateString('ja-JP'),
+                tx.type === 'purchase' ? '仕入れ' : '販売',
+                (tx.inventory?.catalog?.name || '-').replace(/"/g, '""'),
+                tx.inventory?.condition || '-',
+                tx.quantity,
+                tx.unit_price,
+                tx.total_price,
+                tx.expenses || 0,
+                tx.type === 'sale' && tx.profit != null ? tx.profit : '',
+                tx.type === 'sale' && tx.profit_rate != null ? tx.profit_rate : '',
+                (tx.notes || '').replace(/"/g, '""'),
+            ])
+            const csv = [headers, ...csvRows].map(row => row.map(v => `"${v}"`).join(',')).join('\n')
+            const bom = '\uFEFF'
+            const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            const filterLabel = typeFilter === 'all' ? '全取引' : typeFilter === 'purchase' ? '仕入れ' : '販売'
+            a.href = url
+            a.download = `POS取引履歴_${filterLabel}_${new Date().toISOString().slice(0, 10)}.csv`
+            a.click()
+            URL.revokeObjectURL(url)
+        } catch (e) {
+            console.error('CSV download failed:', e)
+        } finally {
+            setDownloading(false)
+        }
+    }, [typeFilter])
+
     return (
         <PosLayout>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5 md:mb-6">
@@ -45,7 +82,17 @@ export default function HistoryPage() {
                     <h1 className="text-xl font-bold text-gray-900">取引履歴</h1>
                     <p className="text-sm text-gray-500 mt-1">{transactions.length}件の取引</p>
                 </div>
-                <div className="flex gap-1.5 bg-white border border-gray-200 rounded-lg p-1 self-start">
+                <div className="flex items-center gap-2 self-start">
+                <button
+                    onClick={downloadCsv}
+                    disabled={downloading || loading || transactions.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="CSVダウンロード"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    {downloading ? 'DL中...' : 'CSV'}
+                </button>
+                <div className="flex gap-1.5 bg-white border border-gray-200 rounded-lg p-1">
                     {[
                         { key: 'all' as const, label: 'すべて' },
                         { key: 'purchase' as const, label: '仕入れ' },
@@ -57,6 +104,7 @@ export default function HistoryPage() {
                             className={`px-3 md:px-4 py-2 rounded-md text-sm font-bold transition-colors ${typeFilter === f.key ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700'}`}
                         >{f.label}</button>
                     ))}
+                </div>
                 </div>
             </div>
 
