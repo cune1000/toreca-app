@@ -25,6 +25,7 @@ export interface Card {
   name_en?: string | null
   set_name_en?: string | null
   release_year?: number | null
+  release_date?: string | null
   justtcg_id?: string | null
   tcgplayer_id?: string | null
   pricecharting_url?: string | null

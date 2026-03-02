@@ -144,6 +144,7 @@ export function useRegistration(
           set_code: setCode,
           set_name_en: currentSet?.name || card.set_name,
           release_year: releaseYear,
+          release_date: currentSet?.release_date || null,
           expansion: expansionOverrideRef.current || (currentSet ? getSetNameJa(currentSet.id, currentSet.name) : card.set_name),
           image_url: pc?.imageUrl || null,
           justtcg_id: card.id,

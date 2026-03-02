@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       set_code,
       set_name_en,
       release_year,
+      release_date,
       expansion,
       image_url,
       justtcg_id,
@@ -145,6 +146,9 @@ export async function POST(request: NextRequest) {
 
     // R13-API06: release_year NaN/Infinity ガード
     const safeReleaseYear = typeof release_year === 'number' && Number.isFinite(release_year) ? release_year : null
+    // release_date: ISO日付形式(YYYY-MM-DD)のみ許可
+    const safeReleaseDate = typeof release_date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(release_date)
+      ? release_date.slice(0, 10) : null
 
     // rarity_id 自動ルックアップ（英語名→日本語略称→raritiesテーブル）
     let rarityId: string | null = null
@@ -170,6 +174,7 @@ export async function POST(request: NextRequest) {
       if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
       if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
       if (safeReleaseYear) updateFields.release_year = safeReleaseYear
+      if (safeReleaseDate) updateFields.release_date = safeReleaseDate
       if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
       if (str(pricecharting_id, 100)) updateFields.pricecharting_id = str(pricecharting_id, 100)
       if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
@@ -249,6 +254,7 @@ export async function POST(request: NextRequest) {
       if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
       if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
       if (safeReleaseYear) updateFields.release_year = safeReleaseYear
+      if (safeReleaseDate) updateFields.release_date = safeReleaseDate
       if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
       if (pcId) updateFields.pricecharting_id = pcId
       if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
@@ -287,6 +293,7 @@ export async function POST(request: NextRequest) {
         set_code: str(set_code, 100),
         set_name_en: str(set_name_en, 200),
         release_year: safeReleaseYear,
+        release_date: safeReleaseDate,
         expansion: str(expansion, 200),
         image_url: url(image_url),
         justtcg_id: trimmedJusttcgId, // R13-API10: trimmed
@@ -316,6 +323,7 @@ export async function POST(request: NextRequest) {
           if (str(rarity, 50)) fallbackFields.rarity = str(rarity, 50)
           if (rarityId) fallbackFields.rarity_id = rarityId
           if (str(set_code, 100)) fallbackFields.set_code = str(set_code, 100)
+          if (safeReleaseDate) fallbackFields.release_date = safeReleaseDate
           if (str(expansion, 200)) fallbackFields.expansion = str(expansion, 200)
           if (pcId) fallbackFields.pricecharting_id = pcId
           if (category?.id) fallbackFields.category_large_id = category.id
