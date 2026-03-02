@@ -200,7 +200,7 @@ export default function CardDetailHeader({
               {(card?.release_date || card?.release_year) && (
                 <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-sm">{card.release_date || `${card.release_year}年`}</span>
               )}
-              {card?.regulation && (
+              {card?.regulation && card.regulation !== card.set_code && (
                 <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-300">{card.regulation}</span>
               )}
             </div>
