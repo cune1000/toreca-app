@@ -49,9 +49,29 @@ export function normalizeModelno(raw: string | null | undefined): string {
 
 /**
  * 外部商品名とDBカード名のマッチングスコアを算出
+ * cardNameEn がある場合は英語名とも照合し、高い方のスコアを採用
  * @returns 0-100 のスコア
  */
 export function calculateMatchScore(
+  externalName: string,
+  externalModelno: string | null,
+  cardName: string,
+  cardNumber: string | null,
+  cardNameEn?: string | null,
+): number {
+  const scoreJa = calcScoreForName(externalName, externalModelno, cardName, cardNumber)
+
+  // 英語名がある場合はそちらでも照合して高い方を採用
+  if (cardNameEn) {
+    const scoreEn = calcScoreForName(externalName, externalModelno, cardNameEn, cardNumber)
+    return Math.max(scoreJa, scoreEn)
+  }
+
+  return scoreJa
+}
+
+/** 単一名前に対するスコア計算（内部用） */
+function calcScoreForName(
   externalName: string,
   externalModelno: string | null,
   cardName: string,

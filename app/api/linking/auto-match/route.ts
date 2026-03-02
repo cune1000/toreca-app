@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
       searchTerms.push(modelno)
     }
 
+    // 日本語名 + 英語名の両方で検索（スニダンは英語表記のため）
     const orConditions = searchTerms
-      .map(t => `name.ilike.%${t}%`)
+      .flatMap(t => [`name.ilike.%${t}%`, `name_en.ilike.%${t}%`])
       .join(',')
 
     // 型番でも検索
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     const { data: candidates, error } = await supabase
       .from('cards')
-      .select('id, name, card_number, expansion, set_code, image_url, rarity')
+      .select('id, name, name_en, card_number, expansion, set_code, image_url, rarity')
       .or(orConditions + cardNumberConditions)
       .limit(50)
 
@@ -50,15 +51,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // 2. スコア計算
+    // 2. スコア計算（英語名も照合）
     const scored = (candidates || [])
       .map(card => {
-        const score = calculateMatchScore(name, modelno || null, card.name, card.card_number)
+        const score = calculateMatchScore(name, modelno || null, card.name, card.card_number, card.name_en)
         if (score === 0) return null
         return {
           card: {
             id: card.id,
             name: card.name,
+            nameEn: card.name_en,
             cardNumber: card.card_number,
             expansion: card.expansion,
             setCode: card.set_code,

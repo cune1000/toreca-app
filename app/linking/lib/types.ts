@@ -62,6 +62,7 @@ export interface LoungeItem extends ExternalItem {
 export interface LinkableCard {
   id: string
   name: string
+  nameEn: string | null
   cardNumber: string | null
   expansion: string | null
   setCode: string | null

@@ -32,6 +32,11 @@ export default memo(function CardSearchResult({ card, score, matchType, onLink }
         <p className="text-[11px] font-medium text-[var(--lk-text)] truncate leading-tight">
           {card.name}
         </p>
+        {card.nameEn && (
+          <p className="text-[9px] text-[var(--lk-text-secondary)] truncate leading-tight">
+            {card.nameEn}
+          </p>
+        )}
         <div className="flex items-center gap-1.5 mt-0.5">
           {card.cardNumber && (
             <span className="text-[9px] text-[var(--lk-text-muted)]">{card.cardNumber}</span>

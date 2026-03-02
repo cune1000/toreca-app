@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
     // JustTCG Explorer登録分は category_large_id が null のケースがあるため名前検索で対応
     let query = supabase
       .from('cards')
-      .select('id, name, card_number, expansion, set_code, image_url, rarity')
-      .or(`name.ilike.%${q}%,card_number.ilike.%${q}%,expansion.ilike.%${q}%`)
+      .select('id, name, name_en, card_number, expansion, set_code, image_url, rarity')
+      .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,card_number.ilike.%${q}%,expansion.ilike.%${q}%`)
       .order('name', { ascending: true })
       .limit(limit)
 
@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
     const cards = (data || []).map(card => ({
       id: card.id,
       name: card.name,
+      nameEn: card.name_en,
       cardNumber: card.card_number,
       expansion: card.expansion,
       setCode: card.set_code,
