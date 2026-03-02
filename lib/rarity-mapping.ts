@@ -27,6 +27,7 @@ export const RARITY_EN_TO_JA: Record<string, string> = {
   'Trainer Gallery Rare Holo': 'CHR',
   'Radiant Rare': 'K',
   'Super Rare': 'SR',
+  'Mega Ultra Rare': 'MUR',
   'None': '−',
 }
 
@@ -85,6 +86,7 @@ export function getRarityShortName(rarityEn: string): string | null {
     'Trainer Gallery Rare Holo': 'CHR',
     'Radiant Rare': 'K',
     'Super Rare': 'SR',
+    'Mega Ultra Rare': 'MUR',
   }
   return mapping[rarityEn] || null
 }
