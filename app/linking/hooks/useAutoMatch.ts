@@ -13,25 +13,32 @@ interface UseAutoMatchReturn {
 export function useAutoMatch(item: ExternalItem | null): UseAutoMatchReturn {
   const [matches, setMatches] = useState<MatchCandidate[]>([])
   const [loading, setLoading] = useState(false)
-  const prevItemIdRef = useRef<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
-  const fetchMatches = useCallback(async (item: ExternalItem) => {
+  const fetchMatches = useCallback(async (targetItem: ExternalItem) => {
+    // 前のリクエストをキャンセル
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     try {
       const res = await fetch('/api/linking/auto-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: item.name,
-          modelno: item.modelno,
+          name: targetItem.name,
+          modelno: targetItem.modelno,
           limit: 10,
         }),
+        signal: controller.signal,
       })
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setMatches(data.matches || [])
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') return
       console.error('[useAutoMatch] Error:', err)
       setMatches([])
     } finally {
@@ -43,11 +50,8 @@ export function useAutoMatch(item: ExternalItem | null): UseAutoMatchReturn {
   useEffect(() => {
     if (!item) {
       setMatches([])
-      prevItemIdRef.current = null
       return
     }
-    if (item.id === prevItemIdRef.current) return
-    prevItemIdRef.current = item.id
 
     // 既に紐づけ済みならマッチング不要
     if (item.linkedCardId) {
@@ -56,11 +60,15 @@ export function useAutoMatch(item: ExternalItem | null): UseAutoMatchReturn {
     }
 
     fetchMatches(item)
-  }, [item, fetchMatches])
+
+    return () => {
+      if (abortRef.current) abortRef.current.abort()
+    }
+  }, [item?.id, item?.linkedCardId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const clear = useCallback(() => {
     setMatches([])
-    prevItemIdRef.current = null
+    if (abortRef.current) abortRef.current.abort()
   }, [])
 
   return { matches, loading, fetchMatches, clear }

@@ -13,19 +13,56 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const perPage = Math.min(200, Math.max(1, parseInt(searchParams.get('perPage') || '100')))
     const search = searchParams.get('search')?.trim() || ''
-    const filter = searchParams.get('filter') || 'all'  // all | linked | unlinked
-    const sort = searchParams.get('sort') || 'name'      // name | price | linked
+    const filter = searchParams.get('filter') || 'all'
+    const sort = searchParams.get('sort') || 'name'
     const order = searchParams.get('order') || 'asc'
 
-    // 1. snkrdunk_items_cache から商品取得
+    // 1. linked/unlinkedフィルタ: 紐づけ済みapparel_idを先に取得
+    let linkedApparelIds: Set<number> = new Set()
+    let linkedMap: Record<number, { cardId: string; cardName: string }> = {}
+
+    if (filter !== 'all' || sort === 'linked') {
+      // フィルタ or ソートで紐づけ状態が必要 → 全linked apparel_id を取得
+      const { data: allLinks } = await supabase
+        .from('card_sale_urls')
+        .select('apparel_id, card_id, card:card_id(name)')
+        .not('apparel_id', 'is', null)
+        .limit(10000)
+
+      if (allLinks) {
+        for (const link of allLinks) {
+          if (link.apparel_id) {
+            linkedApparelIds.add(link.apparel_id)
+            linkedMap[link.apparel_id] = {
+              cardId: link.card_id,
+              cardName: (link as any).card?.name || '',
+            }
+          }
+        }
+      }
+    }
+
+    // 2. snkrdunk_items_cache からクエリ構築
     let query = supabase
       .from('snkrdunk_items_cache')
       .select('*', { count: 'exact' })
 
-    // テキスト検索
     if (search) {
       query = query.ilike('name', `%${search}%`)
     }
+
+    // DB側フィルタ: linked/unlinked
+    if (filter === 'linked' && linkedApparelIds.size > 0) {
+      query = query.in('apparel_id', Array.from(linkedApparelIds))
+    } else if (filter === 'linked') {
+      // linked が0件ならダミー条件で0件返す
+      query = query.eq('apparel_id', -1)
+    } else if (filter === 'unlinked' && linkedApparelIds.size > 0) {
+      // NOT IN で未紐づけのみ取得
+      // Supabase PostgREST: not.in を使用
+      query = query.not('apparel_id', 'in', `(${Array.from(linkedApparelIds).join(',')})`)
+    }
+    // filter === 'unlinked' && linkedApparelIds.size === 0 → 全件が未紐づけなのでフィルタ不要
 
     // ソート
     const ascending = order === 'asc'
@@ -45,30 +82,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // 2. 紐づけ済み apparel_id を取得
-    const apparelIds = (items || []).map(i => i.apparel_id)
-    let linkedMap: Record<number, { cardId: string; cardName: string }> = {}
+    // 3. フィルタなしの場合: 表示分のみ紐づけ情報を取得
+    if (filter === 'all' && sort !== 'linked') {
+      const apparelIds = (items || []).map(i => i.apparel_id)
+      if (apparelIds.length > 0) {
+        const { data: links } = await supabase
+          .from('card_sale_urls')
+          .select('apparel_id, card_id, card:card_id(name)')
+          .in('apparel_id', apparelIds)
 
-    if (apparelIds.length > 0) {
-      const { data: links } = await supabase
-        .from('card_sale_urls')
-        .select('apparel_id, card_id, card:card_id(name)')
-        .in('apparel_id', apparelIds)
-
-      if (links) {
-        for (const link of links) {
-          if (link.apparel_id) {
-            linkedMap[link.apparel_id] = {
-              cardId: link.card_id,
-              cardName: (link as any).card?.name || '',
+        if (links) {
+          for (const link of links) {
+            if (link.apparel_id) {
+              linkedMap[link.apparel_id] = {
+                cardId: link.card_id,
+                cardName: (link as any).card?.name || '',
+              }
             }
           }
         }
       }
     }
 
-    // 3. レスポンス整形
-    let result = (items || []).map(item => ({
+    // 4. レスポンス整形
+    const result = (items || []).map(item => ({
       id: String(item.apparel_id),
       name: item.name,
       modelno: item.product_number,
@@ -84,32 +121,11 @@ export async function GET(req: NextRequest) {
       linkedCardName: linkedMap[item.apparel_id]?.cardName || null,
     }))
 
-    // 紐づけ状態フィルタ（DB側で効率的にできないためJS側で）
-    if (filter === 'linked') {
-      result = result.filter(r => r.linkedCardId !== null)
-    } else if (filter === 'unlinked') {
-      result = result.filter(r => r.linkedCardId === null)
-    }
-
-    // 紐づけ状態ソート
-    if (sort === 'linked') {
-      result.sort((a, b) => {
-        const aLinked = a.linkedCardId ? 1 : 0
-        const bLinked = b.linkedCardId ? 1 : 0
-        return ascending ? aLinked - bLinked : bLinked - aLinked
-      })
-    }
-
     const total = count ?? 0
 
     return NextResponse.json({
       items: result,
-      pagination: {
-        page,
-        perPage,
-        total,
-        totalPages: Math.ceil(total / perPage),
-      },
+      pagination: { page, perPage, total, totalPages: Math.ceil(total / perPage) },
     })
   } catch (error: any) {
     console.error('[linking/snkrdunk/items] Error:', error)

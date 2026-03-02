@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { X, Search, Link2, Unlink, Loader2, Sparkles } from 'lucide-react'
 import { useAutoMatch } from '../hooks/useAutoMatch'
 import { useCardSearch } from '../hooks/useCardSearch'
+import { buildLinkBody, buildUnlinkBody, getLinkEndpoint } from '../lib/link-helpers'
 import CardSearchResult from './CardSearchResult'
 import type { ExternalItem, LinkableCard, SourceConfig } from '../lib/types'
 
@@ -35,13 +36,10 @@ export default function RightPanel({
     if (!item || linking) return
     setLinking(true)
     try {
-      const endpoint = `/api/linking/${config.key}/link`
-      const body = buildLinkBody(config.key, item, card.id)
-
-      const res = await fetch(endpoint, {
+      const res = await fetch(getLinkEndpoint(config.key), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildLinkBody(config.key, item, card.id)),
       })
 
       if (res.ok) {
@@ -62,13 +60,10 @@ export default function RightPanel({
     if (!item || unlinking) return
     setUnlinking(true)
     try {
-      const endpoint = `/api/linking/${config.key}/link`
-      const body = buildUnlinkBody(config.key, item)
-
-      const res = await fetch(endpoint, {
+      const res = await fetch(getLinkEndpoint(config.key), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildUnlinkBody(config.key, item)),
       })
 
       if (res.ok) {
@@ -93,11 +88,11 @@ export default function RightPanel({
   }
 
   return (
-    <div className={`w-72 border-l border-[var(--lk-border)] bg-[var(--lk-surface)] flex flex-col overflow-hidden ${className}`}>
+    <div className={`relative w-72 border-l border-[var(--lk-border)] bg-[var(--lk-surface)] flex flex-col overflow-hidden ${className}`}>
       {/* ヘッダー */}
       <div className="shrink-0 px-3 py-2 border-b border-[var(--lk-border)] flex items-center justify-between">
         <h3 className="text-xs font-bold text-[var(--lk-ink)]">商品詳細</h3>
-        <button onClick={onClose} className="p-1 rounded hover:bg-[var(--lk-border-light)]">
+        <button onClick={onClose} aria-label="閉じる" className="p-1 rounded hover:bg-[var(--lk-border-light)]">
           <X size={14} className="text-[var(--lk-text-muted)]" />
         </button>
       </div>
@@ -107,7 +102,7 @@ export default function RightPanel({
         <div className="p-3 border-b border-[var(--lk-border)]">
           {item.imageUrl && (
             <div className="w-full aspect-square mb-2 rounded-[var(--lk-radius)] overflow-hidden bg-[var(--lk-border-light)]">
-              <img src={item.imageUrl} alt="" className="w-full h-full object-contain" />
+              <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain" />
             </div>
           )}
           <h4 className="text-[12px] font-bold text-[var(--lk-text)] leading-snug">{item.name}</h4>
@@ -215,30 +210,12 @@ export default function RightPanel({
         )}
       </div>
 
-      {/* リンク中オーバーレイ */}
+      {/* リンク中オーバーレイ（position:relativeを親に追加済み） */}
       {linking && (
-        <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+        <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-[var(--lk-radius)]">
           <Loader2 size={20} className="animate-spin text-[var(--lk-accent)]" />
         </div>
       )}
     </div>
   )
-}
-
-function buildLinkBody(source: string, item: ExternalItem, cardId: string): Record<string, unknown> {
-  switch (source) {
-    case 'snkrdunk': return { cardId, apparelId: (item.meta as any).apparelId }
-    case 'shinsoku': return { cardId, itemId: (item.meta as any).itemId }
-    case 'lounge': return { cardId, cardKey: (item.meta as any).cardKey }
-    default: throw new Error(`Unknown source: ${source}`)
-  }
-}
-
-function buildUnlinkBody(source: string, item: ExternalItem): Record<string, unknown> {
-  switch (source) {
-    case 'snkrdunk': return { apparelId: (item.meta as any).apparelId }
-    case 'shinsoku': return { itemId: (item.meta as any).itemId }
-    case 'lounge': return { cardKey: (item.meta as any).cardKey }
-    default: throw new Error(`Unknown source: ${source}`)
-  }
 }

@@ -163,8 +163,8 @@ export default function CenterPanel({
                     item={item}
                     selected={item.id === selectedItemId}
                     checked={checkedItems.has(item.id)}
-                    onSelect={() => onSelectItem(item)}
-                    onToggleCheck={() => toggleCheck(item.id)}
+                    onSelect={onSelectItem}
+                    onToggleCheck={toggleCheck}
                     showCheckbox={true}
                   />
                 </div>

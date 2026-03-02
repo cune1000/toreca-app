@@ -4,37 +4,26 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import type { ExternalItem, LinkFilter, SortConfig, PaginationInfo, SourceConfig } from '../lib/types'
 
 interface UseLinkingStateReturn {
-  // 商品データ
   items: ExternalItem[]
   loading: boolean
   error: string | null
   clearError: () => void
-
-  // ページネーション
   pagination: PaginationInfo
   setPage: (page: number) => void
-
-  // 検索・フィルタ
   search: string
   setSearch: (s: string) => void
   linkFilter: LinkFilter
   setLinkFilter: (f: LinkFilter) => void
   sort: SortConfig
   setSort: (field: SortConfig['field']) => void
-
-  // 選択
   selectedItem: ExternalItem | null
   selectItem: (item: ExternalItem | null) => void
   checkedItems: Set<string>
   toggleCheck: (id: string) => void
   toggleAllFiltered: () => void
   checkedCount: number
-
-  // アクション
   fetchItems: () => Promise<void>
   updateItemLink: (itemId: string, cardId: string | null, cardName: string | null) => void
-
-  // 統計
   stats: { total: number; linked: number; unlinked: number }
 }
 
@@ -43,22 +32,35 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<PaginationInfo>({ page: 1, perPage: 100, total: 0, totalPages: 0 })
-  const [search, setSearchRaw] = useState('')
-  const [linkFilter, setLinkFilter] = useState<LinkFilter>('all')
+  const [search, setSearchDisplay] = useState('')
+  const [linkFilter, setLinkFilterState] = useState<LinkFilter>('all')
   const [sort, setSortState] = useState<SortConfig>({ field: 'name', order: 'asc' })
   const [selectedItem, setSelectedItem] = useState<ExternalItem | null>(null)
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set())
 
+  // デバウンス用: 実際にAPIに送る検索語はrefで管理
+  const debouncedSearchRef = useRef('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // fetchトリガー用カウンター（ref値変更後に再取得を発火させる）
+  const [fetchTrigger, setFetchTrigger] = useState(0)
 
-  // デバウンス検索
+  // デバウンス付き検索
   const setSearch = useCallback((s: string) => {
-    setSearchRaw(s)
+    setSearchDisplay(s)
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
+      debouncedSearchRef.current = s
       setPagination(prev => ({ ...prev, page: 1 }))
+      setFetchTrigger(n => n + 1)
     }, 300)
+  }, [])
+
+  // フィルタ変更時はページリセット + 即時取得
+  const setLinkFilter = useCallback((f: LinkFilter) => {
+    setLinkFilterState(f)
+    setPagination(prev => ({ ...prev, page: 1 }))
+    setCheckedItems(new Set())
   }, [])
 
   // ソートトグル
@@ -72,11 +74,13 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
     setPagination(prev => ({ ...prev, page: 1 }))
   }, [])
 
+  // ページ変更時はcheckedItemsクリア
   const setPage = useCallback((page: number) => {
     setPagination(prev => ({ ...prev, page }))
+    setCheckedItems(new Set())
   }, [])
 
-  // データ取得
+  // データ取得（searchはrefから読むのでdepsに入らない）
   const fetchItems = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
@@ -89,7 +93,7 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
       const params = new URLSearchParams({
         page: String(pagination.page),
         perPage: String(pagination.perPage),
-        search,
+        search: debouncedSearchRef.current,
         filter: linkFilter,
         sort: sort.field,
         order: sort.order,
@@ -113,12 +117,21 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
     } finally {
       setLoading(false)
     }
-  }, [config.itemsEndpoint, pagination.page, pagination.perPage, search, linkFilter, sort.field, sort.order])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.itemsEndpoint, pagination.page, pagination.perPage, linkFilter, sort.field, sort.order, fetchTrigger])
 
-  // ページ・検索・フィルタ・ソート変更時に再取得
+  // deps変更時に再取得
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+      if (abortRef.current) abortRef.current.abort()
+    }
+  }, [])
 
   // チェック操作
   const toggleCheck = useCallback((id: string) => {
@@ -133,7 +146,7 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
   const toggleAllFiltered = useCallback(() => {
     const ids = items.map(i => i.id)
     setCheckedItems(prev => {
-      const allChecked = ids.every(id => prev.has(id))
+      const allChecked = ids.length > 0 && ids.every(id => prev.has(id))
       if (allChecked) {
         const next = new Set(prev)
         ids.forEach(id => next.delete(id))
@@ -153,7 +166,6 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
         ? { ...item, linkedCardId: cardId, linkedCardName: cardName }
         : item
     ))
-    // 選択中のアイテムも更新
     setSelectedItem(prev =>
       prev?.id === itemId
         ? { ...prev, linkedCardId: cardId, linkedCardName: cardName }
@@ -167,7 +179,7 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
 
   const clearError = useCallback(() => setError(null), [])
 
-  // 統計
+  // 統計（現在ページの情報）
   const stats = useMemo(() => {
     const linked = items.filter(i => i.linkedCardId).length
     return {
@@ -178,26 +190,14 @@ export function useLinkingState(config: SourceConfig): UseLinkingStateReturn {
   }, [items, pagination.total])
 
   return {
-    items,
-    loading,
-    error,
-    clearError,
-    pagination,
-    setPage,
-    search,
-    setSearch,
-    linkFilter,
-    setLinkFilter,
-    sort,
-    setSort,
-    selectedItem,
-    selectItem,
-    checkedItems,
-    toggleCheck,
-    toggleAllFiltered,
+    items, loading, error, clearError,
+    pagination, setPage,
+    search, setSearch,
+    linkFilter, setLinkFilter,
+    sort, setSort,
+    selectedItem, selectItem,
+    checkedItems, toggleCheck, toggleAllFiltered,
     checkedCount: checkedItems.size,
-    fetchItems,
-    updateItemLink,
-    stats,
+    fetchItems, updateItemLink, stats,
   }
 }

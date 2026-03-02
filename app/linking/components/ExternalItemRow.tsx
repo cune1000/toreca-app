@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
 import { Check, Link2, Unlink } from 'lucide-react'
 import type { ExternalItem } from '../lib/types'
 
@@ -8,8 +8,8 @@ interface ExternalItemRowProps {
   item: ExternalItem
   selected: boolean
   checked: boolean
-  onSelect: () => void
-  onToggleCheck: () => void
+  onSelect: (item: ExternalItem) => void
+  onToggleCheck: (id: string) => void
   showCheckbox: boolean
 }
 
@@ -23,6 +23,12 @@ export default memo(function ExternalItemRow({
 }: ExternalItemRowProps) {
   const isLinked = !!item.linkedCardId
 
+  const handleSelect = useCallback(() => onSelect(item), [onSelect, item])
+  const handleToggleCheck = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    onToggleCheck(item.id)
+  }, [onToggleCheck, item.id])
+
   return (
     <div
       className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors border-b border-[var(--lk-border-light)] ${
@@ -30,12 +36,12 @@ export default memo(function ExternalItemRow({
           ? 'bg-[var(--lk-accent-light)]'
           : 'hover:bg-[var(--lk-border-light)]'
       }`}
-      onClick={onSelect}
+      onClick={handleSelect}
     >
       {/* チェックボックス */}
       {showCheckbox && (
         <button
-          onClick={e => { e.stopPropagation(); onToggleCheck() }}
+          onClick={handleToggleCheck}
           className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
             checked
               ? 'bg-[var(--lk-accent)] border-[var(--lk-accent)] text-white'
