@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { getSetNameJa, extractSetCode, extractReleaseYear, getRegulationFromSetCode } from '@/lib/justtcg-set-names'
 import type { JTCard, JTSet, PCMatch } from './useJustTcgState'
+import { getNmVariant } from './useJustTcgState'
 
 export function useRegistration(
   cards: JTCard[],
@@ -146,14 +147,16 @@ export function useRegistration(
           release_year: releaseYear,
           release_date: currentSet?.release_date || null,
           expansion: expansionOverrideRef.current || (currentSet ? getSetNameJa(currentSet.id, currentSet.name) : card.set_name),
-          image_url: pc?.imageUrl || null,
+          image_url: pc?.imageUrl || (card.tcgplayerId ? `https://product-images.tcgplayer.com/fit-in/400x560/${card.tcgplayerId}.jpg` : null),
           justtcg_id: card.id,
-          tcgplayer_id: null, // R13-INT06: JustTCG variant IDはTCGPlayer IDではない
+          tcgplayer_id: card.tcgplayerId || null,
           pricecharting_id: pc?.id ? String(pc.id) : null,
           pricecharting_name: pc?.name || card.name, // PC名優先、なければJustTCG英語名
           pricecharting_url: pc?.pricechartingUrl || null,
           regulation: getRegulationFromSetCode(setCode) || null,
           game: selectedGameRef.current,
+          justtcg_nm_price_usd: getNmVariant(card)?.price ?? null,
+          justtcg_price_history: getNmVariant(card)?.priceHistory ?? null,
         }),
       })
       // R14-16: 非JSONレスポンス対策

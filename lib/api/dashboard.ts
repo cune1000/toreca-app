@@ -119,12 +119,17 @@ export async function searchCardsForDashboard(
   price_a_date?: string
   price_psa10?: number
   price_psa10_date?: string
+  justtcg_nm_price_usd?: number
+  pc_loose_usd?: number
+  pc_loose_jpy?: number
+  pc_graded_usd?: number
+  pc_graded_jpy?: number
 }>> {
   if (!query || query.length < 2) return []
 
   const { data, error } = await supabase
     .from(TABLES.CARDS)
-    .select('id, name, card_number, image_url')
+    .select('id, name, card_number, image_url, justtcg_nm_price_usd')
     .or(buildKanaSearchFilter(query, ['name', 'card_number']))
     .limit(limit)
 
@@ -135,13 +140,21 @@ export async function searchCardsForDashboard(
 
   if (!data || data.length === 0) return []
 
-  // 各カードの最新スニダン価格を取得（Aランク・PSA10それぞれ）
   const cardIds = data.map(c => c.id)
-  const { data: salesData } = await supabase
-    .from('snkrdunk_sales_history')
-    .select('card_id, price, grade, sold_at')
-    .in('card_id', cardIds)
-    .order('sold_at', { ascending: false })
+
+  // 各カードの最新スニダン価格 + 最新PriceCharting価格を並列取得
+  const [salesResult, overseasResult] = await Promise.all([
+    supabase
+      .from('snkrdunk_sales_history')
+      .select('card_id, price, grade, sold_at')
+      .in('card_id', cardIds)
+      .order('sold_at', { ascending: false }),
+    supabase
+      .from('overseas_prices')
+      .select('card_id, loose_price_usd, loose_price_jpy, graded_price_usd, graded_price_jpy')
+      .in('card_id', cardIds)
+      .order('recorded_at', { ascending: false }),
+  ])
 
   // カードごとにAランク・PSA10の最新価格を取得
   const pricesByCard: Record<string, {
@@ -149,7 +162,7 @@ export async function searchCardsForDashboard(
     psa10?: { price: number; date: string }
   }> = {}
 
-  for (const sale of (salesData || [])) {
+  for (const sale of (salesResult.data || [])) {
     if (!pricesByCard[sale.card_id]) {
       pricesByCard[sale.card_id] = {}
     }
@@ -162,12 +175,33 @@ export async function searchCardsForDashboard(
     }
   }
 
+  // カードごとの最新PriceCharting価格（order desc → 最初の1件が最新）
+  const overseasByCard: Record<string, {
+    loose_usd?: number; loose_jpy?: number
+    graded_usd?: number; graded_jpy?: number
+  }> = {}
+  for (const row of (overseasResult.data || [])) {
+    if (!overseasByCard[row.card_id]) {
+      overseasByCard[row.card_id] = {
+        loose_usd: row.loose_price_usd,
+        loose_jpy: row.loose_price_jpy,
+        graded_usd: row.graded_price_usd,
+        graded_jpy: row.graded_price_jpy,
+      }
+    }
+  }
+
   return data.map(card => ({
     ...card,
     price_a: pricesByCard[card.id]?.a?.price,
     price_a_date: pricesByCard[card.id]?.a?.date,
     price_psa10: pricesByCard[card.id]?.psa10?.price,
-    price_psa10_date: pricesByCard[card.id]?.psa10?.date
+    price_psa10_date: pricesByCard[card.id]?.psa10?.date,
+    justtcg_nm_price_usd: card.justtcg_nm_price_usd ?? undefined,
+    pc_loose_usd: overseasByCard[card.id]?.loose_usd != null ? overseasByCard[card.id].loose_usd / 100 : undefined,
+    pc_loose_jpy: overseasByCard[card.id]?.loose_jpy ?? undefined,
+    pc_graded_usd: overseasByCard[card.id]?.graded_usd != null ? overseasByCard[card.id].graded_usd / 100 : undefined,
+    pc_graded_jpy: overseasByCard[card.id]?.graded_jpy ?? undefined,
   }))
 }
 

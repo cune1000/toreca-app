@@ -160,7 +160,7 @@ export function useJustTcgState() {
   const checkedCardsExtRef = useRef<Set<string>>(new Set())
 
   // 登録モード
-  const [showRegistration, setShowRegistration] = useState(false)
+  const [showRegistration, setShowRegistration] = useState(true)
 
   // セット取得（ゲーム変更時）— AbortController でレースコンディション防止
   useEffect(() => {

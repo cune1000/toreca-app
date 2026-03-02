@@ -22,3 +22,8 @@ export const PRICECHARTING_TOKEN = process.env.PRICECHARTING_TOKEN
  * JustTCG APIキー
  */
 export const JUSTTCG_API_KEY = process.env.JUSTTCG_API_KEY
+
+/**
+ * TCG API キー (tcgapi.dev)
+ */
+export const TCG_API_KEY = process.env.TCG_API_KEY

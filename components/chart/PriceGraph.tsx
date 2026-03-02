@@ -30,13 +30,16 @@ function CustomTooltip({ active, payload }: any) {
             {payload.map((p: any, i: number) => (
                 <div key={i}>
                     <p className="font-bold" style={{ color: p.color }}>
-                        {p.name}: {formatPrice(p.value || 0)}
+                        {p.name}: {p.dataKey === 'justtcg_nm_usd' ? `$${(p.value || 0).toFixed(2)}` : formatPrice(p.value || 0)}
                     </p>
                     {p.dataKey === 'loose_price_jpy' && d?.loose_price_usd > 0 && (
                         <p className="text-gray-400 text-[10px]">({formatUsd(d.loose_price_usd)})</p>
                     )}
                     {p.dataKey === 'graded_price_jpy' && d?.graded_price_usd > 0 && (
                         <p className="text-gray-400 text-[10px]">({formatUsd(d.graded_price_usd)})</p>
+                    )}
+                    {p.dataKey === 'justtcg_nm_usd' && (
+                        <p className="text-gray-400 text-[10px]">(USD)</p>
                     )}
                 </div>
             ))}
@@ -47,6 +50,7 @@ function CustomTooltip({ active, payload }: any) {
 export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' }: Props) {
     const [period, setPeriod] = useState(initialPeriod)
     const [showGraded, setShowGraded] = useState(true)
+    const [showJtcg, setShowJtcg] = useState(true)
 
     const chartData = data[period] || []
 
@@ -63,6 +67,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
         [chartData]
     )
 
+    const hasJtcgData = formattedData.some((d: any) => d.justtcg_nm_usd > 0)
     const tickInterval = Math.max(1, Math.floor(formattedData.length / 6))
 
     return (
@@ -104,6 +109,22 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                         PSA10
                     </span>
                 </label>
+                {hasJtcgData && (
+                    <label
+                        className="flex items-center gap-1.5 cursor-pointer"
+                        onClick={() => setShowJtcg(!showJtcg)}
+                    >
+                        <div
+                            className={`w-3 h-3 rounded-full border-2 transition-colors ${showJtcg
+                                    ? 'bg-blue-400 border-blue-400'
+                                    : 'bg-white border-gray-300'
+                                }`}
+                        />
+                        <span className={showJtcg ? 'text-gray-600' : 'text-gray-400'}>
+                            JT NM
+                        </span>
+                    </label>
+                )}
             </div>
 
             {/* グラフ */}
@@ -119,6 +140,10 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                 <linearGradient id="gradGraded" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stopColor="#10b981" stopOpacity={0.1} />
                                     <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                                </linearGradient>
+                                <linearGradient id="gradJtcg" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.1} />
+                                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -136,6 +161,17 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                 tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
                                 width={52}
                             />
+                            {hasJtcgData && (
+                                <YAxis
+                                    yAxisId="usd"
+                                    orientation="right"
+                                    tick={{ fontSize: 10, fill: '#93c5fd' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={(v) => `$${v}`}
+                                    width={45}
+                                />
+                            )}
                             <Tooltip content={<CustomTooltip />} />
                             <Area
                                 type="monotone"
@@ -158,6 +194,19 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                     dot={false}
                                     activeDot={{ r: 4, fill: '#10b981' }}
                                     strokeDasharray="4 2"
+                                />
+                            )}
+                            {showJtcg && hasJtcgData && (
+                                <Area
+                                    type="monotone"
+                                    dataKey="justtcg_nm_usd"
+                                    stroke="#3b82f6"
+                                    strokeWidth={1.5}
+                                    fill="url(#gradJtcg)"
+                                    name="JT NM"
+                                    dot={false}
+                                    activeDot={{ r: 4, fill: '#3b82f6' }}
+                                    yAxisId="usd"
                                 />
                             )}
                         </AreaChart>

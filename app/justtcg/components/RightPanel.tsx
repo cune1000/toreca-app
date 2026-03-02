@@ -34,6 +34,8 @@ interface RightPanelProps {
   scrollable?: boolean
   /** セット情報（発売日表示用） */
   selectedSet?: JTSet | null
+  /** Gemini翻訳による日本語名 */
+  translatedJaName?: string
 }
 
 export default memo(function RightPanel({
@@ -55,6 +57,7 @@ export default memo(function RightPanel({
   onRegister,
   scrollable = true,
   selectedSet,
+  translatedJaName,
 }: RightPanelProps) {
   const [showChart, setShowChart] = useState(false)
 
@@ -98,6 +101,9 @@ export default memo(function RightPanel({
             <h2 className="text-base font-bold text-[var(--jtcg-ink)] leading-tight break-words" style={{ fontFamily: 'var(--font-heading)' }}>
               {card.name}
             </h2>
+            {translatedJaName && (
+              <p className="text-sm text-blue-600 mt-0.5">{translatedJaName}</p>
+            )}
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-[var(--jtcg-text-muted)]" style={{ fontFamily: 'var(--font-price)' }}>
                 #{card.number}

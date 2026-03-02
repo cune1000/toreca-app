@@ -18,6 +18,7 @@ interface CardListItemProps {
   isChecked: boolean
   isRegistered: boolean
   onToggleCheck: (cardId: string) => void
+  translatedJaName?: string
 }
 
 export default memo(function CardListItem({
@@ -28,6 +29,7 @@ export default memo(function CardListItem({
   isChecked,
   isRegistered,
   onToggleCheck,
+  translatedJaName,
 }: CardListItemProps) {
   const nm = getNmVariant(card)
   const hasJapanese = Array.isArray(card.variants) && card.variants.some(v => v.language === 'Japanese')
@@ -87,6 +89,9 @@ export default memo(function CardListItem({
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[var(--jtcg-text)] truncate leading-tight">{card.name}</p>
+        {translatedJaName && (
+          <p className="text-[10px] text-blue-600 truncate leading-tight">{translatedJaName}</p>
+        )}
         <p className="text-[10px] text-[var(--jtcg-text-muted)] truncate">{getSetNameJa(card.set, card.set_name)}</p>
       </div>
 

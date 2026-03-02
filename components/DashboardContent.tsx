@@ -42,6 +42,11 @@ interface SearchResult {
   price_a_date?: string
   price_psa10?: number
   price_psa10_date?: string
+  justtcg_nm_price_usd?: number
+  pc_loose_usd?: number
+  pc_loose_jpy?: number
+  pc_graded_usd?: number
+  pc_graded_jpy?: number
 }
 
 // 価格変動閾値（10%以上 or 1000円以上）
@@ -411,28 +416,56 @@ export default function DashboardContent() {
                   {card.card_number && (
                     <p className="text-xs text-gray-500 mb-1">{card.card_number}</p>
                   )}
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div className="text-xs">
-                      <span className="text-gray-500">A: </span>
-                      {card.price_a ? (
-                        <>
-                          <span className="font-bold text-blue-600">¥{card.price_a.toLocaleString()}</span>
-                          <span className="text-gray-400 ml-1">({card.price_a_date ? new Date(card.price_a_date).toLocaleDateString('ja-JP') : '-'})</span>
-                        </>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                  <div className="space-y-1 mt-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="text-xs">
+                        <span className="text-gray-500">A: </span>
+                        {card.price_a ? (
+                          <>
+                            <span className="font-bold text-blue-600">¥{card.price_a.toLocaleString()}</span>
+                            <span className="text-gray-400 ml-1">({card.price_a_date ? new Date(card.price_a_date).toLocaleDateString('ja-JP') : '-'})</span>
+                          </>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-gray-500">PSA10: </span>
+                        {card.price_psa10 ? (
+                          <>
+                            <span className="font-bold text-red-600">¥{card.price_psa10.toLocaleString()}</span>
+                            <span className="text-gray-400 ml-1">({card.price_psa10_date ? new Date(card.price_psa10_date).toLocaleDateString('ja-JP') : '-'})</span>
+                          </>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs">
-                      <span className="text-gray-500">PSA10: </span>
-                      {card.price_psa10 ? (
-                        <>
-                          <span className="font-bold text-red-600">¥{card.price_psa10.toLocaleString()}</span>
-                          <span className="text-gray-400 ml-1">({card.price_psa10_date ? new Date(card.price_psa10_date).toLocaleDateString('ja-JP') : '-'})</span>
-                        </>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-xs">
+                        <span className="text-gray-500">JT NM: </span>
+                        {card.justtcg_nm_price_usd ? (
+                          <span className="font-bold text-emerald-600">${card.justtcg_nm_price_usd.toFixed(2)}</span>
+                        ) : <span className="text-gray-400">-</span>}
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-gray-500">PC素体: </span>
+                        {card.pc_loose_usd ? (
+                          <>
+                            <span className="font-bold text-purple-600">${card.pc_loose_usd.toFixed(2)}</span>
+                            {card.pc_loose_jpy != null && <span className="text-gray-400 ml-0.5">(¥{card.pc_loose_jpy.toLocaleString()})</span>}
+                          </>
+                        ) : <span className="text-gray-400">-</span>}
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-gray-500">PC PSA10: </span>
+                        {card.pc_graded_usd ? (
+                          <>
+                            <span className="font-bold text-orange-600">${card.pc_graded_usd.toFixed(2)}</span>
+                            {card.pc_graded_jpy != null && <span className="text-gray-400 ml-0.5">(¥{card.pc_graded_jpy.toLocaleString()})</span>}
+                          </>
+                        ) : <span className="text-gray-400">-</span>}
+                      </div>
                     </div>
                   </div>
                 </div>

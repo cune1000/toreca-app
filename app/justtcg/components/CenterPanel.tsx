@@ -42,6 +42,13 @@ interface CenterPanelProps {
   handleBulkPcSearchChecked: () => void
   handleBulkPcSearchFiltered: () => void
   cancelBulkPcSearch: () => void
+  // AI翻訳
+  translatedNames?: Record<string, string>
+  translating?: boolean
+  translationProgress?: { current: number; total: number } | null
+  onTranslateAll?: () => void
+  onTranslateChecked?: () => void
+  cancelTranslation?: () => void
   className?: string
 }
 
@@ -55,6 +62,7 @@ export default memo(function CenterPanel({
   checkedCards, registered, checkedCount, readyCount, readyOverwriteCount, bulkProgress,
   toggleCheck, toggleAllFiltered, handleBulkRegister, handleBulkOverwrite, cancelBulkRegister,
   bulkPcProgress, handleBulkPcSearchChecked, handleBulkPcSearchFiltered, cancelBulkPcSearch,
+  translatedNames, translating, translationProgress, onTranslateAll, onTranslateChecked, cancelTranslation,
   className = '',
 }: CenterPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -225,6 +233,44 @@ export default memo(function CenterPanel({
             </div>
           </div>
         )}
+
+        {/* AI翻訳 */}
+        {hasSelectedSet && !loadingCards && totalCards > 0 && (
+          <div className="mt-2 pt-2 border-t border-[var(--jtcg-border)] flex items-center gap-1.5">
+            {translating ? (
+              <>
+                {translationProgress && (
+                  <span className="text-[10px] text-blue-600 tabular-nums" style={{ fontFamily: 'var(--font-price)' }}>
+                    翻訳: {translationProgress.current}/{translationProgress.total}
+                  </span>
+                )}
+                <button
+                  onClick={cancelTranslation}
+                  className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold hover:bg-red-200"
+                >
+                  翻訳中止
+                </button>
+              </>
+            ) : (
+              <>
+                {onTranslateChecked && (
+                  <button
+                    onClick={onTranslateChecked}
+                    className="px-2 py-1 rounded-[var(--jtcg-radius)] bg-blue-100 text-blue-700 text-[10px] font-bold hover:bg-blue-200"
+                  >
+                    選択分翻訳
+                  </button>
+                )}
+                <button
+                  onClick={onTranslateAll}
+                  className="px-2 py-1 rounded-[var(--jtcg-radius)] bg-blue-50 text-blue-600 text-[10px] font-bold hover:bg-blue-100"
+                >
+                  全件翻訳
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* カードリスト */}
@@ -278,6 +324,7 @@ export default memo(function CenterPanel({
                     isChecked={checkedCards.has(card.id)}
                     isRegistered={!!registered[card.id]}
                     onToggleCheck={toggleCheck}
+                    translatedJaName={translatedNames?.[card.id]}
                   />
                 </div>
               )

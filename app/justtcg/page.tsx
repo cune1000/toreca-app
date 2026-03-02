@@ -4,15 +4,18 @@ import { useState, useCallback, useEffect } from 'react'
 import { Menu, X, Settings2 } from 'lucide-react'
 import { useJustTcgState } from './hooks/useJustTcgState'
 import { useRegistration } from './hooks/useRegistration'
+import { useTranslation } from './hooks/useTranslation'
 import LeftPanel from './components/LeftPanel'
 import CenterPanel from './components/CenterPanel'
 import RightPanel from './components/RightPanel'
 import { GAME_OPTIONS } from './lib/constants'
+import { getSetNameJa } from '@/lib/justtcg-set-names'
 import type { JTCard } from './hooks/useJustTcgState'
 
 export default function JustTcgExplorer() {
   const state = useJustTcgState()
   const reg = useRegistration(state.cards, state.selectedSet, state.selectedGame, state.pcMatches)
+  const trans = useTranslation()
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
 
   // Gemini日本語名連携: useJustTcgState → useRegistration.setJaName を注入
@@ -66,6 +69,23 @@ export default function JustTcgExplorer() {
   const handleRegister = useCallback(() => { if (card) reg.handleRegister(card) }, [card, reg.handleRegister])
 
   // 一括PC検索用の安定コールバック（R14-05: checkedCardsはref注入済みなのでdeps不要）
+  // AI翻訳（全件）
+  const handleTranslateAll = useCallback(() => {
+    if (state.selectedSetId && state.cards.length > 0) {
+      const set = state.selectedSet
+      trans.translateSet(state.selectedSetId, state.cards, state.selectedGame, set?.name, set ? getSetNameJa(set.id, set.name) : undefined)
+    }
+  }, [state.selectedSetId, state.cards, state.selectedGame, state.selectedSet, trans.translateSet])
+
+  // AI翻訳（選択分のみ）
+  const handleTranslateChecked = useCallback(() => {
+    if (state.selectedSetId && reg.checkedCards.size > 0) {
+      const checked = state.cards.filter(c => reg.checkedCards.has(c.id))
+      const set = state.selectedSet
+      trans.translateSet(state.selectedSetId, checked, state.selectedGame, set?.name, set ? getSetNameJa(set.id, set.name) : undefined)
+    }
+  }, [state.selectedSetId, state.cards, reg.checkedCards, state.selectedGame, state.selectedSet, trans.translateSet])
+
   const handleBulkPcSearchChecked = useCallback(() => {
     state.handleBulkPcSearch('checked')
   }, [state.handleBulkPcSearch])
@@ -186,6 +206,12 @@ export default function JustTcgExplorer() {
           handleBulkPcSearchChecked={handleBulkPcSearchChecked}
           handleBulkPcSearchFiltered={handleBulkPcSearchFiltered}
           cancelBulkPcSearch={state.cancelBulkPcSearch}
+          translatedNames={state.selectedSetId ? trans.translations[state.selectedSetId] : undefined}
+          translating={trans.translating}
+          translationProgress={trans.translationProgress}
+          onTranslateAll={handleTranslateAll}
+          onTranslateChecked={reg.checkedCards.size > 0 ? handleTranslateChecked : undefined}
+          cancelTranslation={trans.cancelTranslation}
           className="flex-1 min-w-0"
         />
         {/* R11-17: カードがある場合のみ右パネルを表示（セット選択時に自然に出現） */}
@@ -208,6 +234,7 @@ export default function JustTcgExplorer() {
               isRegistering={card ? !!reg.registering[card.id] : false}
               registerError={card ? reg.registerError[card.id] : ''}
               onRegister={handleRegister}
+              translatedJaName={card && state.selectedSetId ? trans.getJaName(state.selectedSetId, card.id) : undefined}
             />
           </div>
         )}
@@ -259,6 +286,7 @@ export default function JustTcgExplorer() {
               isRegistering={!!reg.registering[card.id]}
               registerError={reg.registerError[card.id] || ''}
               onRegister={handleRegister}
+              translatedJaName={card && state.selectedSetId ? trans.getJaName(state.selectedSetId, card.id) : undefined}
             />
           </div>
         </div>

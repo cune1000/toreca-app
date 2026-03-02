@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getRarityShortName } from '@/lib/rarity-mapping'
+import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,8 @@ export async function POST(request: NextRequest) {
       pricecharting_url,
       regulation,
       game,
+      justtcg_nm_price_usd,
+      justtcg_price_history,
     } = body
 
     if (!name || !justtcg_id || typeof name !== 'string' || typeof justtcg_id !== 'string') {
@@ -105,7 +108,74 @@ export async function POST(request: NextRequest) {
       return `${m[1].padStart(maxLen, '0')}/${m[2].padStart(maxLen, '0')}`
     }
 
+    // JustTCG NM価格バリデーション
+    const safeNmPrice = typeof justtcg_nm_price_usd === 'number' && isFinite(justtcg_nm_price_usd) && justtcg_nm_price_usd >= 0
+      ? justtcg_nm_price_usd : null
+
     const supabase = createServiceClient()
+
+    // 価格履歴保存（登録成功後に非同期実行）
+    async function savePriceData(cardId: string, pcId: string | null) {
+      try {
+        // 1. JustTCG NM価格履歴を保存
+        if (Array.isArray(justtcg_price_history) && justtcg_price_history.length > 0) {
+          const rows = justtcg_price_history
+            .filter((h: any) => typeof h.p === 'number' && isFinite(h.p) && typeof h.t === 'number')
+            .map((h: any) => ({
+              card_id: cardId,
+              price_usd: h.p,
+              recorded_at: new Date(h.t * 1000).toISOString(),
+            }))
+          if (rows.length > 0) {
+            // 既存データを削除してから再挿入（重複防止）
+            await supabase.from('justtcg_price_history').delete().eq('card_id', cardId)
+            // 50件ずつバッチINSERT
+            for (let i = 0; i < rows.length; i += 50) {
+              await supabase.from('justtcg_price_history').insert(rows.slice(i, i + 50))
+            }
+          }
+        }
+
+        // 2. PriceCharting初期価格を overseas_prices に保存
+        if (pcId) {
+          // 既にこのカードの overseas_prices があるか確認
+          const { data: existingOverseas } = await supabase
+            .from('overseas_prices')
+            .select('id')
+            .eq('card_id', cardId)
+            .limit(1)
+          if (!existingOverseas || existingOverseas.length === 0) {
+            try {
+              const product = await getProduct(pcId)
+              const looseUsd = product['loose-price'] ?? null
+              const psa10Usd = product['manual-only-price'] ?? null
+              // 為替レート取得
+              const { data: rateData } = await supabase
+                .from('exchange_rates')
+                .select('rate')
+                .eq('base_currency', 'USD')
+                .eq('target_currency', 'JPY')
+                .order('recorded_at', { ascending: false })
+                .limit(1)
+              const rate = rateData?.[0]?.rate || 150
+              await supabase.from('overseas_prices').insert({
+                card_id: cardId,
+                pricecharting_id: pcId,
+                loose_price_usd: looseUsd,
+                graded_price_usd: psa10Usd,
+                exchange_rate: rate,
+                loose_price_jpy: looseUsd != null ? penniesToJpy(looseUsd, rate) : null,
+                graded_price_jpy: psa10Usd != null ? penniesToJpy(psa10Usd, rate) : null,
+              })
+            } catch (e) {
+              console.error('PriceCharting initial fetch error:', e)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('savePriceData error:', e)
+      }
+    }
 
     // justtcg_id 既存チェック（後でUPDATE or INSERT判定に使用）
     const { data: existing, error: dupCheckError } = await supabase
@@ -183,6 +253,7 @@ export async function POST(request: NextRequest) {
       if (rarityId) updateFields.rarity_id = rarityId
       if (url(image_url)) updateFields.image_url = url(image_url)
       if (str(regulation, 10)) updateFields.regulation = str(regulation, 10)
+      if (safeNmPrice !== null) updateFields.justtcg_nm_price_usd = safeNmPrice
 
       const { data: updated, error: updateError } = await supabase
         .from('cards')
@@ -198,6 +269,8 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         )
       }
+      // 価格履歴保存（非ブロッキング）
+      savePriceData(existing.id, str(pricecharting_id, 100)).catch(() => {})
       return NextResponse.json({ success: true, data: updated, updated: true })
     }
 
@@ -263,6 +336,7 @@ export async function POST(request: NextRequest) {
       if (rarityId) updateFields.rarity_id = rarityId
       if (url(image_url)) updateFields.image_url = url(image_url)
       if (str(regulation, 10)) updateFields.regulation = str(regulation, 10)
+      if (safeNmPrice !== null) updateFields.justtcg_nm_price_usd = safeNmPrice
 
       const { data: merged, error: mergeError } = await supabase
         .from('cards')
@@ -278,6 +352,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         )
       }
+      savePriceData(mergeTarget.id, pcId).catch(() => {})
       return NextResponse.json({ success: true, data: merged, merged: true })
     }
 
@@ -303,6 +378,7 @@ export async function POST(request: NextRequest) {
         pricecharting_url: url(pricecharting_url),
         regulation: str(regulation, 10),
         category_large_id: category?.id || null,
+        justtcg_nm_price_usd: safeNmPrice,
       })
       .select()
       .single()
@@ -329,6 +405,7 @@ export async function POST(request: NextRequest) {
           if (category?.id) fallbackFields.category_large_id = category.id
           if (url(image_url)) fallbackFields.image_url = url(image_url)
           if (str(regulation, 10)) fallbackFields.regulation = str(regulation, 10)
+          if (safeNmPrice !== null) fallbackFields.justtcg_nm_price_usd = safeNmPrice
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('cards')
             .update(fallbackFields)
@@ -336,6 +413,7 @@ export async function POST(request: NextRequest) {
             .select()
             .single()
           if (!fallbackError) {
+            savePriceData(raceExisting.id, pcId).catch(() => {})
             return NextResponse.json({ success: true, data: fallbackData, updated: true })
           }
         }
@@ -351,6 +429,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    savePriceData(card.id, str(pricecharting_id, 100)).catch(() => {})
     return NextResponse.json({ success: true, data: card })
   } catch (error: unknown) {
     console.error('JustTCG register error:', error)
