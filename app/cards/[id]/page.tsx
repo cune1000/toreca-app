@@ -49,6 +49,10 @@ export default function CardDetailPage({ params }: Props) {
   const [overseasLatest, setOverseasLatest] = useState<any | null>(null)
   const [overseasHistory, setOverseasHistory] = useState<any[]>([])
 
+  // ── JustTCG NM price history ──
+  const [justTcgHistory, setJustTcgHistory] = useState<any[]>([])
+  const [exchangeRate, setExchangeRate] = useState<number>(155)
+
   // ── Fetch card data ──
   useEffect(() => {
     const fetchCard = async () => {
@@ -79,6 +83,7 @@ export default function CardDetailPage({ params }: Props) {
       fetchSnkrdunkSales()
       fetchPurchaseLinks()
       fetchOverseasPrices()
+      fetchJustTcgHistory()
     }
   }, [card?.id, card?.pricecharting_id])
 
@@ -123,6 +128,27 @@ export default function CardDetailPage({ params }: Props) {
         setOverseasLatest(json.data[json.data.length - 1])
       }
     } catch (err) { console.error('Failed to fetch overseas prices:', err) }
+  }
+
+  const fetchJustTcgHistory = async () => {
+    try {
+      const [{ data: history }, { data: rateData }] = await Promise.all([
+        supabase
+          .from('justtcg_price_history')
+          .select('recorded_at, price_usd')
+          .eq('card_id', card.id)
+          .order('recorded_at', { ascending: true }),
+        supabase
+          .from('exchange_rates')
+          .select('rate')
+          .eq('base_currency', 'USD')
+          .eq('target_currency', 'JPY')
+          .order('recorded_at', { ascending: false })
+          .limit(1),
+      ])
+      if (rateData?.[0]?.rate) setExchangeRate(rateData[0].rate)
+      setJustTcgHistory(history || [])
+    } catch (err) { console.error('Failed to fetch JustTCG history:', err) }
   }
 
   const handleCardUpdated = async () => {
@@ -242,6 +268,20 @@ export default function CardDetailPage({ params }: Props) {
       }
     }
 
+    // JustTCG NM価格データを日次で追加（USD→JPY変換）
+    if (justTcgHistory.length > 0) {
+      const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
+      for (const jh of justTcgHistory) {
+        const d = formatDate(jh.recorded_at); if (!d) continue
+        if (cutoff && d < cutoff) continue
+        const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
+        const ts = dayNoon.getTime()
+        const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(dayNoon) }
+        if (jh.price_usd) existing.justtcg_nm_jpy = Math.round(jh.price_usd * exchangeRate)
+        dataMap.set(ts, existing)
+      }
+    }
+
     // 売買日次平均を追加
     if (snkrdunkSales.length > 0) {
       const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
@@ -264,7 +304,7 @@ export default function CardDetailPage({ params }: Props) {
     }
 
     return Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp).slice(-300)
-  }, [purchasePrices, salePrices, overseasHistory, snkrdunkSales, selectedPeriod])
+  }, [purchasePrices, salePrices, overseasHistory, justTcgHistory, exchangeRate, snkrdunkSales, selectedPeriod])
 
   const latestPrices = useMemo(() => {
     const latest: Record<string, { price: number; stock: number | null; siteName: string }> = {}

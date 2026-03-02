@@ -89,6 +89,11 @@ export const OVERSEAS_LINE_COLORS: Record<string, { color: string; label: string
   graded: { color: '#a78bfa', label: '海外PSA10' },  // violet
 }
 
+// JustTCG NM価格線カラー
+export const JUSTTCG_LINE_COLORS: Record<string, { color: string; label: string }> = {
+  nm: { color: '#06b6d4', label: 'JT NM' },          // cyan
+}
+
 // 日次平均カラー
 export const DAILY_AVG_COLORS: Record<string, { color: string; label: string }> = {
   trade: { color: '#f97316', label: '売買平均' },     // orange

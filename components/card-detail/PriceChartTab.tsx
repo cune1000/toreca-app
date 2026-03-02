@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { RefreshCw } from 'lucide-react'
 import {
   SITE_COLORS, PURCHASE_CONDITION_COLORS, SALE_GRADE_COLORS,
-  OVERSEAS_LINE_COLORS, DAILY_AVG_COLORS,
+  OVERSEAS_LINE_COLORS, JUSTTCG_LINE_COLORS, DAILY_AVG_COLORS,
   PERIOD_OPTIONS,
 } from './constants'
 import { isSnkrdunkSiteName } from '@/lib/snkrdunk-api'
@@ -97,6 +97,7 @@ export default function PriceChartTab({
   const [showOverseasLoose, setShowOverseasLoose] = useState(() => loadSetting('showOverseasLoose', true))
   const [showOverseasGraded, setShowOverseasGraded] = useState(() => loadSetting('showOverseasGraded', true))
   const [showDailyTrade, setShowDailyTrade] = useState(() => loadSetting('showDailyTrade', true))
+  const [showJustTcgNm, setShowJustTcgNm] = useState(() => loadSetting('showJustTcgNm', true))
   const [overseasUpdating, setOverseasUpdating] = useState(false)
   const [visibleGrades, setVisibleGrades] = useState<Record<string, { price: boolean; stock: boolean }>>(() => loadSetting('visibleGrades', {}))
   const [visiblePurchase, setVisiblePurchase] = useState<Record<string, boolean>>(() => loadSetting('visiblePurchase', {}))
@@ -105,10 +106,12 @@ export default function PriceChartTab({
   useEffect(() => { saveSetting('showOverseasLoose', showOverseasLoose) }, [showOverseasLoose, saveSetting])
   useEffect(() => { saveSetting('showOverseasGraded', showOverseasGraded) }, [showOverseasGraded, saveSetting])
   useEffect(() => { saveSetting('showDailyTrade', showDailyTrade) }, [showDailyTrade, saveSetting])
+  useEffect(() => { saveSetting('showJustTcgNm', showJustTcgNm) }, [showJustTcgNm, saveSetting])
   useEffect(() => { saveSetting('visibleGrades', visibleGrades) }, [visibleGrades, saveSetting])
   useEffect(() => { saveSetting('visiblePurchase', visiblePurchase) }, [visiblePurchase, saveSetting])
 
   const hasOverseasData = chartData.some(d => d.overseas_loose || d.overseas_graded)
+  const hasJustTcgData = chartData.some(d => d.justtcg_nm_jpy)
   const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
 
   // スニダン判定（グレード別で表示するのでサイト別からは除外）
@@ -252,7 +255,7 @@ export default function PriceChartTab({
         )}
 
         {/* 海外・その他 */}
-        {(card.pricecharting_id || hasDailyTradeData) && (
+        {(card.pricecharting_id || hasJustTcgData || hasDailyTradeData) && (
           <div>
             <p className="text-xs text-slate-400 font-medium mb-1.5">海外・その他</p>
             <div className="flex flex-wrap gap-2 items-center">
@@ -278,6 +281,13 @@ export default function PriceChartTab({
                     海外更新
                   </button>
                 </>
+              )}
+              {hasJustTcgData && (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showJustTcgNm ? 'bg-cyan-50 border-cyan-200 text-cyan-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: JUSTTCG_LINE_COLORS.nm.color }}></span>
+                  <span className="cursor-pointer select-none" onClick={() => setShowJustTcgNm(!showJustTcgNm)}>{JUSTTCG_LINE_COLORS.nm.label}</span>
+                  <input type="checkbox" checked={showJustTcgNm} onChange={() => setShowJustTcgNm(!showJustTcgNm)} className="w-3.5 h-3.5 accent-cyan-500 cursor-pointer" />
+                </div>
               )}
               {hasDailyTradeData && (
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showDailyTrade ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>
@@ -448,6 +458,21 @@ export default function PriceChartTab({
                   strokeWidth={2}
                   strokeDasharray="6 3"
                   name={OVERSEAS_LINE_COLORS.graded.label}
+                  dot={false}
+                  connectNulls
+                />
+              )}
+
+              {/* JustTCG NM線 */}
+              {showJustTcgNm && hasJustTcgData && (
+                <Line
+                  yAxisId="price"
+                  type="monotone"
+                  dataKey="justtcg_nm_jpy"
+                  stroke={JUSTTCG_LINE_COLORS.nm.color}
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  name={JUSTTCG_LINE_COLORS.nm.label}
                   dot={false}
                   connectNulls
                 />
