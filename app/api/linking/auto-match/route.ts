@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { calculateMatchScore } from '@/app/linking/lib/matching'
+import { calculateMatchScore, parseExternalName } from '@/app/linking/lib/matching'
 
 const supabase = createServiceClient()
 
@@ -9,6 +9,9 @@ const supabase = createServiceClient()
  * POST /api/linking/auto-match
  * body: { name: string, modelno?: string, limit?: number }
  * → スコア付きカード候補を返す
+ *
+ * 商品名の構造化情報（[setCode cardNumber](expansion)）を自動パースし、
+ * カード名・型番・セットコードで複合検索してマッチング精度を向上
  */
 export async function POST(req: NextRequest) {
   try {
@@ -19,42 +22,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'name is required' }, { status: 400 })
     }
 
-    // 1. 名前で候補カードを検索（広めに取得してスコアで絞る）
-    const searchTerms: string[] = []
+    // 1. 構造化商品名をパース
+    // e.g. "Shedinja AR [M1S 072/063](Expansion Pack "Mega Symphonia")"
+    // → cardName="Shedinja", cardNumber="072/063", setCode="M1S"
+    const parsed = parseExternalName(name)
 
-    // 商品名から主要なキーワードを抽出（最初の20文字程度）
-    const shortName = name.slice(0, 20)
-    searchTerms.push(shortName)
+    // 2. 検索条件を構築
+    const orParts: string[] = []
 
-    // 型番がある場合は型番でも検索
-    if (modelno) {
-      searchTerms.push(modelno)
+    // カード名で検索（日本語名・英語名の両方）
+    if (parsed.cardName) {
+      orParts.push(`name.ilike.%${parsed.cardName}%`)
+      orParts.push(`name_en.ilike.%${parsed.cardName}%`)
     }
 
-    // 日本語名 + 英語名の両方で検索（スニダンは英語表記のため）
-    const orConditions = searchTerms
-      .flatMap(t => [`name.ilike.%${t}%`, `name_en.ilike.%${t}%`])
-      .join(',')
+    // パースしたカード番号で検索
+    if (parsed.cardNumber) {
+      orParts.push(`card_number.ilike.%${parsed.cardNumber}%`)
+    }
 
-    // 型番でも検索
-    const cardNumberConditions = modelno
-      ? `,card_number.ilike.%${modelno}%`
-      : ''
+    // ExternalItemのmodelno（product_number）でも検索
+    if (modelno && modelno !== parsed.cardNumber) {
+      orParts.push(`card_number.ilike.%${modelno}%`)
+    }
+
+    if (orParts.length === 0) {
+      return NextResponse.json({ matches: [] })
+    }
 
     const { data: candidates, error } = await supabase
       .from('cards')
       .select('id, name, name_en, card_number, expansion, set_code, image_url, rarity')
-      .or(orConditions + cardNumberConditions)
+      .or(orParts.join(','))
       .limit(50)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // 2. スコア計算（英語名も照合）
+    // 3. スコア計算（パースしたクリーンな名前・型番を使用）
+    const effectiveName = parsed.cardName || name
+    const effectiveModelno = parsed.cardNumber || modelno || null
+
     const scored = (candidates || [])
       .map(card => {
-        const score = calculateMatchScore(name, modelno || null, card.name, card.card_number, card.name_en)
+        let score = calculateMatchScore(
+          effectiveName,
+          effectiveModelno,
+          card.name,
+          card.card_number,
+          card.name_en,
+        )
+
+        // セットコード一致ボーナス（+5、上限100）
+        if (score > 0 && parsed.setCode && card.set_code &&
+            parsed.setCode.toUpperCase() === card.set_code.toUpperCase()) {
+          score = Math.min(100, score + 5)
+        }
+
         if (score === 0) return null
         return {
           card: {

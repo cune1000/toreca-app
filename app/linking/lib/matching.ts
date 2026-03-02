@@ -1,6 +1,87 @@
 import { MATCH_SCORES } from './constants'
 
 // ============================================================================
+// 構造化名前パーサー（スニダン等の "[setCode cardNumber](expansion)" 形式対応）
+// ============================================================================
+
+/** パース結果 */
+export interface ParsedExternalName {
+  /** カード名本体（レアリティ・括弧を除去済み） */
+  cardName: string
+  /** レアリティヒント（AR, SAR, SR 等） */
+  rarityHint: string | null
+  /** カード番号（072/063, 144 等） */
+  cardNumber: string | null
+  /** セットコード（M1S, SV-P 等） */
+  setCode: string | null
+  /** エキスパンション名 */
+  expansion: string | null
+  /** 言語タグ（CN, EN 等） */
+  language: string | null
+}
+
+const LANG_TAGS = new Set(['CN', 'EN', 'JP', 'KR', 'TW', 'ID', 'TH'])
+
+// レアリティサフィックス（"ex"は小文字でカード名の一部なので含めない）
+const RARITY_SUFFIX = /\s+(AR|SAR|SR|UR|RR|HR|CHR|CSR|ACE|TR|PR|IR|SIR|[RUCSAPNKH])\s*$/
+
+/**
+ * スニダン等の構造化商品名をパースして検索用の情報を抽出
+ *
+ * 入力例:
+ *   "Shedinja AR [M1S 072/063](Expansion Pack "Mega Symphonia")"
+ *   "Victini ex P [SV-P 144] [CN] (Gym Star Trial Winner's Gift)"
+ *
+ * → cardName="Shedinja", cardNumber="072/063", setCode="M1S", ...
+ */
+export function parseExternalName(raw: string): ParsedExternalName {
+  let language: string | null = null
+  let cardNumber: string | null = null
+  let setCode: string | null = null
+
+  // 1. 角括弧 [...] の内容を抽出・分類
+  const bracketRegex = /\[([^\]]+)\]/g
+  let m
+  while ((m = bracketRegex.exec(raw)) !== null) {
+    const content = m[1].trim()
+    if (LANG_TAGS.has(content.toUpperCase())) {
+      language = content.toUpperCase()
+    } else {
+      // "M1S 072/063" or "SV-P 144" → setCode + cardNumber
+      const spaceIdx = content.indexOf(' ')
+      if (spaceIdx > 0) {
+        setCode = content.slice(0, spaceIdx).trim()
+        cardNumber = content.slice(spaceIdx + 1).trim()
+      } else if (/\d/.test(content)) {
+        // 数字のみ（番号だけの場合）
+        cardNumber = content
+      }
+    }
+  }
+
+  // 2. 丸括弧 (...) からエキスパンション名を抽出
+  const parenRegex = /\(([^)]+)\)/g
+  const parens: string[] = []
+  while ((m = parenRegex.exec(raw)) !== null) {
+    parens.push(m[1].trim())
+  }
+  const expansion = parens.length > 0 ? parens[parens.length - 1] : null
+
+  // 3. カード名 = 最初の [ or ( より前の部分
+  let cardNamePart = raw.replace(/\s*[\[\(].*/, '').trim()
+
+  // 4. レアリティサフィックスを分離（"AR", "P" 等）
+  let rarityHint: string | null = null
+  const rarityMatch = cardNamePart.match(RARITY_SUFFIX)
+  if (rarityMatch) {
+    rarityHint = rarityMatch[1]
+    cardNamePart = cardNamePart.slice(0, rarityMatch.index!).trim()
+  }
+
+  return { cardName: cardNamePart, rarityHint, cardNumber, setCode, expansion, language }
+}
+
+// ============================================================================
 // 名前正規化
 // ============================================================================
 
