@@ -348,3 +348,70 @@ export async function getBoxSizes(apparelId: number): Promise<SnkrdunkBoxSize[]>
             listingCount: sp.listingItemCount || 0,
         }))
 }
+
+// ============================================================================
+// カテゴリ別商品一覧（紐づけページ用）
+// ============================================================================
+
+export interface SnkrdunkCategoryItem {
+    id: number                // apparelId
+    name: string
+    productNumber: string
+    minPrice: number | null
+    totalListingCount: number
+    imageUrl: string | null
+    releasedAt: string | null
+}
+
+export interface SnkrdunkCategoryResponse {
+    items: SnkrdunkCategoryItem[]
+    total: number
+    page: number
+    perPage: number
+    totalPages: number
+}
+
+/**
+ * カテゴリ別商品一覧を取得（ポケカ全商品取得用）
+ * GET /v1/apparel/market/category?apparelCategoryId=25&brandId=pokemon
+ */
+export async function getCategoryItems(
+    page: number = 1,
+    perPage: number = 120,
+): Promise<SnkrdunkCategoryResponse> {
+    const params = new URLSearchParams({
+        apparelCategoryId: '25',     // トレカカテゴリ
+        brandId: 'pokemon',          // ポケモン
+        page: page.toString(),
+        perPage: perPage.toString(),
+    })
+
+    const url = `${SNKRDUNK_BASE}/v1/apparel/market/category?${params}`
+    const res = await snkrdunkFetch(url)
+
+    if (!res.ok) {
+        throw new Error(`カテゴリ商品一覧の取得に失敗: HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    const apparels = data.apparels || []
+    const total = data.totalCount ?? apparels.length
+
+    const items: SnkrdunkCategoryItem[] = apparels.map((a: any) => ({
+        id: a.id,
+        name: a.name || a.localizedName || '',
+        productNumber: a.productNumber || '',
+        minPrice: a.minPrice ?? null,
+        totalListingCount: a.totalListingCount ?? 0,
+        imageUrl: a.primaryMedia?.imageUrl || a.imageUrl || null,
+        releasedAt: a.releasedAt || null,
+    }))
+
+    return {
+        items,
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
+    }
+}

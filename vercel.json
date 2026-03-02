@@ -8,6 +8,7 @@
     { "path": "/api/cron/lounge-cache",           "schedule": "0 * * * *" },
     { "path": "/api/cron/toreca-lounge",          "schedule": "0 * * * *" },
     { "path": "/api/cron/exchange-rate-sync",     "schedule": "0 * * * *" },
-    { "path": "/api/cron/overseas-price-sync",    "schedule": "0 * * * *" }
+    { "path": "/api/cron/overseas-price-sync",    "schedule": "0 * * * *" },
+    { "path": "/api/cron/snkrdunk-items-sync",   "schedule": "0 */6 * * *" }
   ]
 }

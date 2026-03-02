@@ -1,0 +1,37 @@
+[data-page="linking"] {
+  --lk-bg: #F8FAFB;
+  --lk-surface: #FFFFFF;
+  --lk-ink: #1A2332;
+  --lk-accent: var(--lk-source-color, #10b981);
+  --lk-accent-light: var(--lk-source-color-light, #d1fae5);
+  --lk-border: #E5E7EB;
+  --lk-border-light: #F3F4F6;
+  --lk-text: #1F2937;
+  --lk-text-secondary: #6B7280;
+  --lk-text-muted: #9CA3AF;
+  --lk-linked: #059669;
+  --lk-unlinked: #D97706;
+  --lk-radius: 0.375rem;
+
+  --font-heading: var(--font-body-ja), sans-serif;
+  --font-body: var(--font-body-ja), var(--font-body-en), sans-serif;
+  --font-price: var(--font-mono-price), 'Menlo', monospace;
+
+  font-family: var(--font-body);
+  background-color: var(--lk-bg);
+  color: var(--lk-text);
+}
+
+[data-page="linking"] * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lk-border) transparent;
+}
+
+[data-page="linking"] *::-webkit-scrollbar {
+  width: 6px;
+}
+
+[data-page="linking"] *::-webkit-scrollbar-thumb {
+  background-color: var(--lk-border);
+  border-radius: 3px;
+}
