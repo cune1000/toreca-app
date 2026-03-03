@@ -1,0 +1,37 @@
+[data-page="tcgapi"] {
+  --jtcg-bg: #F8FAFB;
+  --jtcg-surface: #FFFFFF;
+  --jtcg-ink: #0F4C81;
+  --jtcg-ink-light: #1A6BB5;
+  --jtcg-accent: #0891B2;
+  --jtcg-border: #E2E8F0;
+  --jtcg-border-light: #F0F4F8;
+  --jtcg-text: #1A1A1A;
+  --jtcg-text-secondary: #64748B;
+  --jtcg-text-muted: #94A3B8;
+  --jtcg-up: #059669;
+  --jtcg-down: #DC2626;
+  --jtcg-radius: 0.4rem;
+
+  --font-heading: var(--font-body-ja), var(--font-heading-en), serif;
+  --font-body: var(--font-body-ja), var(--font-body-en), sans-serif;
+  --font-price: var(--font-mono-price), 'Menlo', monospace;
+
+  font-family: var(--font-body);
+  background-color: var(--jtcg-bg);
+  color: var(--jtcg-text);
+}
+
+[data-page="tcgapi"] * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--jtcg-border) transparent;
+}
+
+[data-page="tcgapi"] *::-webkit-scrollbar {
+  width: 6px;
+}
+
+[data-page="tcgapi"] *::-webkit-scrollbar-thumb {
+  background-color: var(--jtcg-border);
+  border-radius: 3px;
+}

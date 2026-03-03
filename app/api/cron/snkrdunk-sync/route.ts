@@ -12,7 +12,7 @@ import { normalizeGrade, parseRelativeTime, extractGradePrices } from '@/lib/scr
 
 export const maxDuration = 300
 
-const BATCH_SIZE = 5
+const BATCH_SIZE = 15
 const SYNC_INTERVAL_MINUTES = 120        // 通常: 2時間
 const ERROR_BASE_RETRY_MINUTES = 60      // エラー初回: 1時間
 const ERROR_MAX_RETRY_MINUTES = 360      // エラー最大: 6時間
@@ -128,21 +128,21 @@ export async function GET(req: Request) {
       const elapsed = Date.now() - cardStart
       results.push(isSuccess
         ? {
-            cardName: saleUrl.card?.name,
-            status: 'success',
-            salesInserted: syncResult!.salesInserted,
-            salesSkipped: syncResult!.salesSkipped,
-            overallMin: syncResult!.overallMin,
-            totalListings: syncResult!.totalListings,
-            gradePrices: syncResult!.gradePricesCount,
-            ms: elapsed,
-          }
+          cardName: saleUrl.card?.name,
+          status: 'success',
+          salesInserted: syncResult!.salesInserted,
+          salesSkipped: syncResult!.salesSkipped,
+          overallMin: syncResult!.overallMin,
+          totalListings: syncResult!.totalListings,
+          gradePrices: syncResult!.gradePricesCount,
+          ms: elapsed,
+        }
         : {
-            cardName: saleUrl.card?.name,
-            status: 'error',
-            error: syncError,
-            ms: elapsed,
-          }
+          cardName: saleUrl.card?.name,
+          status: 'error',
+          error: syncError,
+          ms: elapsed,
+        }
       )
     }
 

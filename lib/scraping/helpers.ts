@@ -24,30 +24,25 @@ export function parseRelativeTime(timeStr: string, baseTime: Date): Date | null 
         return isNaN(result.getTime()) ? null : result
     }
 
-    // 相対時刻のパターン（3日前、2時間前、5秒前など）
-    const pattern = /(\d+)(秒|分|時間|日)前/
+    // 相対時刻のパターン（3日前、2時間前、5秒前、18h agoなど）
+    const pattern = /(\d+)\s*(秒|分|時間|日|s|m|h|d|secs?|mins?|hours?|days?)\s*(前|ago)?/i
     const match = timeStr.match(pattern)
     if (!match) return null
 
     const value = parseInt(match[1], 10)
-    const unit = match[2]
+    const unit = match[2].toLowerCase()
     const result = new Date(baseTime)
 
-    switch (unit) {
-        case '秒':
-            result.setSeconds(result.getSeconds() - value)
-            break
-        case '分':
-            result.setMinutes(result.getMinutes() - value)
-            break
-        case '時間':
-            result.setHours(result.getHours() - value)
-            break
-        case '日':
-            result.setDate(result.getDate() - value)
-            break
-        default:
-            return null
+    if (unit === '秒' || unit.startsWith('s')) {
+        result.setSeconds(result.getSeconds() - value)
+    } else if (unit === '分' || unit.startsWith('m')) {
+        result.setMinutes(result.getMinutes() - value)
+    } else if (unit === '時間' || unit.startsWith('h')) {
+        result.setHours(result.getHours() - value)
+    } else if (unit === '日' || unit.startsWith('d')) {
+        result.setDate(result.getDate() - value)
+    } else {
+        return null
     }
 
     return result

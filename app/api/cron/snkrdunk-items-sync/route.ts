@@ -8,8 +8,8 @@ export const maxDuration = 300
 
 const supabase = createServiceClient()
 
-/** 1回のcron実行でフェッチする最大ページ数 */
-const MAX_PAGES_PER_RUN = 50
+/** 1回のcron実行でフェッチするデフォルトの最大ページ数 */
+const DEFAULT_MAX_PAGES_PER_RUN = 5
 /** 1ページあたりの取得件数 */
 const PER_PAGE = 120
 /** ページ間の待機時間（ms） */
@@ -27,12 +27,17 @@ export async function GET(req: Request) {
       return new Response('Unauthorized', { status: 401 })
     }
 
+    const { searchParams } = new URL(req.url)
+    const isFullSync = searchParams.get('full') === 'true'
+
     const gate = await shouldRunCronJob('snkrdunk-items-sync')
-    if (!gate.shouldRun) {
+    if (!gate.shouldRun && !isFullSync) { // フル同期（手動）の場合はゲートを無視してもよい
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
-    console.log('[snkrdunk-items-sync] Starting full sync...')
+    const maxPages = isFullSync ? 9999 : DEFAULT_MAX_PAGES_PER_RUN
+
+    console.log(`[snkrdunk-items-sync] Starting ${isFullSync ? 'Full' : 'Light'} sync...`)
     const startTime = Date.now()
     const now = new Date().toISOString()
 
@@ -42,9 +47,9 @@ export async function GET(req: Request) {
     let page = 1
     let totalPages = 1
 
-    // ページネーションで全件取得
-    while (page <= totalPages && page <= MAX_PAGES_PER_RUN) {
-      console.log(`[snkrdunk-items-sync] Fetching page ${page}/${totalPages}...`)
+    // ページネーションで取得
+    while (page <= totalPages && page <= maxPages) {
+      console.log(`[snkrdunk-items-sync] Fetching page ${page}/${Math.min(totalPages, maxPages)}...`)
 
       const result = await getCategoryItems(page, PER_PAGE)
       totalPages = result.totalPages
@@ -85,7 +90,7 @@ export async function GET(req: Request) {
       page++
 
       // レート制限対策
-      if (page <= totalPages && page <= MAX_PAGES_PER_RUN) {
+      if (page <= totalPages && page <= maxPages) {
         await new Promise(resolve => setTimeout(resolve, PAGE_DELAY_MS))
       }
     }

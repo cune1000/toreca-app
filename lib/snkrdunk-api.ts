@@ -67,10 +67,10 @@ async function snkrdunkFetch(url: string): Promise<Response> {
         let res: Response
 
         if (ZENROWS_API_KEY) {
-            // ZenRows プロキシ経由
-            const zenrowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(url)}`
+            // ZenRows プロキシ経由でヘッダーも転送
+            const zenrowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(url)}&custom_headers=true`
             console.log(`[SnkrdunkAPI] Fetching via ZenRows: ${url}`)
-            res = await fetch(zenrowsUrl, { signal: controller.signal, cache: 'no-store' })
+            res = await fetch(zenrowsUrl, { headers, signal: controller.signal, cache: 'no-store' })
         } else {
             // 直接呼び出し
             console.log(`[SnkrdunkAPI] Fetching directly: ${url}`)
@@ -378,6 +378,7 @@ export interface SnkrdunkCategoryResponse {
 export async function getCategoryItems(
     page: number = 1,
     perPage: number = 120,
+    order: 'new' | 'popular' | 'default' = 'new'
 ): Promise<SnkrdunkCategoryResponse> {
     const params = new URLSearchParams({
         apparelCategoryId: '25',     // トレカカテゴリ
@@ -385,6 +386,10 @@ export async function getCategoryItems(
         page: page.toString(),
         perPage: perPage.toString(),
     })
+
+    if (order !== 'default') {
+        params.append('order', order)
+    }
 
     const url = `${SNKRDUNK_BASE}/v1/apparel/market/category?${params}`
     const res = await snkrdunkFetch(url)
