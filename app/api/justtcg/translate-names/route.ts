@@ -63,11 +63,32 @@ export async function POST(request: NextRequest) {
       'Surprise Box': 'サプライズBOX',
     }
 
+    // ユーザーフィードバックに基づく「Geminiが誤訳しやすいカード」の直接変換辞書
+    const KNOWN_TRANSLATIONS: Record<string, string> = {
+      "rosa's encouragement": "メイ", // 直訳「メイのエンカレッジメント」等を防止
+      "lillie's full force": "リーリエの全力",
+      "professor's research": "博士の研究",
+      "boss's orders": "ボスの指令",
+    }
+
     const preResolved: Record<string, string> = {}
     const toTranslate: Array<{ id: string; name: string }> = []
 
     for (const item of names as Array<{ id: string; name: string }>) {
       let matched = false
+      const lowerName = item.name.toLowerCase()
+
+      // まず特例辞書に完全一致・部分一致するかチェック
+      for (const [enName, jaName] of Object.entries(KNOWN_TRANSLATIONS)) {
+        if (lowerName.includes(enName)) {
+          preResolved[item.id] = jaName
+          matched = true
+          break
+        }
+      }
+      if (matched) continue
+
+      // 次に商品名（BOXなど）の接尾辞チェック
       for (const [suffix, jaSuffix] of Object.entries(PRODUCT_SUFFIXES)) {
         if (item.name.endsWith(suffix)) {
           // セット名部分を抽出して日本語セット名 + 商品種別に変換
@@ -95,20 +116,20 @@ export async function POST(request: NextRequest) {
       ? `\n**このセットの情報**: 英語名「${setNameEn}」= 日本語名「${setNameJa}」\n商品名にセット名が含まれる場合は上記の日本語セット名を使ってください。\n`
       : ''
 
-    const prompt = `あなたは日本の${gameLabel}の専門家です。以下の英語名を正式な日本語名に変換してください。
+    const prompt = `あなたは日本の${gameLabel}の専門家です。以下の英語名を公式の日本語名に変換してください。
 ${setContext}
 **ルール**:
-1. これは意訳・翻訳ではありません。日本で実際に発売されている商品・カードの正式な日本語名を答えてください
+1. これは直訳・意訳ではありません。日本で実際に発売されている公式の商品名・カード名を答えてください。
 2. ポケモン・キャラクター名: 正式な日本語名を使用
    - 「ex」は小文字（Pikachu ex → ピカチュウex）
    - V / VSTAR / VMAX / GX / EX(大文字) はそのまま
-3. グッズ・サポート・スタジアム・エネルギー: 正式な日本語カード名
-4. 商品名（Booster Box / Booster Pack / Elite Trainer Box等）:
+3. "〇〇's Encouragement" や "〇〇's Care" などのサポーターの場合、日本では単なるキャラクター名「〇〇」（例：メイ、カトレア等）であるか、公式の独自の日本語名（例：リーリエの全力等）がついています。絶対に「エンカレッジメント」「ケア」といったカタカナ直訳にしないでください。
+4. 存在しない謎の単語（ムニキスゼロ等）は絶対に出力しないでください。
+5. 商品名（Booster Box等）:
    - Booster Box → 「${setNameJa || 'セット名'} BOX」
    - Booster Pack → 「${setNameJa || 'セット名'} パック」
-   - Booster Bundle → 「${setNameJa || 'セット名'} バンドル」
-5. (Master Ball Reverse) / (Art Rare) 等のパターン名は除去
-6. 正式名が分からない場合 → カタカナに音訳（英語のまま返さないこと）
+6. (Master Ball Reverse) / (Art Rare) 等のパターン名（英語）は除去してください。
+7. 正式名がどうしても分からない場合のみ、カタカナに音訳してください。
 
 入力リスト:
 ${nameList}

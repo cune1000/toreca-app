@@ -48,6 +48,8 @@ interface CenterPanelProps {
   translationProgress?: { current: number; total: number } | null
   onTranslateAll?: () => void
   onTranslateChecked?: () => void
+  onTranslateAllByImage?: () => void
+  onTranslateCheckedByImage?: () => void
   cancelTranslation?: () => void
   className?: string
 }
@@ -62,7 +64,8 @@ export default memo(function CenterPanel({
   checkedCards, registered, checkedCount, readyCount, readyOverwriteCount, bulkProgress,
   toggleCheck, toggleAllFiltered, handleBulkRegister, handleBulkOverwrite, cancelBulkRegister,
   bulkPcProgress, handleBulkPcSearchChecked, handleBulkPcSearchFiltered, cancelBulkPcSearch,
-  translatedNames, translating, translationProgress, onTranslateAll, onTranslateChecked, cancelTranslation,
+  translatedNames, translating, translationProgress, onTranslateAll, onTranslateChecked,
+  onTranslateAllByImage, onTranslateCheckedByImage, cancelTranslation,
   className = '',
 }: CenterPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -110,9 +113,8 @@ export default memo(function CenterPanel({
               <span className="text-[var(--jtcg-border)]">|</span>
               <button
                 onClick={clearRarityFilter}
-                className={`px-2 py-0.5 rounded-full transition-colors ${
-                  rarityFilter.size === 0 ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
-                }`}
+                className={`px-2 py-0.5 rounded-full transition-colors ${rarityFilter.size === 0 ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
               >
                 All
               </button>
@@ -121,9 +123,8 @@ export default memo(function CenterPanel({
                   key={r}
                   onClick={() => toggleRarity(r)}
                   aria-pressed={rarityFilter.has(r)}
-                  className={`px-2 py-0.5 rounded-full transition-colors ${
-                    rarityFilter.has(r) ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
-                  }`}
+                  className={`px-2 py-0.5 rounded-full transition-colors ${rarityFilter.has(r) ? 'bg-[var(--jtcg-ink)] text-white font-bold' : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
                 >
                   {r}
                 </button>
@@ -258,14 +259,28 @@ export default memo(function CenterPanel({
                     onClick={onTranslateChecked}
                     className="px-2 py-1 rounded-[var(--jtcg-radius)] bg-blue-100 text-blue-700 text-[10px] font-bold hover:bg-blue-200"
                   >
-                    選択分翻訳
+                    選択分テキスト翻訳
                   </button>
                 )}
                 <button
                   onClick={onTranslateAll}
                   className="px-2 py-1 rounded-[var(--jtcg-radius)] bg-blue-50 text-blue-600 text-[10px] font-bold hover:bg-blue-100"
                 >
-                  全件翻訳
+                  全件テキスト翻訳
+                </button>
+                {onTranslateCheckedByImage && (
+                  <button
+                    onClick={onTranslateCheckedByImage}
+                    className="px-2 py-1 rounded-[var(--jtcg-radius)] bg-indigo-100 text-indigo-700 text-[10px] font-bold hover:bg-indigo-200"
+                  >
+                    選択分を画像で翻訳
+                  </button>
+                )}
+                <button
+                  onClick={onTranslateAllByImage}
+                  className="px-2 py-1 rounded-[var(--jtcg-radius)] bg-indigo-50 text-indigo-600 text-[10px] font-bold hover:bg-indigo-100"
+                >
+                  全件画像で翻訳
                 </button>
               </>
             )}

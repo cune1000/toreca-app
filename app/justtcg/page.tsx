@@ -86,6 +86,21 @@ export default function JustTcgExplorer() {
     }
   }, [state.selectedSetId, state.cards, reg.checkedCards, state.selectedGame, state.selectedSet, trans.translateSet])
 
+  // AI翻訳（全件 画像）
+  const handleTranslateAllByImage = useCallback(() => {
+    if (state.selectedSetId && state.cards.length > 0) {
+      trans.translateByImage(state.selectedSetId, state.cards)
+    }
+  }, [state.selectedSetId, state.cards, trans.translateByImage])
+
+  // AI翻訳（選択分のみ 画像）
+  const handleTranslateCheckedByImage = useCallback(() => {
+    if (state.selectedSetId && reg.checkedCards.size > 0) {
+      const checked = state.cards.filter(c => reg.checkedCards.has(c.id))
+      trans.translateByImage(state.selectedSetId, checked)
+    }
+  }, [state.selectedSetId, state.cards, reg.checkedCards, trans.translateByImage])
+
   const handleBulkPcSearchChecked = useCallback(() => {
     state.handleBulkPcSearch('checked')
   }, [state.handleBulkPcSearch])
@@ -147,11 +162,10 @@ export default function JustTcgExplorer() {
 
           {state.usage && (
             <div className="flex items-center gap-1.5 text-[10px]">
-              <span className={`px-2 py-0.5 rounded-full font-bold ${
-                state.usage.dailyRemaining < 10 ? 'bg-red-100 text-red-700' :
-                state.usage.dailyRemaining < 30 ? 'bg-amber-100 text-amber-700' :
-                'bg-green-100 text-green-700'
-              }`}>
+              <span className={`px-2 py-0.5 rounded-full font-bold ${state.usage.dailyRemaining < 10 ? 'bg-red-100 text-red-700' :
+                  state.usage.dailyRemaining < 30 ? 'bg-amber-100 text-amber-700' :
+                    'bg-green-100 text-green-700'
+                }`}>
                 {state.usage.dailyRemaining}/{state.usage.dailyLimit}
               </span>
               <span className="text-[var(--jtcg-text-muted)] hidden sm:inline">
@@ -211,6 +225,8 @@ export default function JustTcgExplorer() {
           translationProgress={trans.translationProgress}
           onTranslateAll={handleTranslateAll}
           onTranslateChecked={reg.checkedCards.size > 0 ? handleTranslateChecked : undefined}
+          onTranslateAllByImage={handleTranslateAllByImage}
+          onTranslateCheckedByImage={reg.checkedCards.size > 0 ? handleTranslateCheckedByImage : undefined}
           cancelTranslation={trans.cancelTranslation}
           className="flex-1 min-w-0"
         />

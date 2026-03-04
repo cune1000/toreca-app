@@ -89,5 +89,64 @@ export function useTranslation() {
     return translations[setId]?.[cardId]
   }, [translations])
 
-  return { translations, translating, translationError, translationProgress, translateSet, cancelTranslation, getJaName }
+  const translateByImage = useCallback(async (
+    setId: string,
+    cards: JTCard[],
+  ) => {
+    // TCGPlayer IDがある未翻訳カードのみ対象
+    const imageCards = cards.filter(c => c.tcgplayerId && !translations[setId]?.[c.id])
+    if (imageCards.length === 0) return
+
+    setTranslating(true)
+    setTranslationError('')
+    setTranslationProgress({ current: 0, total: imageCards.length })
+    cancelRef.current = false
+
+    try {
+      let processed = 0
+      for (const card of imageCards) {
+        if (cancelRef.current) break
+
+        const imageUrl = `https://product-images.tcgplayer.com/${card.tcgplayerId}.jpg`
+
+        try {
+          const res = await fetch('/api/justtcg/extract-name', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl }),
+          })
+
+          if (res.status === 429) {
+            await new Promise(r => setTimeout(r, 4000))
+          } else if (res.ok) {
+            const json = await res.json()
+            if (json.success && json.name) {
+              setTranslations(prev => ({
+                ...prev,
+                [setId]: { ...prev[setId], [card.id]: json.name }
+              }))
+            }
+          }
+        } catch (e) {
+          console.error("Image translation error for", card.id, e)
+        }
+
+        processed++
+        setTranslationProgress({ current: processed, total: imageCards.length })
+
+        // extract-name APIのIP制限(2秒)を回避
+        if (processed < imageCards.length && !cancelRef.current) {
+          await new Promise(r => setTimeout(r, 2200))
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '画像翻訳に失敗しました'
+      setTranslationError(msg)
+    } finally {
+      setTranslating(false)
+      setTranslationProgress(null)
+    }
+  }, [translations])
+
+  return { translations, translating, translationError, translationProgress, translateSet, translateByImage, cancelTranslation, getJaName }
 }

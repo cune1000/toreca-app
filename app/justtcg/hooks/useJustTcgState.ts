@@ -118,7 +118,7 @@ export function useJustTcgState() {
   })
   const setSelectedGame = useCallback((game: string) => {
     setSelectedGameRaw(game)
-    try { localStorage.setItem('jtcg-selectedGame', game) } catch {}
+    try { localStorage.setItem('jtcg-selectedGame', game) } catch { }
   }, [])
   const [sets, setSets] = useState<JTSet[]>([])
   const [selectedSetId, setSelectedSetId] = useState('')
@@ -235,10 +235,18 @@ export function useJustTcgState() {
     return () => controller.abort()
   }, [selectedSetId, selectedGame])
 
-  // レアリティ一覧（"None" を除外）
+  // レアリティ一覧（"None" や空文字は "レアリティなし" として扱い、指定の順にソート）
   const rarities = useMemo(() => {
-    const set = new Set(cards.map(c => c.rarity).filter(r => r && r !== 'None'))
-    return Array.from(set).sort()
+    const RARITY_ORDER = ['SAR', 'SR', 'AR', 'R', 'UC', 'C', 'レアリティなし']
+    const set = new Set(cards.map(c => !c.rarity || c.rarity === 'None' ? 'レアリティなし' : c.rarity))
+    return Array.from(set).sort((a, b) => {
+      const idxA = RARITY_ORDER.indexOf(a)
+      const idxB = RARITY_ORDER.indexOf(b)
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB
+      if (idxA !== -1) return -1
+      if (idxB !== -1) return 1
+      return a.localeCompare(b)
+    })
   }, [cards])
 
   // 検索テキストのデバウンス（入力中のUI応答性を維持しつつフィルタリングを遅延）
@@ -256,7 +264,10 @@ export function useJustTcgState() {
       )
     }
     if (rarityFilter.size > 0) {
-      list = list.filter(c => rarityFilter.has(c.rarity))
+      list = list.filter(c => {
+        const r = !c.rarity || c.rarity === 'None' ? 'レアリティなし' : c.rarity
+        return rarityFilter.has(r)
+      })
     }
     if (japaneseOnly) {
       list = list.filter(c => Array.isArray(c.variants) && c.variants.some(v => v.language === 'Japanese'))
@@ -528,7 +539,7 @@ export function useJustTcgState() {
   // selectedSet メモ化（毎レンダーの sets.find を防止）
   const selectedSet = useMemo(() =>
     sets.find(s => s.id === selectedSetId) || null
-  , [sets, selectedSetId])
+    , [sets, selectedSetId])
 
   const clearError = useCallback(() => setError(''), [])
   const toggleRegistration = useCallback(() => setShowRegistration(p => !p), [])

@@ -64,10 +64,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'imageUrl は必須です' }, { status: 400 })
     }
 
-    // URL検証（PriceChartingの画像ドメインのみ許可）
+    // URL検証（PriceCharting・TCGPlayerの画像ドメインのみ許可）
     try {
       const parsed = new URL(imageUrl)
-      if (parsed.hostname !== 'storage.googleapis.com') {
+      if (parsed.hostname !== 'storage.googleapis.com' && parsed.hostname !== 'product-images.tcgplayer.com') {
         return NextResponse.json({ success: false, error: '許可されていない画像URLです' }, { status: 400 })
       }
     } catch {
