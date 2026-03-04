@@ -10,6 +10,7 @@ export function useRegistration(
   selectedSet: JTSet | null,
   selectedGame: string,
   pcMatches: Record<string, PCMatch | null>,
+  translatedNames: Record<string, string> = {}
 ) {
   const [checkedCards, setCheckedCards] = useState<Set<string>>(new Set())
   const [jaNames, setJaNames] = useState<Record<string, string>>({})
@@ -109,6 +110,8 @@ export function useRegistration(
   selectedGameRef.current = selectedGame
   const expansionOverrideRef = useRef(expansionOverride)
   expansionOverrideRef.current = expansionOverride
+  const translatedNamesRef = useRef(translatedNames)
+  translatedNamesRef.current = translatedNames
 
   // デフォルト収録弾名（マッピング or セット名）
   const defaultExpansion = useMemo(
@@ -118,7 +121,7 @@ export function useRegistration(
 
   /** カード1件を登録。成功（or 既に登録済み）なら true を返す */
   const handleRegister = useCallback(async (card: JTCard): Promise<boolean> => {
-    const jaName = jaNamesRef.current[card.id]?.trim()
+    const jaName = (jaNamesRef.current[card.id] || translatedNamesRef.current[card.id])?.trim()
     if (!jaName) {
       setRegisterError(prev => ({ ...prev, [card.id]: '日本語名を入力してください' }))
       return false
@@ -210,7 +213,7 @@ export function useRegistration(
     try {
       // R13-INT07: jaNameが未入力のカードもスキップ（日本語名なし登録防止）
       const toRegister = cardsRef.current.filter(c =>
-        checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id] && jaNamesRef.current[c.id]?.trim()
+        checkedCardsRef.current.has(c.id) && !registeredRef.current[c.id] && (jaNamesRef.current[c.id] || translatedNamesRef.current[c.id])?.trim()
       )
       // R14-03: 空配列の早期リターン（UIチラつき防止）
       if (toRegister.length === 0) return
@@ -247,7 +250,7 @@ export function useRegistration(
     const capturedSetId = selectedSetRef.current?.id
     try {
       const toOverwrite = cardsRef.current.filter(c =>
-        checkedCardsRef.current.has(c.id) && registeredRef.current[c.id] && jaNamesRef.current[c.id]?.trim()
+        checkedCardsRef.current.has(c.id) && registeredRef.current[c.id] && (jaNamesRef.current[c.id] || translatedNamesRef.current[c.id])?.trim()
       )
       if (toOverwrite.length === 0) return
       cancelBulkRef.current = false
@@ -276,11 +279,11 @@ export function useRegistration(
 
   const checkedCount = checkedCards.size
   const readyCount = useMemo(() =>
-    cards.filter(c => checkedCards.has(c.id) && jaNames[c.id]?.trim() && !registered[c.id]).length
-  , [cards, checkedCards, jaNames, registered])
+    cards.filter(c => checkedCards.has(c.id) && (jaNames[c.id] || translatedNames[c.id])?.trim() && !registered[c.id]).length
+    , [cards, checkedCards, jaNames, translatedNames, registered])
   const readyOverwriteCount = useMemo(() =>
-    cards.filter(c => checkedCards.has(c.id) && jaNames[c.id]?.trim() && registered[c.id]).length
-  , [cards, checkedCards, jaNames, registered])
+    cards.filter(c => checkedCards.has(c.id) && (jaNames[c.id] || translatedNames[c.id])?.trim() && registered[c.id]).length
+    , [cards, checkedCards, jaNames, translatedNames, registered])
 
   return {
     checkedCards,

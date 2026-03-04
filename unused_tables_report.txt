@@ -1,0 +1,50 @@
+== UNUSED TABLES (0 Hits) ==
+card_learning_images
+scraping_schedules
+cron_rest_times
+card_sale_sites
+price_history
+recognition_queue
+pending_images
+recognition_corrections
+
+== LOW USAGE TABLES (1-5 Hits) ==
+lounge_known_keys (4 hits): app\api\cron\lounge-cache\route.ts, app\api\new-products\route.ts
+category_medium (4 hits): app\api\cron\daily-price-aggregate\route.ts, lib\api\categories.ts, lib\supabase.ts
+category_small (3 hits): lib\api\categories.ts, lib\supabase.ts
+grid_templates (5 hits): app\api\grid-templates\route.ts
+category_detail (1 hits): lib\supabase.ts
+sale_sites (5 hits): app\api\linking\snkrdunk\link\route.ts, components\pages\CardsPage.tsx, lib\api\dashboard.ts
+cron_schedules (5 hits): app\api\admin\cron\route.ts, app\api\cron-schedules\route.ts, lib\cron-gate.ts
+exchange_rates (5 hits): app\api\cron\exchange-rate-sync\route.ts, app\api\justtcg\register\route.ts, app\api\overseas-prices\update\route.ts, app\cards\[id]\page.tsx, lib\supabase.ts
+api_keys (2 hits): lib\api\auth.ts
+daily_price_index (3 hits): app\api\cron\daily-price-aggregate\route.ts, app\api\price-index\route.ts, app\api\public\market-index\route.ts
+pending_cards (2 hits): app\api\justtcg\cleanup-duplicates\route.ts, lib\supabase.ts
+
+== MODERATE/HIGH USAGE TABLES (>5 Hits) ==
+chart_daily_card_prices (6 hits)
+rarities (73 hits)
+card_purchase_links (25 hits)
+purchase_prices (19 hits)
+purchase_shops (21 hits)
+pos_history (14 hits)
+card_sale_urls (49 hits)
+sale_prices (35 hits)
+pos_inventory (42 hits)
+fetched_tweets (6 hits)
+lounge_cards_cache (7 hits)
+shop_monitor_settings (12 hits)
+pos_catalogs (20 hits)
+pos_transactions (23 hits)
+pos_checkout_items (26 hits)
+cron_logs (8 hits)
+overseas_prices (20 hits)
+pos_sources (7 hits)
+pos_lots (25 hits)
+shinsoku_items (8 hits)
+cards (337 hits)
+pos_checkout_folders (12 hits)
+snkrdunk_sales_history (25 hits)
+category_large (31 hits)
+justtcg_price_history (10 hits)
+snkrdunk_items_cache (6 hits)
