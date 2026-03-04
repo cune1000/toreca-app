@@ -90,9 +90,8 @@ export default memo(function RightPanel({
   return (
     <aside
       aria-label="カード詳細"
-      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-80 shrink-0'} transition-opacity duration-200 ease-in-out ${
-        open ? 'opacity-100' : 'opacity-0 overflow-hidden pointer-events-none'
-      }`}
+      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-80 shrink-0'} transition-opacity duration-200 ease-in-out ${open ? 'opacity-100' : 'opacity-0 overflow-hidden pointer-events-none'
+        }`}
     >
       <div className="p-4 space-y-4">
         {/* ヘッダー */}
@@ -294,11 +293,10 @@ export default memo(function RightPanel({
               <button
                 onClick={() => onRegister?.()}
                 disabled={isRegistering || !jaName?.trim()}
-                className={`w-full text-xs px-3 py-2 rounded-[var(--jtcg-radius)] font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed ${
-                  isRegistered
+                className={`w-full text-xs px-3 py-2 rounded-[var(--jtcg-radius)] font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed ${isRegistered
                     ? 'bg-amber-500 text-white'
                     : 'bg-[var(--jtcg-ink)] text-white'
-                }`}
+                  }`}
               >
                 {isRegistering ? '処理中...' : isRegistered ? '上書き更新' : '登録'}
               </button>
@@ -307,7 +305,11 @@ export default memo(function RightPanel({
               )}
               {registerError && <p className="text-xs text-red-500" role="alert">{registerError}</p>}
               {pcMatch === undefined && !isRegistered && (
-                <p className="text-[10px] text-amber-600">PC検索未実施（画像なしで登録されます）</p>
+                card.tcgplayerId ? (
+                  <p className="text-[10px] text-blue-600 font-bold">PC検索未実施（TCGPlayer画像で登録されます）</p>
+                ) : (
+                  <p className="text-[10px] text-amber-600">PC検索未実施（画像なしで登録されます）</p>
+                )
               )}
             </div>
           </div>
