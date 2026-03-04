@@ -36,21 +36,24 @@ export async function GET(req: Request) {
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
-    const maxPages = isFullSync ? 9999 : DEFAULT_MAX_PAGES_PER_RUN
+    const pagesParam = parseInt(searchParams.get('pages') || '0')
+    const startPage = parseInt(searchParams.get('start') || '1')
+    const maxPages = isFullSync ? 9999 : (pagesParam || DEFAULT_MAX_PAGES_PER_RUN)
 
-    console.log(`[snkrdunk-items-sync] Starting ${isFullSync ? 'Full' : 'Light'} sync...`)
+    console.log(`[snkrdunk-items-sync] Starting ${isFullSync ? 'Full' : 'Light'} sync (start=${startPage}, max=${maxPages})...`)
     const startTime = Date.now()
     const now = new Date().toISOString()
 
     let totalInserted = 0
     let totalUpdated = 0
     let totalFetched = 0
-    let page = 1
-    let totalPages = 1
+    let page = startPage
+    let totalPages = 9999
 
     // ページネーションで取得
-    while (page <= totalPages && page <= maxPages) {
-      console.log(`[snkrdunk-items-sync] Fetching page ${page}/${Math.min(totalPages, maxPages)}...`)
+    const endPage = startPage + maxPages - 1
+    while (page <= totalPages && page <= endPage) {
+      console.log(`[snkrdunk-items-sync] Fetching page ${page}/${Math.min(totalPages, endPage)}...`)
 
       const result = await getCategoryItems(page, PER_PAGE)
       totalPages = result.totalPages
@@ -91,7 +94,7 @@ export async function GET(req: Request) {
       page++
 
       // レート制限対策
-      if (page <= totalPages && page <= maxPages) {
+      if (page <= totalPages && page <= endPage) {
         await new Promise(resolve => setTimeout(resolve, PAGE_DELAY_MS))
       }
     }
