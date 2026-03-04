@@ -21,7 +21,7 @@ export const SET_NAME_JA: Record<string, string> = {
   'sv11w-white-flare-pokemon-japan': 'ホワイトフレア',
   'sv11b-black-bolt-pokemon-japan': 'ブラックボルト',
   'sv10-the-glory-of-team-rocket-pokemon-japan': 'ロケット団の栄光',
-  'sv9a-heat-wave-arena-pokemon-japan': 'ヒートウェーブアリーナ',
+  'sv9a-heat-wave-arena-pokemon-japan': '熱風のアリーナ',
   'sv9-battle-partners-pokemon-japan': 'バトルパートナーズ',
   'svn-battle-partners-deck-build-box-pokemon-japan': 'バトルパートナーズ デッキビルドBOX',
   'sv8a-terastal-fest-ex-pokemon-japan': 'テラスタルフェスex',
