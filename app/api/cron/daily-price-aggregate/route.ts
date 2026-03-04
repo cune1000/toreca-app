@@ -30,7 +30,8 @@ export async function GET(req: Request) {
             )
         }
 
-        const gate = await shouldRunCronJob('daily-price-aggregate')
+        const forceParam = searchParams.get('force') === '1'
+        const gate = await shouldRunCronJob('daily-price-aggregate', { force: forceParam })
         if (!gate.shouldRun) {
             return NextResponse.json({ skipped: true, reason: gate.reason })
         }

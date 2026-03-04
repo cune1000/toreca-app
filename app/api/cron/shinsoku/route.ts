@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const gate = await shouldRunCronJob('shinsoku')
+    const force = request.nextUrl.searchParams.get('force') === '1'
+    const gate = await shouldRunCronJob('shinsoku', { force })
     if (!gate.shouldRun) {
         return NextResponse.json({ skipped: true, reason: gate.reason })
     }

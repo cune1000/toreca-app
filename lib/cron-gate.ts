@@ -24,7 +24,11 @@ interface CronSchedule {
  * - interval型: now - last_run_at >= interval_minutes なら実行
  * - daily/multi_daily型: 現在UTC時が run_at_hours に含まれ、分が run_at_minute ± 4分以内、かつ同時間帯に未実行なら実行
  */
-export async function shouldRunCronJob(jobName: string): Promise<GateResult> {
+export async function shouldRunCronJob(jobName: string, opts?: { force?: boolean }): Promise<GateResult> {
+  if (opts?.force) {
+    return { shouldRun: true, reason: 'force' }
+  }
+
   const supabase = createServiceClient()
 
   const { data, error } = await supabase

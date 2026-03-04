@@ -30,7 +30,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const isFullSync = searchParams.get('full') === 'true'
 
-    const gate = await shouldRunCronJob('snkrdunk-items-sync')
+    const forceParam = searchParams.get('force') === '1'
+    const gate = await shouldRunCronJob('snkrdunk-items-sync', { force: forceParam })
     if (!gate.shouldRun && !isFullSync) { // フル同期（手動）の場合はゲートを無視してもよい
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }
