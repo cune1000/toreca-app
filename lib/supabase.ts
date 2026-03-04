@@ -4,15 +4,19 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 // Supabase Client
 // =============================================================================
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase environment variables')
 }
 
-/** Supabaseクライアント（シングルトン） */
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+// ダミーキーをフォールバックとして渡すことで、Vercelのビルド時（ENV未設定時）に
+// `supabaseUrl is required` エラーでビルドが落ちるのを防ぐ
+export const supabase: SupabaseClient = createClient(
+  supabaseUrl || 'https://dummy.supabase.co',
+  supabaseAnonKey || 'dummy'
+)
 
 /** サービスロールキー用クライアント（サーバーサイドのみ） */
 export function createServiceClient(): SupabaseClient {
@@ -21,7 +25,9 @@ export function createServiceClient(): SupabaseClient {
     console.error('[CRITICAL] SUPABASE_SERVICE_ROLE_KEY not set — falling back to anon key. RLS-enabled tables will fail!')
     return supabase
   }
-  return createClient(supabaseUrl, serviceKey, {
+  return createClient(
+    supabaseUrl || 'https://dummy.supabase.co',
+    serviceKey || 'dummy', {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 }
