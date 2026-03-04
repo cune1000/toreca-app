@@ -24,7 +24,8 @@ export async function GET(req: Request) {
       )
     }
 
-    const gate = await shouldRunCronJob('exchange-rate-sync')
+    const force = new URL(req.url).searchParams.get('force') === '1'
+    const gate = await shouldRunCronJob('exchange-rate-sync', { force })
     if (!gate.shouldRun) {
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }

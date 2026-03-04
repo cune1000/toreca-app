@@ -53,7 +53,8 @@ export async function GET(req: Request) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const gate = await shouldRunCronJob('snkrdunk-sync')
+    const force = new URL(req.url).searchParams.get('force') === '1'
+    const gate = await shouldRunCronJob('snkrdunk-sync', { force })
     if (!gate.shouldRun) {
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }
