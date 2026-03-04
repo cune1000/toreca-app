@@ -284,7 +284,7 @@ export default memo(function RightPanel({
               />
               <input
                 type="text"
-                value={jaName || ''}
+                value={jaName || translatedJaName || ''}
                 onChange={e => onJaNameChange?.(e.target.value)}
                 placeholder="日本語名を入力..."
                 aria-label="日本語名"
@@ -292,10 +292,10 @@ export default memo(function RightPanel({
               />
               <button
                 onClick={() => onRegister?.()}
-                disabled={isRegistering || !jaName?.trim()}
+                disabled={isRegistering || !(jaName?.trim() || translatedJaName?.trim())}
                 className={`w-full text-xs px-3 py-2 rounded-[var(--jtcg-radius)] font-bold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed ${isRegistered
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-[var(--jtcg-ink)] text-white'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-[var(--jtcg-ink)] text-white'
                   }`}
               >
                 {isRegistering ? '処理中...' : isRegistered ? '上書き更新' : '登録'}

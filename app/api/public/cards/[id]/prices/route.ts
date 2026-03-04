@@ -137,8 +137,9 @@ export async function GET(
             }
         }
 
-        // 平均計算
+        // 集計関数
         const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null
+        const max = (arr: number[]) => arr.length > 0 ? Math.max(...arr) : null
 
         const dailyData = Object.entries(byDate)
             .map(([date, entry]) => ({
@@ -149,10 +150,10 @@ export async function GET(
                 psa10_sale: avg(entry.psa10_sale),
                 a_sale: avg(entry.a_sale),
                 box_sale: avg(entry.box_sale),
-                purchase_normal: avg(entry.purchase_normal),
-                purchase_psa10: avg(entry.purchase_psa10),
-                purchase_sealed: avg(entry.purchase_sealed),
-                purchase_opened: avg(entry.purchase_opened),
+                purchase_normal: max(entry.purchase_normal),
+                purchase_psa10: max(entry.purchase_psa10),
+                purchase_sealed: max(entry.purchase_sealed),
+                purchase_opened: max(entry.purchase_opened),
             }))
             .sort((a, b) => a.date.localeCompare(b.date))
 

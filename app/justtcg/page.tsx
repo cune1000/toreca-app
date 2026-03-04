@@ -14,8 +14,9 @@ import type { JTCard } from './hooks/useJustTcgState'
 
 export default function JustTcgExplorer() {
   const state = useJustTcgState()
-  const reg = useRegistration(state.cards, state.selectedSet, state.selectedGame, state.pcMatches)
   const trans = useTranslation()
+  const currentTranslations = state.selectedSetId ? trans.translations[state.selectedSetId] || {} : {}
+  const reg = useRegistration(state.cards, state.selectedSet, state.selectedGame, state.pcMatches, currentTranslations)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
 
   // Gemini日本語名連携: useJustTcgState → useRegistration.setJaName を注入
@@ -163,8 +164,8 @@ export default function JustTcgExplorer() {
           {state.usage && (
             <div className="flex items-center gap-1.5 text-[10px]">
               <span className={`px-2 py-0.5 rounded-full font-bold ${state.usage.dailyRemaining < 10 ? 'bg-red-100 text-red-700' :
-                  state.usage.dailyRemaining < 30 ? 'bg-amber-100 text-amber-700' :
-                    'bg-green-100 text-green-700'
+                state.usage.dailyRemaining < 30 ? 'bg-amber-100 text-amber-700' :
+                  'bg-green-100 text-green-700'
                 }`}>
                 {state.usage.dailyRemaining}/{state.usage.dailyLimit}
               </span>

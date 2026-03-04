@@ -234,7 +234,7 @@ export default function CardDetailPage({ params }: Props) {
       const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
       const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
       const pKey = `purchase_${p.condition || (p.is_psa ? 'psa' : '素体')}`
-      if (!(pKey in existing)) existing[pKey] = p.price  // 降順なので最初（最新）を優先
+      existing[pKey] = Math.max(existing[pKey] || 0, p.price)  // 同一時刻は最高値を採用
       dataMap.set(ts, existing)
     })
     filteredSale.forEach((p: any) => {
