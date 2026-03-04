@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     if (dupCheckError) {
       console.error('Duplicate check error:', dupCheckError)
       return NextResponse.json(
-        { success: false, error: '重複チェックに失敗しました' },
+        { success: false, error: 'DB_ERROR: ' + dupCheckError.message + ' details: ' + dupCheckError.details },
         { status: 500 }
       )
     }
@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
         )
       }
       // 価格履歴保存（非ブロッキング）
-      savePriceData(existing.id, str(pricecharting_id, 100)).catch(() => {})
+      savePriceData(existing.id, str(pricecharting_id, 100)).catch(() => { })
       return NextResponse.json({ success: true, data: updated, updated: true })
     }
 
@@ -352,7 +352,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         )
       }
-      savePriceData(mergeTarget.id, pcId).catch(() => {})
+      savePriceData(mergeTarget.id, pcId).catch(() => { })
       return NextResponse.json({ success: true, data: merged, merged: true })
     }
 
@@ -413,7 +413,7 @@ export async function POST(request: NextRequest) {
             .select()
             .single()
           if (!fallbackError) {
-            savePriceData(raceExisting.id, pcId).catch(() => {})
+            savePriceData(raceExisting.id, pcId).catch(() => { })
             return NextResponse.json({ success: true, data: fallbackData, updated: true })
           }
         }
@@ -429,7 +429,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    savePriceData(card.id, str(pricecharting_id, 100)).catch(() => {})
+    savePriceData(card.id, str(pricecharting_id, 100)).catch(() => { })
     return NextResponse.json({ success: true, data: card })
   } catch (error: unknown) {
     console.error('JustTCG register error:', error)
