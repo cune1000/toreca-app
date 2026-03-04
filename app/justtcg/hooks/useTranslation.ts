@@ -67,9 +67,9 @@ export function useTranslation() {
         processed = Math.min(i + BATCH_SIZE, untranslated.length)
         setTranslationProgress({ current: processed, total: untranslated.length })
 
-        // バッチ間の待機（レート制限回避）
+        // バッチ間の待機（レート制限回避 5.5s -> 0.6s）
         if (i + BATCH_SIZE < untranslated.length && !cancelRef.current) {
-          await new Promise(r => setTimeout(r, 5500))
+          await new Promise(r => setTimeout(r, 600))
         }
       }
     } catch (e: unknown) {
@@ -134,9 +134,9 @@ export function useTranslation() {
         processed++
         setTranslationProgress({ current: processed, total: imageCards.length })
 
-        // extract-name APIのIP制限(2秒)を回避
+        // extract-name APIのIP制限(2秒->0.5秒)を回避するため0.6秒待機
         if (processed < imageCards.length && !cancelRef.current) {
-          await new Promise(r => setTimeout(r, 2200))
+          await new Promise(r => setTimeout(r, 600))
         }
       }
     } catch (e: unknown) {

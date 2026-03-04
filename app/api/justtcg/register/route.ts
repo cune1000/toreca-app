@@ -5,9 +5,9 @@ import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
 
 export const dynamic = 'force-dynamic'
 
-// レート制限（IPごとに5秒間隔）
+// レート制限（IPごとに0.5秒間隔：フロントエンド側でのバッチ間隔に合わせて緩和）
 const lastRegisterMap = new Map<string, number>()
-const REGISTER_RATE_MS = 5_000
+const REGISTER_RATE_MS = 500
 
 export async function POST(request: NextRequest) {
   try {

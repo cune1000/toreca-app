@@ -223,8 +223,8 @@ export function useRegistration(
       setBulkProgress({ current: 0, total: toRegister.length, succeeded: 0, failed: 0 })
       for (let i = 0; i < toRegister.length; i++) {
         if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
-        // レート制限対策: 2件目以降は5.5秒待機（サーバー側5秒制限）
-        if (i > 0) await new Promise(r => setTimeout(r, 5500))
+        // レート制限対策: サーバー側の0.5秒制限に合わせ、バッチ間に0.6秒のウェイトを設ける
+        if (i > 0) await new Promise(r => setTimeout(r, 600))
         if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
         const ok = await handleRegister(toRegister[i])
         if (ok) succeeded++
@@ -258,7 +258,8 @@ export function useRegistration(
       setBulkProgress({ current: 0, total: toOverwrite.length, succeeded: 0, failed: 0 })
       for (let i = 0; i < toOverwrite.length; i++) {
         if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
-        if (i > 0) await new Promise(r => setTimeout(r, 5500))
+        // レート制限対策: APIの0.5秒間隔に合わせた遅延
+        if (i > 0) await new Promise(r => setTimeout(r, 600))
         if (cancelBulkRef.current || selectedSetRef.current?.id !== capturedSetId) break
         const ok = await handleRegister(toOverwrite[i])
         if (ok) succeeded++; else failed++

@@ -3,9 +3,9 @@ import { getGeminiModel, fetchImageAsBase64, extractJsonFromResponse } from '@/l
 
 export const dynamic = 'force-dynamic'
 
-// IPレート制限（2秒間隔 — 一括フローからの連続呼び出しに対応）
+// IPレート制限（0.5秒間隔 — フロントエンド側でのバッチ間隔に合わせて緩和）
 const lastRequestMap = new Map<string, number>()
-const RATE_LIMIT_MS = 2_000
+const RATE_LIMIT_MS = 500
 const MAX_ENTRIES = 100
 
 const EXTRACT_NAME_PROMPT = `このトレーディングカードの画像を見て、カードに書かれている日本語のカード名を抽出してください。

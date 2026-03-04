@@ -3,9 +3,9 @@ import { searchProducts } from '@/lib/pricecharting-api'
 
 export const dynamic = 'force-dynamic'
 
-// レート制限（IPごとに3秒間隔）
+// レート制限（IPごとに0.5秒間隔）
 const lastRequestMap = new Map<string, number>()
-const RATE_LIMIT_MS = 3_000
+const RATE_LIMIT_MS = 500
 const MAX_RATE_LIMIT_ENTRIES = 100
 
 export async function POST(request: NextRequest) {

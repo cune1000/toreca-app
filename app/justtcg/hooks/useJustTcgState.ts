@@ -450,8 +450,8 @@ export function useJustTcgState() {
       for (let i = 0; i < targets.length; i++) {
         if (cancelBulkPcRef.current || selectedSetIdRef.current !== capturedSetId) break
 
-        // 2件目以降は3.5秒待機（サーバー側3秒レート制限 + マージン）
-        if (i > 0) await new Promise(r => setTimeout(r, 3500))
+        // 2件目以降は0.6秒待機（サーバー側0.5秒レート制限 + マージン）
+        if (i > 0) await new Promise(r => setTimeout(r, 600))
         if (cancelBulkPcRef.current || selectedSetIdRef.current !== capturedSetId) break
 
         const card = targets[i]
