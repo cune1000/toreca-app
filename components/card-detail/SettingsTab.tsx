@@ -2,8 +2,6 @@
 
 import { useState } from 'react'
 import { ExternalLink, RefreshCw, Zap, Clock, AlertTriangle, Link2, ChevronRight, Pencil, Trash2, Check, X } from 'lucide-react'
-import ShinsokuLink from '@/components/chart/ShinsokuLink'
-import LoungeLink from '@/components/chart/LoungeLink'
 import PriceChartingLink from '@/components/chart/PriceChartingLink'
 import { formatRelativeTime } from './constants'
 import { isSnkrdunkSiteName, isSnkrdunkUrl } from '@/lib/snkrdunk-api'
@@ -258,49 +256,7 @@ export default function SettingsTab({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* シンソク */}
-          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3 border-b border-green-100/60">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🔗</span>
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-700">シンソク買取</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">6時間ごとに自動追跡</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-4">
-              <ShinsokuLink
-                cardId={card.id}
-                cardName={card.name}
-                links={purchaseLinks.filter((l: any) => l.shop?.name === 'シンソク（郵送買取）')}
-                onLinksChanged={onLinksChanged}
-              />
-            </div>
-          </div>
-
-          {/* トレカラウンジ */}
-          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 border-b border-orange-100/60">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🏪</span>
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-700">トレカラウンジ買取</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">買取価格を自動追跡</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-4">
-              <LoungeLink
-                cardId={card.id}
-                cardName={card.name}
-                links={purchaseLinks.filter((l: any) => l.shop?.name === 'トレカラウンジ（郵送買取）')}
-                onLinksChanged={onLinksChanged}
-              />
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PriceCharting */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b border-blue-100/60">

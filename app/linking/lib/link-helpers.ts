@@ -1,11 +1,12 @@
 import type { ExternalItem } from './types'
 
 /** 紐づけAPIのリクエストボディを構築 */
-export function buildLinkBody(source: string, item: ExternalItem, cardId: string): Record<string, unknown> {
+export function buildLinkBody(source: string, item: ExternalItem, cardId: string, condition?: string): Record<string, unknown> {
+  const cond = condition && condition !== 'normal' ? { label: condition, condition } : {}
   switch (source) {
     case 'snkrdunk': return { cardId, apparelId: (item.meta as any).apparelId }
-    case 'shinsoku': return { cardId, itemId: (item.meta as any).itemId }
-    case 'lounge': return { cardId, cardKey: (item.meta as any).cardKey }
+    case 'shinsoku': return { cardId, itemId: (item.meta as any).itemId, ...cond }
+    case 'lounge': return { cardId, cardKey: (item.meta as any).cardKey, ...cond }
     default: throw new Error(`Unknown source: ${source}`)
   }
 }

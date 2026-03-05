@@ -7,7 +7,7 @@ import { buildLinkBody, getLinkEndpoint } from '../lib/link-helpers'
 
 interface UseBulkLinkingReturn {
   progress: BulkLinkProgress | null
-  startBulkLink: (items: ExternalItem[], config: SourceConfig) => Promise<void>
+  startBulkLink: (items: ExternalItem[], config: SourceConfig, condition?: string) => Promise<void>
   cancel: () => void
 }
 
@@ -17,7 +17,7 @@ export function useBulkLinking(
   const [progress, setProgress] = useState<BulkLinkProgress | null>(null)
   const cancelledRef = useRef(false)
 
-  const startBulkLink = useCallback(async (items: ExternalItem[], config: SourceConfig) => {
+  const startBulkLink = useCallback(async (items: ExternalItem[], config: SourceConfig, condition?: string) => {
     const unlinked = items.filter(i => !i.linkedCardId)
     if (unlinked.length === 0) return
 
@@ -54,7 +54,7 @@ export function useBulkLinking(
           const linkRes = await fetch(getLinkEndpoint(config.key), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(buildLinkBody(config.key, item, topMatch.card.id)),
+            body: JSON.stringify(buildLinkBody(config.key, item, topMatch.card.id, condition)),
           })
 
           if (linkRes.ok) {

@@ -17,6 +17,8 @@ export default function LinkingPage({ config }: LinkingPageProps) {
   const state = useLinkingState(config)
   const bulk = useBulkLinking(state.updateItemLink)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
+  const showCondition = config.key === 'shinsoku' || config.key === 'lounge'
+  const [condition, setCondition] = useState('素体')
 
   const item = state.selectedItem
   const isOverlayOpen = mobileFilterOpen || !!item
@@ -59,8 +61,8 @@ export default function LinkingPage({ config }: LinkingPageProps) {
 
   const handleBulkLink = useCallback(() => {
     const checked = state.items.filter(i => state.checkedItems.has(i.id))
-    bulk.startBulkLink(checked, config)
-  }, [state.items, state.checkedItems, bulk.startBulkLink, config])
+    bulk.startBulkLink(checked, config, showCondition ? condition : undefined)
+  }, [state.items, state.checkedItems, bulk.startBulkLink, config, showCondition, condition])
 
   const cssVars = {
     '--lk-source-color': config.accentColor,
@@ -142,6 +144,8 @@ export default function LinkingPage({ config }: LinkingPageProps) {
             config={config}
             onLink={handleLink}
             onUnlink={handleUnlink}
+            condition={showCondition ? condition : undefined}
+            onConditionChange={showCondition ? setCondition : undefined}
           />
         </div>
       </div>
