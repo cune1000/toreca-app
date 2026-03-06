@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { X, Search, Link2, Unlink, Loader2, Sparkles } from 'lucide-react'
 import { useAutoMatch } from '../hooks/useAutoMatch'
 import { useCardSearch } from '../hooks/useCardSearch'
@@ -41,6 +41,14 @@ export default function RightPanel({
   const showCondition = config.key === 'shinsoku' || config.key === 'lounge'
   const condition = conditionProp || '素体'
   const setCondition = onConditionChange || (() => {})
+
+  // アイテム選択時にmetaからconditionを自動推定
+  useEffect(() => {
+    if (!item || !showCondition || !onConditionChange) return
+    const meta = item.meta as any
+    const isPsa = meta?.grade?.toUpperCase?.()?.includes('PSA') || meta?.productFormat === 'PSA'
+    onConditionChange(isPsa ? 'PSA10' : '素体')
+  }, [item?.id])
 
   const handleLink = useCallback(async (card: LinkableCard) => {
     if (!item || linking) return
@@ -116,9 +124,16 @@ export default function RightPanel({
             </div>
           )}
           <h4 className="text-[12px] font-bold text-[var(--lk-text)] leading-snug">{item.name}</h4>
-          {item.modelno && (
-            <p className="text-[10px] text-[var(--lk-text-muted)] mt-0.5">{item.modelno}</p>
-          )}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {item.modelno && (
+              <span className="text-[10px] text-[var(--lk-text-muted)]">{item.modelno}</span>
+            )}
+            {((item.meta as any)?.grade?.toUpperCase?.()?.includes('PSA') || (item.meta as any)?.productFormat === 'PSA') ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 leading-none">PSA</span>
+            ) : (item.meta as any)?.productFormat === 'NORMAL' ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 text-gray-500 leading-none">素体</span>
+            ) : null}
+          </div>
           {item.price != null && item.price > 0 && (
             <p className="text-[14px] font-bold text-[var(--lk-accent)] mt-1" style={{ fontFamily: 'var(--font-price)' }}>
               ¥{item.price.toLocaleString()}

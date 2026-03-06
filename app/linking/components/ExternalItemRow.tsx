@@ -63,11 +63,18 @@ export default memo(function ExternalItemRow({
         )}
       </div>
 
-      {/* 名前・型番 */}
+      {/* 名前・型番・状態バッジ */}
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-medium text-[var(--lk-text)] truncate leading-tight">
-          {item.name}
-        </p>
+        <div className="flex items-center gap-1">
+          <p className="text-[11px] font-medium text-[var(--lk-text)] truncate leading-tight">
+            {item.name}
+          </p>
+          {(item.meta as any)?.grade?.toUpperCase().includes('PSA') || (item.meta as any)?.productFormat === 'PSA' ? (
+            <span className="shrink-0 px-1 py-0.5 rounded text-[8px] font-bold bg-amber-100 text-amber-700 leading-none">PSA</span>
+          ) : (item.meta as any)?.productFormat === 'NORMAL' ? (
+            <span className="shrink-0 px-1 py-0.5 rounded text-[8px] font-bold bg-gray-100 text-gray-500 leading-none">素体</span>
+          ) : null}
+        </div>
         {item.modelno && (
           <p className="text-[9px] text-[var(--lk-text-muted)] truncate">{item.modelno}</p>
         )}
