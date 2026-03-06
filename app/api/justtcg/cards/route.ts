@@ -94,8 +94,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, ...responseData, cached: false }, { // R12-16: 冗長なusageを削除（responseDataに含有）
-      headers: { 'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800' },
+    // 空データはVercelエッジキャッシュしない（一時的なAPI問題で空結果が固定化されるのを防止）
+    const cacheHeader = allCards.length > 0
+      ? 'public, max-age=900, stale-while-revalidate=1800'
+      : 'no-store'
+
+    return NextResponse.json({ success: true, ...responseData, cached: false }, {
+      headers: { 'Cache-Control': cacheHeader },
     })
   } catch (error: unknown) {
     console.error('JustTCG cards error:', error)

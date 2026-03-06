@@ -42,13 +42,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const cacheHeader = result.data?.length > 0
+      ? 'public, max-age=1800, stale-while-revalidate=3600'
+      : 'no-store'
+
     return NextResponse.json({
       success: true,
       data: result.data,
       usage: result.usage,
       cached: false,
     }, {
-      headers: { 'Cache-Control': 'public, max-age=1800, stale-while-revalidate=3600' },
+      headers: { 'Cache-Control': cacheHeader },
     })
   } catch (error: unknown) {
     console.error('JustTCG sets error:', error)
