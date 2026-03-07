@@ -1,38 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { SET_NAME_JA, extractSetCode, getSetNameJa } from '@/lib/justtcg-set-names'
+import { extractSetCode, getSetNameJa } from '@/lib/justtcg-set-names'
 import { getRarityShortName } from '@/lib/rarity-mapping'
+import { extractSetIdFromJusttcgId } from '@/lib/justtcg-api'
 
 export const dynamic = 'force-dynamic'
-
-// justtcg_id からセットIDを逆引き
-// 例: "pokemon-japan-m2-inferno-x-oricorio-ex-111-080-special-art-rare"
-//   → set_id: "m2-inferno-x-pokemon-japan"
-function extractSetIdFromJusttcgId(justtcgId: string): string | null {
-  // 既知のゲームプレフィックス
-  const GAME_PREFIXES = ['pokemon-japan-', 'one-piece-card-game-']
-  let slug = ''
-  for (const prefix of GAME_PREFIXES) {
-    if (justtcgId.startsWith(prefix)) {
-      slug = justtcgId.slice(prefix.length)
-      const gameSuffix = prefix.slice(0, -1) // 末尾の '-' を除去
-      // SET_NAME_JA の全キーに対してマッチ試行（長い順 = より具体的なマッチ優先）
-      const sortedSetIds = Object.keys(SET_NAME_JA)
-        .filter(k => k.endsWith(gameSuffix))
-        .sort((a, b) => b.length - a.length)
-      for (const setId of sortedSetIds) {
-        // setId から gameSuffix を除去してスラグ部分を取得
-        // "m2-inferno-x-pokemon-japan" → "m2-inferno-x-"
-        const setSlug = setId.replace(`-${gameSuffix}`, '') + '-'
-        if (slug.startsWith(setSlug)) {
-          return setId
-        }
-      }
-      break
-    }
-  }
-  return null
-}
 
 export async function POST() {
   try {

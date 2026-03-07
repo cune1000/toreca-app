@@ -1,4 +1,5 @@
 import { JUSTTCG_API_KEY } from '@/lib/config'
+import { SET_NAME_JA } from '@/lib/justtcg-set-names'
 
 const BASE_URL = 'https://api.justtcg.com/v1'
 
@@ -144,4 +145,30 @@ export async function getCards(setId: string, opts?: { offset?: number; limit?: 
   if (opts?.limit) params.limit = String(opts.limit)
 
   return fetchJustTcg<JustTcgCard[]>('/cards', params)
+}
+
+/**
+ * justtcg_id からセットIDを逆引き
+ * 例: "pokemon-japan-m2-inferno-x-oricorio-ex-111-080-special-art-rare"
+ *   → "m2-inferno-x-pokemon-japan"
+ */
+export function extractSetIdFromJusttcgId(justtcgId: string): string | null {
+  const GAME_PREFIXES = ['pokemon-japan-', 'one-piece-card-game-']
+  for (const prefix of GAME_PREFIXES) {
+    if (justtcgId.startsWith(prefix)) {
+      const slug = justtcgId.slice(prefix.length)
+      const gameSuffix = prefix.slice(0, -1)
+      const sortedSetIds = Object.keys(SET_NAME_JA)
+        .filter(k => k.endsWith(gameSuffix))
+        .sort((a, b) => b.length - a.length)
+      for (const setId of sortedSetIds) {
+        const setSlug = setId.replace(`-${gameSuffix}`, '') + '-'
+        if (slug.startsWith(setSlug)) {
+          return setId
+        }
+      }
+      break
+    }
+  }
+  return null
 }

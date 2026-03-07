@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/snkrdunk-items-sync",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/justtcg-price-sync",
+      "schedule": "0 19 * * *"
     }
   ]
 }
