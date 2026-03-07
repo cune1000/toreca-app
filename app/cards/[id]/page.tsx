@@ -498,6 +498,7 @@ export default function CardDetailPage({ params }: Props) {
               {/* スニダン売買タブ */}
               {chartTab === 'snkrdunk' && (
                 <SnkrdunkTab
+                  cardId={card.id}
                   snkrdunkSales={snkrdunkSales}
                   snkrdunkLoading={snkrdunkLoading}
                   snkrdunkScraping={snkrdunkScraping}

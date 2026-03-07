@@ -353,6 +353,95 @@ export async function getBoxSizes(apparelId: number): Promise<SnkrdunkBoxSize[]>
 // カテゴリ別商品一覧（紐づけページ用）
 // ============================================================================
 
+// ============================================================================
+// チャートデータ（価格推移グラフ）
+// ============================================================================
+
+export interface SnkrdunkChartOption {
+    id: number
+    localizedName: string
+}
+
+export interface SnkrdunkChartResponse {
+    points: [number, number][]  // [timestamp_ms, price]
+    rangeKeys: { key: string; text: string; enabled: boolean }[]
+    salesChartOption: SnkrdunkChartOption[]
+}
+
+/** シングルカード用の状態ID（全商品共通） */
+export const SINGLE_CHART_OPTIONS: Record<string, number> = {
+    'すべての状態': -1,
+    'A': 18,
+    'B': 19,
+    'C': 20,
+    'D': 21,
+    'PSA10': 22,
+    'PSA9': 23,
+    'PSA8以下': 24,
+    'BGS10 BL': 25,
+    'BGS10 GL': 26,
+    'BGS9.5': 27,
+    'BGS9以下': 28,
+    'ARS10+': 29,
+    'ARS10': 30,
+    'ARS9': 31,
+    'ARS8以下': 32,
+}
+
+/**
+ * シングルカードのチャートデータを取得
+ * GET /v1/apparels/{id}/sales-chart/used?range={range}&salesChartOptionId={conditionId}
+ */
+export async function getSalesChartUsed(
+    apparelId: number,
+    salesChartOptionId: number = -1,
+    range: string = 'all'
+): Promise<SnkrdunkChartResponse> {
+    const url = `${SNKRDUNK_BASE}/v1/apparels/${apparelId}/sales-chart/used?range=${range}&salesChartOptionId=${salesChartOptionId}`
+    const res = await snkrdunkFetch(url)
+
+    if (!res.ok) {
+        throw new Error(`シングルチャートデータの取得に失敗: HTTP ${res.status}`)
+    }
+
+    return await res.json()
+}
+
+/**
+ * BOX商品のチャートデータを取得
+ * GET /v1/apparels/{id}/sales-chart?range={range}&salesChartOptionId={quantityId}
+ *
+ * quantityId は商品ごとに異なるため、まず salesChartOptionId=0 で
+ * salesChartOption を取得し、目的の個数IDを特定する
+ */
+export async function getSalesChart(
+    apparelId: number,
+    salesChartOptionId: number = 0,
+    range: string = 'all'
+): Promise<SnkrdunkChartResponse> {
+    const url = `${SNKRDUNK_BASE}/v1/apparels/${apparelId}/sales-chart?range=${range}&salesChartOptionId=${salesChartOptionId}`
+    const res = await snkrdunkFetch(url)
+
+    if (!res.ok) {
+        throw new Error(`BOXチャートデータの取得に失敗: HTTP ${res.status}`)
+    }
+
+    return await res.json()
+}
+
+/**
+ * BOX商品のチャートオプション（個数ID一覧）を取得
+ * salesChartOptionId=0 で叩くと salesChartOption にリストが返る
+ */
+export async function getBoxChartOptions(apparelId: number): Promise<SnkrdunkChartOption[]> {
+    const data = await getSalesChart(apparelId, 0)
+    return data.salesChartOption || []
+}
+
+// ============================================================================
+// カテゴリ別商品一覧（紐づけページ用）
+// ============================================================================
+
 export interface SnkrdunkCategoryItem {
     id: number                // apparelId
     name: string

@@ -1,13 +1,31 @@
 'use client'
 
-import { RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
 import {
   SNKRDUNK_GRADE_COLORS, PURCHASE_CONDITION_COLORS,
   GRADE_SORT_ORDER, isBoxGrade, SINGLE_CATEGORIES,
   formatRelativeTime,
 } from './constants'
 
+// チャート条件のカラー定義
+const CHART_CONDITION_COLORS: Record<string, string> = {
+  'すべての状態': '#6366f1', // indigo
+  'A': '#10b981',
+  'B': '#f59e0b',
+  'C': '#ef4444',
+  'D': '#dc2626',
+  'PSA10': '#8b5cf6',
+  'PSA9': '#06b6d4',
+  'PSA8以下': '#64748b',
+  'すべて': '#6366f1',
+  '1個': '#3b82f6',
+  '2個': '#06b6d4',
+}
+
 interface SnkrdunkTabProps {
+  cardId: string
   snkrdunkSales: any[]
   snkrdunkLoading: boolean
   snkrdunkScraping: boolean
@@ -21,15 +39,264 @@ interface SnkrdunkTabProps {
   formatDate: (dateStr: string | null) => Date | null
 }
 
+// チャートカスタムツールチップ
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  const d = new Date(label)
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl px-4 py-3 text-sm" style={{ minWidth: 160 }}>
+      <p className="text-slate-400 text-xs mb-2">
+        {d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+      </p>
+      {payload.filter((e: any) => e.value != null).map((entry: any, i: number) => (
+        <div key={i} className="flex items-center justify-between gap-4 py-0.5">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-slate-300 text-xs">{entry.name}</span>
+          </span>
+          <span className="font-semibold text-white text-xs tabular-nums">
+            ¥{Number(entry.value).toLocaleString()}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function SnkrdunkTab({
+  cardId,
   snkrdunkSales, snkrdunkLoading, snkrdunkScraping,
   selectedSnkrdunkCategory, onCategoryChange, onScrape,
   purchasePrices, salePrices,
   latestPurchaseByLabel, snkrdunkLatestByGrade,
   formatDate,
 }: SnkrdunkTabProps) {
+  // ── チャートデータ state ──
+  const [chartData, setChartData] = useState<Record<string, any[]>>({})
+  const [chartLoading, setChartLoading] = useState(false)
+  const [chartFetching, setChartFetching] = useState(false)
+  const [chartConditions, setChartConditions] = useState<string[]>([])
+  const [visibleConditions, setVisibleConditions] = useState<Set<string>>(new Set(['すべての状態']))
+  const [chartError, setChartError] = useState<string | null>(null)
+  const [anomalyCount, setAnomalyCount] = useState(0)
+
+  // チャートデータ読み込み
+  const fetchChartData = useCallback(async () => {
+    if (!cardId) return
+    setChartLoading(true)
+    try {
+      const res = await fetch(`/api/snkrdunk-chart?cardId=${cardId}`)
+      const json = await res.json()
+      if (json.success && json.totalPoints > 0) {
+        setChartData(json.data)
+        setChartConditions(Object.keys(json.data))
+        // 異常値カウント
+        let anomalies = 0
+        for (const points of Object.values(json.data) as any[][]) {
+          anomalies += points.filter((p: any) => p.isAnomaly).length
+        }
+        setAnomalyCount(anomalies)
+        // 初回: すべての状態 or 最初の条件を表示
+        if (json.data['すべての状態']) {
+          setVisibleConditions(new Set(['すべての状態']))
+        } else if (json.data['すべて']) {
+          setVisibleConditions(new Set(['すべて']))
+        } else {
+          const first = Object.keys(json.data)[0]
+          if (first) setVisibleConditions(new Set([first]))
+        }
+      }
+    } catch (e: any) {
+      console.error('Failed to fetch chart data:', e)
+    } finally {
+      setChartLoading(false)
+    }
+  }, [cardId])
+
+  // 初回取得（スニダンからAPIでフェッチ → DB保存）
+  const fetchFromSnkrdunk = useCallback(async () => {
+    if (!cardId) return
+    setChartFetching(true)
+    setChartError(null)
+    try {
+      const res = await fetch('/api/snkrdunk-chart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        setChartError(json.error)
+        return
+      }
+      // 取得後にDBから再読み込み
+      await fetchChartData()
+    } catch (e: any) {
+      setChartError(e.message)
+    } finally {
+      setChartFetching(false)
+    }
+  }, [cardId, fetchChartData])
+
+  // マウント時にDBからチャートデータを読み込み
+  useEffect(() => {
+    fetchChartData()
+  }, [fetchChartData])
+
+  // 条件の表示切替
+  const toggleCondition = (cond: string) => {
+    setVisibleConditions(prev => {
+      const next = new Set(prev)
+      if (next.has(cond)) {
+        next.delete(cond)
+      } else {
+        next.add(cond)
+      }
+      return next
+    })
+  }
+
+  // Recharts用データを構築
+  const rechartsData = (() => {
+    const dataMap = new Map<number, any>()
+    for (const cond of visibleConditions) {
+      const points = chartData[cond] || []
+      for (const p of points) {
+        const ts = new Date(p.date).getTime()
+        const existing = dataMap.get(ts) || { timestamp: ts }
+        existing[cond] = p.priceCleaned
+        dataMap.set(ts, existing)
+      }
+    }
+    return Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp)
+  })()
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div className="space-y-5">
+      {/* ── チャートセクション ── */}
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h4 className="font-bold text-sm text-indigo-800">
+                <TrendingUp size={14} className="inline mr-1" />
+                スニダン価格推移
+              </h4>
+              {anomalyCount > 0 && (
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-xs">
+                  <AlertTriangle size={10} />
+                  {anomalyCount}件補正
+                </span>
+              )}
+            </div>
+            <button
+              onClick={fetchFromSnkrdunk}
+              disabled={chartFetching}
+              className="px-2.5 py-1 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-1 shadow-sm transition-colors"
+            >
+              {chartFetching ? <RefreshCw size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+              {chartConditions.length === 0 ? 'データ取得' : '更新'}
+            </button>
+          </div>
+        </div>
+
+        <div className="p-3">
+          {chartLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="animate-spin text-indigo-500" size={24} />
+            </div>
+          ) : chartFetching ? (
+            <div className="flex flex-col items-center justify-center py-12 text-indigo-500">
+              <RefreshCw className="animate-spin mb-2" size={24} />
+              <p className="text-sm">スニダンからデータを取得中...</p>
+              <p className="text-xs text-slate-400 mt-1">条件別に取得するため少し時間がかかります</p>
+            </div>
+          ) : chartConditions.length === 0 ? (
+            <div className="bg-slate-50 rounded-xl p-8 text-center">
+              <p className="text-slate-500 text-sm mb-3">チャートデータがありません</p>
+              <button
+                onClick={fetchFromSnkrdunk}
+                className="px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm hover:bg-indigo-600 transition-colors"
+              >
+                スニダンから価格データを取得
+              </button>
+              {chartError && (
+                <p className="text-red-500 text-xs mt-2">{chartError}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* 条件選択ボタン */}
+              <div className="flex flex-wrap gap-1 mb-3">
+                {chartConditions.map(cond => {
+                  const color = CHART_CONDITION_COLORS[cond] || '#6b7280'
+                  const isActive = visibleConditions.has(cond)
+                  const count = chartData[cond]?.length || 0
+                  return (
+                    <button
+                      key={cond}
+                      onClick={() => toggleCondition(cond)}
+                      className={`px-2 py-0.5 rounded-lg text-xs font-medium transition-colors ${
+                        isActive
+                          ? 'text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                      }`}
+                      style={isActive ? { backgroundColor: color } : undefined}
+                    >
+                      {cond} ({count})
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* チャート */}
+              {rechartsData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={rechartsData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="timestamp"
+                      type="number"
+                      domain={['dataMin', 'dataMax']}
+                      tickFormatter={(ts) => {
+                        const d = new Date(ts)
+                        return `${d.getMonth() + 1}/${d.getDate()}`
+                      }}
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      scale="time"
+                    />
+                    <YAxis
+                      tickFormatter={(v) => v >= 10000 ? `${(v / 10000).toFixed(1)}万` : `¥${v.toLocaleString()}`}
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      width={55}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    {[...visibleConditions].map(cond => (
+                      <Line
+                        key={cond}
+                        type="monotone"
+                        dataKey={cond}
+                        name={cond}
+                        stroke={CHART_CONDITION_COLORS[cond] || '#6b7280'}
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-center text-slate-400 text-sm py-8">
+                  条件を選択してください
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── 3カラム: 売買履歴 + 買取 + 販売中最安値 ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
       {/* ── カラム1: スニダン売買例歴 ── */}
       <div className="border border-slate-200 rounded-xl overflow-hidden">
         <div className="bg-purple-50 px-4 py-3 border-b border-purple-100">
@@ -371,6 +638,7 @@ export default function SnkrdunkTab({
           )}
         </div>
       </div>
+    </div>
     </div>
   )
 }
