@@ -107,9 +107,9 @@ export async function POST(req: Request) {
         const now = new Date().toISOString()
 
         if (productType === 'single') {
-            // シングルカード: 主要条件を取得
+            // シングルカード: A, B, PSA10, PSA9 を取得（「すべての状態」は平均値のため除外）
             const conditionsToFetch = requestedConditions || [
-                'すべての状態', 'A', 'B', 'PSA10', 'PSA9',
+                'A', 'B', 'PSA10', 'PSA9',
             ]
 
             for (const condLabel of conditionsToFetch) {
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
                 if (optionId === undefined) continue
 
                 try {
-                    const chartData = await getSalesChartUsed(apparelId, optionId)
+                    const chartData = await getSalesChartUsed(apparelId, optionId, 'all')
                     if (!chartData.points || chartData.points.length === 0) {
                         results.push({ condition: condLabel, fetched: 0, inserted: 0, anomalies: 0 })
                         continue
@@ -135,24 +135,22 @@ export async function POST(req: Request) {
                 }
             }
         } else {
-            // BOX: まずオプション一覧を取得
+            // BOX: 全数量オプション（1個〜10個等）を取得（「すべて」は平均値のため除外）
             const options = await getBoxChartOptions(apparelId)
             if (options.length === 0) {
                 return NextResponse.json({ success: true, message: 'BOXチャートオプションなし', results: [] })
             }
 
-            // リクエストされた条件、または「すべて」+「1個」
-            const conditionsToFetch = requestedConditions || ['すべて', '1個']
+            // リクエストされた条件、またはAPI返却の全オプション（「すべて」除外）
+            const conditionsToFetch = requestedConditions
+                || options.map(o => o.localizedName)
 
             for (const condLabel of conditionsToFetch) {
-                const option = condLabel === 'すべて'
-                    ? { id: 0, localizedName: 'すべて' }
-                    : options.find(o => o.localizedName === condLabel)
-
+                const option = options.find(o => o.localizedName === condLabel)
                 if (!option) continue
 
                 try {
-                    const chartData = await getSalesChart(apparelId, option.id)
+                    const chartData = await getSalesChart(apparelId, option.id, 'all')
                     if (!chartData.points || chartData.points.length === 0) {
                         results.push({ condition: condLabel, fetched: 0, inserted: 0, anomalies: 0 })
                         continue
