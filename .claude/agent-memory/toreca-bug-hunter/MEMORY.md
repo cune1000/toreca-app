@@ -97,3 +97,14 @@ Key findings:
 - Supabase .insert()/.update() errors silently ignored in multiple cron routes - always destructure { error }
 - cron-gate.ts: if cron_schedules row missing, defaults to allowing execution
 - handleCardUpdated can diverge from initial fetch query in card detail page - always check both
+
+## Cron Bug Audit (2026-03-08)
+See [cron-bugs.md](./cron-bugs.md) for full details.
+Key findings:
+- sale_prices has NO unique constraint → duplicate data accumulates every 5min sync
+- card_sale_urls missing product_type column → getProductInfo called every time
+- justtcg-price-sync: no pagination → large sets partially synced
+- admin/cron manual trigger missing ?force=1
+- daily-price-aggregate depends on v1 category system
+- snkrdunk-items-sync hardcodes brandId='pokemon'
+- maxDuration now 300 (was 120), BATCH_SIZE=15 fits within limit

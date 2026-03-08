@@ -34,17 +34,20 @@ export default function RankingRow({ ranking, cards }: Props) {
 
     if (ranking.comingSoon) {
         return (
-            <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3 px-4">
-                    <span className="text-xl">{ranking.icon}</span>
-                    <h3 className="text-base font-bold text-gray-800">{ranking.label}</h3>
-                    <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full font-medium">
+            <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4 px-4 sm:px-6">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm border border-gray-100 bg-white">
+                        {ranking.icon}
+                    </div>
+                    <h3 className="text-lg font-black text-gray-800 tracking-tight">{ranking.label}</h3>
+                    <span className="text-[10px] px-2 py-1 bg-gray-100 text-gray-500 rounded-full font-bold ml-2">
                         Coming Soon
                     </span>
                 </div>
-                <div className="px-4">
-                    <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-400 text-sm border border-dashed border-gray-200">
-                        データ準備中...
+                <div className="px-4 sm:px-6">
+                    <div className="bg-white/50 rounded-2xl p-12 text-center text-gray-400 text-sm border border-dashed border-gray-200 shadow-sm">
+                        <div className="inline-block p-3 bg-gray-50 rounded-full mb-3">⏳</div>
+                        <p className="font-medium">データ準備中...</p>
                     </div>
                 </div>
             </div>
@@ -52,45 +55,54 @@ export default function RankingRow({ ranking, cards }: Props) {
     }
 
     return (
-        <div className="mb-6 group/row">
+        <div className="mb-8 group/row relative">
             {/* ヘッダー */}
-            <div className="flex items-center gap-2 mb-3 px-4">
-                <span className="text-xl">{ranking.icon}</span>
-                <h3 className="text-base font-bold text-gray-800">{ranking.label}</h3>
+            <div className="flex items-center gap-3 mb-4 px-4 sm:px-6">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm border border-gray-100"
+                    style={{ background: `linear-gradient(135deg, white, ${ranking.color}15)` }}>
+                    {ranking.icon}
+                </div>
+                <h3 className="text-lg font-black text-gray-800 tracking-tight">{ranking.label}</h3>
                 <div
-                    className="w-2.5 h-2.5 rounded-full animate-pulse"
-                    style={{ backgroundColor: ranking.color }}
+                    className="w-2.5 h-2.5 rounded-full animate-pulse ml-1"
+                    style={{ backgroundColor: ranking.color, boxShadow: `0 0 10px ${ranking.color}80` }}
                 />
-                <span className="text-xs text-gray-400 ml-auto">
+                <span className="text-xs font-semibold text-gray-400 ml-auto bg-gray-100/80 px-2.5 py-1 rounded-full border border-gray-200/50">
                     {cards.length}枚
                 </span>
             </div>
 
             {/* 横スクロールエリア */}
             <div className="relative">
-                {/* 左矢印: モバイルでは常に表示 */}
+                {/* 左グラデーションマスク */}
+                {showLeft && <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#F8FAFC] to-transparent z-10 pointer-events-none" />}
+
+                {/* 左矢印 */}
                 {showLeft && (
                     <button
                         onClick={() => scroll('left')}
-                        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-9 h-9 bg-white shadow-lg
-                            rounded-full flex items-center justify-center
-                            opacity-80 md:opacity-0 md:group-hover/row:opacity-100
-                            transition-opacity active:scale-95"
+                        className="hidden sm:flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white/95 backdrop-blur shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100
+                            rounded-full items-center justify-center
+                            opacity-0 group-hover/row:opacity-100
+                            transition-all duration-300 hover:bg-white hover:scale-110 active:scale-95"
                     >
-                        <ChevronLeft size={18} className="text-gray-600" />
+                        <ChevronLeft size={20} className="text-gray-700" />
                     </button>
                 )}
 
-                {/* 右矢印: モバイルでは常に表示 */}
+                {/* 右グラデーションマスク */}
+                {showRight && cards.length > 0 && <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[#F8FAFC] to-transparent z-10 pointer-events-none" />}
+
+                {/* 右矢印 */}
                 {showRight && cards.length > 0 && (
                     <button
                         onClick={() => scroll('right')}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-9 h-9 bg-white shadow-lg
-                            rounded-full flex items-center justify-center
-                            opacity-80 md:opacity-0 md:group-hover/row:opacity-100
-                            transition-opacity active:scale-95"
+                        className="hidden sm:flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white/95 backdrop-blur shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100
+                            rounded-full items-center justify-center
+                            opacity-0 group-hover/row:opacity-100
+                            transition-all duration-300 hover:bg-white hover:scale-110 active:scale-95"
                     >
-                        <ChevronRight size={18} className="text-gray-600" />
+                        <ChevronRight size={20} className="text-gray-700" />
                     </button>
                 )}
 
@@ -98,12 +110,12 @@ export default function RankingRow({ ranking, cards }: Props) {
                 <div
                     ref={scrollRef}
                     onScroll={handleScroll}
-                    className="flex gap-3 overflow-x-auto px-4 pb-3 snap-x snap-mandatory"
+                    className="flex gap-2.5 sm:gap-4 overflow-x-auto px-4 sm:px-6 pb-6 pt-2 snap-x snap-mandatory"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
                 >
                     {cards.length > 0 ? (
                         cards.map((card, i) => (
-                            <div key={card.id} className="snap-start">
+                            <div key={card.id} className="snap-start flex self-stretch shrink-0">
                                 <RankingCardComponent
                                     card={card}
                                     rank={i + 1}
@@ -112,7 +124,7 @@ export default function RankingRow({ ranking, cards }: Props) {
                             </div>
                         ))
                     ) : (
-                        <div className="w-full py-8 text-center text-gray-400 text-sm">
+                        <div className="w-full py-12 text-center text-gray-400 text-sm bg-white/50 rounded-2xl border border-dashed border-gray-200 mx-4 sm:mx-6">
                             データがありません
                         </div>
                     )}

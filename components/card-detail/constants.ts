@@ -62,6 +62,9 @@ export const GRADE_SORT_ORDER: Record<string, number> = {
   '6個': 105, '7個': 106, '8個': 107, '9個': 108, '10個': 109,
 }
 
+// UI表示許可グレード（これ以外はチャート・価格表示から除外）
+export const ALLOWED_GRADES = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
+
 // BOX系グレード判定
 export const isBoxGrade = (grade: string) => /^\d+個$/.test(grade) || grade === 'BOX'
 

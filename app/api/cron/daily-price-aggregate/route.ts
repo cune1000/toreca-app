@@ -103,6 +103,7 @@ export async function GET(req: Request) {
             .lte('sold_at', dayEnd)
             .in('grade', ['PSA10', 'A', '1BOX'])
             .gt('price', 0)
+            .limit(10000)
 
         if (salesError) {
             console.error('Sales query error:', salesError)
@@ -164,6 +165,7 @@ export async function GET(req: Request) {
             .gte('created_at', dayStart)
             .lte('created_at', dayEnd)
             .gt('price', 0)
+            .limit(10000)
 
         if (purchaseError) {
             console.error('Purchase query error:', purchaseError)

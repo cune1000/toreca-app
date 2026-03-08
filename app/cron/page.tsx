@@ -25,7 +25,8 @@ const VERCEL_CRONS = [
     { path: '/api/cron/toreca-lounge', schedule: '30 2,4,13 * * *', name: 'トレカラウンジ オリパ同期' },
     { path: '/api/cron/exchange-rate-sync', schedule: '55 17 * * *', name: '為替レート同期(USD/JPY)' },
     { path: '/api/cron/overseas-price-sync', schedule: '0 18 * * *', name: 'PriceCharting海外価格同期' },
-    { path: '/api/cron/snkrdunk-items-sync', schedule: '0 */6 * * *', name: 'スニダン新規カード取得' }
+    { path: '/api/cron/snkrdunk-items-sync', schedule: '0 */6 * * *', name: 'スニダン新規カード取得' },
+    { path: '/api/cron/justtcg-price-sync', schedule: '0 19 * * *', name: 'JustTCG価格日次同期' }
 ]
 
 export default function CronDashboard() {

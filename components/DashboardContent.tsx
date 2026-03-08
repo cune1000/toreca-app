@@ -443,13 +443,13 @@ export default function DashboardContent() {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="text-xs">
-                        <span className="text-gray-500">JT NM: </span>
+                        <span className="text-gray-500">TCGPlayer: </span>
                         {card.justtcg_nm_price_usd ? (
                           <span className="font-bold text-emerald-600">${card.justtcg_nm_price_usd.toFixed(2)}</span>
                         ) : <span className="text-gray-400">-</span>}
                       </div>
                       <div className="text-xs">
-                        <span className="text-gray-500">PC素体: </span>
+                        <span className="text-gray-500">eBay素体: </span>
                         {card.pc_loose_usd ? (
                           <>
                             <span className="font-bold text-purple-600">${card.pc_loose_usd.toFixed(2)}</span>
@@ -458,7 +458,7 @@ export default function DashboardContent() {
                         ) : <span className="text-gray-400">-</span>}
                       </div>
                       <div className="text-xs">
-                        <span className="text-gray-500">PC PSA10: </span>
+                        <span className="text-gray-500">eBayPSA10: </span>
                         {card.pc_graded_usd ? (
                           <>
                             <span className="font-bold text-orange-600">${card.pc_graded_usd.toFixed(2)}</span>

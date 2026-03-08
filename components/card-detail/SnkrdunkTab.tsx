@@ -6,6 +6,7 @@ import { RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
 import {
   SNKRDUNK_GRADE_COLORS, PURCHASE_CONDITION_COLORS,
   GRADE_SORT_ORDER, isBoxGrade, SINGLE_CATEGORIES,
+  ALLOWED_GRADES,
   formatRelativeTime,
 } from './constants'
 
@@ -70,7 +71,7 @@ export default function SnkrdunkTab({
   const [chartLoading, setChartLoading] = useState(false)
   const [chartFetching, setChartFetching] = useState(false)
   const [chartConditions, setChartConditions] = useState<string[]>([])
-  const [visibleConditions, setVisibleConditions] = useState<Set<string>>(new Set(['すべての状態']))
+  const [visibleConditions, setVisibleConditions] = useState<Set<string>>(new Set())
   const [chartError, setChartError] = useState<string | null>(null)
   const [anomalyCount, setAnomalyCount] = useState(0)
 
@@ -83,15 +84,16 @@ export default function SnkrdunkTab({
       const json = await res.json()
       if (json.success && json.totalPoints > 0) {
         setChartData(json.data)
-        setChartConditions(Object.keys(json.data))
+        setChartConditions(Object.keys(json.data).filter(c => ALLOWED_GRADES.has(c)))
         // 異常値カウント
         let anomalies = 0
         for (const points of Object.values(json.data) as any[][]) {
           anomalies += points.filter((p: any) => p.isAnomaly).length
         }
         setAnomalyCount(anomalies)
-        // 初回: 最初の条件を表示
-        const first = Object.keys(json.data)[0]
+        // 初回: ALLOWED内の最初の条件を表示
+        const allowedKeys = Object.keys(json.data).filter(c => ALLOWED_GRADES.has(c))
+        const first = allowedKeys[0]
         if (first) setVisibleConditions(new Set([first]))
       }
     } catch (e: any) {
@@ -590,7 +592,7 @@ export default function SnkrdunkTab({
           )}
 
           {salePrices.length > 0 && (() => {
-            const ALLOWED = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
+            const ALLOWED = ALLOWED_GRADES
             const filtered = (salePrices as any[]).filter((p: any) => p.grade && ALLOWED.has(p.grade))
             if (filtered.length === 0) return null
             return (

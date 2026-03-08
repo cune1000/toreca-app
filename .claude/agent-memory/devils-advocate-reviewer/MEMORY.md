@@ -8,58 +8,46 @@
 - Supported games (v2): pokemon-japan, one-piece-card-game only
 
 ## Recurring Issues Found
-- **Inconsistent VALID_GAMES across routes**: sets route has 7 games, cards route has 2, register route has 7 in GAME_CATEGORY_MAP. See [consistency-issues.md](./consistency-issues.md)
+- **ALLOWED_GRADES triplicated**: `['A','B','PSA10','PSA9','1個']` in page.tsx (x2) + SnkrdunkTab.tsx (x1). Should be in constants.ts.
+- **Inconsistent VALID_GAMES across routes**: sets route has 7 games, cards route has 2, register route has 7 in GAME_CATEGORY_MAP
 - **RARITY_EN_TO_JA divergence**: See prior notes
-- **Supabase client patterns**: CardPriceDisplay.tsx creates a global supabase client at module scope (anti-pattern for SSR)
+- **Supabase client patterns**: snkrdunk-sync creates global supabase at module scope; justtcg-price-sync does it inside handler (correct)
 - **Supabase JOIN alias collision**: `rarity:rarity_id(id, name)` overwrites `cards.rarity` column. Recommend `rarity_rel` suffix.
+- **isSameTransaction + extractIconNumber duplicated**: in snkrdunk-sync AND snkrdunk-scrape. Should be in lib/scraping/helpers.ts.
+- **formatRelativeTime duplicated**: constants.ts (Japanese) vs cron/page.tsx (English)
+- **admin/cron route has NO authentication**: GET/POST both unprotected
 
 ## UI/UX Migration Issues (2026-03 review) -> [ui-migration-issues.md](./ui-migration-issues.md)
-- Label inconsistency "カテゴリ" vs "ゲーム" in ShopDetailPage, PriceChartingImporter
-- Dual rarity input (text + FK) causes display mismatch across screens
-- Form field order mismatch between CardsPage table and CardEditForm
-- CardForm missing set_code field and drag&drop
-- Image fallback inconsistency across 3 screens
-- ShopDetailPage grid cols mismatch and purchase count bug
+- Label inconsistency, dual rarity input, form field order mismatch, image fallback inconsistency
 
-## Cron Architecture (confirmed 2026-02)
-- **Dual scheduling columns in card_sale_urls**: `next_scrape_at`/`last_scraped_at` (snkrdunk-sync) vs `next_check_at`/`last_checked_at` (update-prices)
-- **snkrdunk-sync ignores auto_scrape_mode** but UI (SnkrdunkMonitorPage, SettingsTab) still references it
-- **snkrdunk-auto-scrape (old)**: file exists but NOT in vercel.json -- should be deleted
-- **Duplicated helpers**: isSameTransaction & extractIconNumber in both sync routes (should be in lib/scraping/helpers.ts)
-- **snkrdunk-sync does NOT write to cron_logs** (update-prices does via logCronResult)
-- **maxDuration=180s with BATCH_SIZE=10**: risky -- each card up to 7 API calls x 15s timeout
-- **No isRestTime check in snkrdunk-sync** (update-prices has it)
-- **CronDashboard orders by next_check_at** but snkrdunk-sync only updates next_scrape_at
+## Cron Architecture (confirmed 2026-03)
+- **Dual scheduling columns in card_sale_urls**: `next_scrape_at`/`last_scraped_at` vs `next_check_at`/`last_checked_at`
+- **snkrdunk-sync**: maxDuration=300, BATCH_SIZE=15, NO timeout guard, JSDoc says "最大5カード" (stale)
+- **justtcg-price-sync**: maxDuration=300, has 270s timeout guard, N+1 UPDATE on cards table
+- **snkrdunk-sync ignores auto_scrape_mode** but UI still references it
+- **Duplicated helpers**: isSameTransaction & extractIconNumber (confirmed still duplicated 2026-03)
+- **top_prices column detection via error**: catches INSERT error code 42703
+- **snkrdunk-sync does NOT write to cron_logs**
 
 ## Linking Page Issues (2026-03 review) -> [linking-review.md](./linking-review.md)
-- **CRITICAL: linkFilter JS-side post-pagination** breaks page counts (C1)
-- **CRITICAL: No auth on link API endpoints** (C2)
-- **3 page files 99% copy-paste** → extract LinkingPageShell or use [source] dynamic route (Y1)
-- **6 API routes also copy-paste** → unify with [source] param (Y2)
-- **Double API call on search**: search state change fires fetchItems immediately + debounced page reset fires again (Y5)
-- **checkedItems persist across pages** but bulk only processes current page items (Y6)
-- **stats.linked/unlinked from current page only** vs total from DB (Y7)
-- **ExternalItemRow memo broken**: inline arrow callbacks in CenterPanel (S4)
-- **buildLinkBody duplicated** in RightPanel.tsx and useBulkLinking.ts (C4)
-- **RightPanel absolute overlay missing position:relative** on parent (C5)
-- **alert() for errors** instead of state-managed banners (S6)
-- **shop_id queried by name every request** (Y3)
-- **Module-scope createServiceClient()** in all 6 API routes (Y10)
+- CRITICAL: linkFilter JS-side post-pagination, No auth on link API endpoints
+- 3 page files + 6 API routes copy-paste, module-scope createServiceClient()
 
 ## Key File Paths
-- `lib/snkrdunk-api.ts` - Snkrdunk API client
-- `lib/scraping/helpers.ts` - parseRelativeTime, normalizeGrade, extractGradePrices
-- `app/api/cron/snkrdunk-sync/route.ts` - NEW unified snkrdunk cron
-- `app/api/cron/snkrdunk-auto-scrape/route.ts` - OLD (to be deleted)
-- `app/api/cron/update-prices/route.ts` - Non-snkrdunk price updates
-- `components/pages/SnkrdunkMonitorPage.tsx` - Snkrdunk monitoring UI
-- `components/card-detail/SettingsTab.tsx` - Per-card settings UI
-- `components/CronDashboard.tsx` - Cron management dashboard
-- `components/CategoryManager.tsx` - Dead code (removed from sidebar, file still exists)
+- `app/api/cron/snkrdunk-sync/route.ts` - Snkrdunk unified cron
+- `app/api/cron/justtcg-price-sync/route.ts` - JustTCG daily price sync
+- `app/api/admin/cron/route.ts` - Admin cron trigger (NO AUTH)
+- `app/cron/page.tsx` - Cron dashboard UI
+- `app/cards/[id]/page.tsx` - Card detail God Component (580 lines, 16 useState, ~30 `any`)
+- `components/card-detail/constants.ts` - Chart colors, grade configs
+- `components/card-detail/PriceChartTab.tsx` - Price chart component
+- `components/card-detail/SnkrdunkTab.tsx` - Snkrdunk sales tab
+- `lib/scraping/helpers.ts` - Shared scraping parsers
 
 ## Patterns & Anti-Patterns
-- **N+1 inserts**: snkrdunk-sync inserts sales one-by-one instead of bulk
+- **N+1 updates**: justtcg-price-sync updates cards.justtcg_nm_price_usd one-by-one
 - **Error-based column detection**: catches INSERT error to detect missing `top_prices` column
 - **TypeScript strict: false**: type mismatches won't surface as compile errors
-- **CardEditForm & CardForm ~80% duplicated**: Should extract shared CardFormBase component
+- **any abuse in page.tsx**: ~30+ occurrences despite lib/types.ts having 300+ lines of type defs
+- **CardEditForm & CardForm ~80% duplicated**: Should extract shared CardFormBase
 - **Rarity triple-source**: cards.rarity (text) + cards.rarity_id (FK) + rarity-mapping.ts (display)

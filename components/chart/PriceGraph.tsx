@@ -121,7 +121,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                 }`}
                         />
                         <span className={showJtcg ? 'text-gray-600' : 'text-gray-400'}>
-                            JT NM
+                            TCGPlayer
                         </span>
                     </label>
                 )}

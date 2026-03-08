@@ -37,6 +37,7 @@ export async function GET(req: Request) {
       .from('cards')
       .select('id, justtcg_id')
       .not('justtcg_id', 'is', null)
+      .limit(10000)
 
     if (cardsError) throw cardsError
     if (!cards || cards.length === 0) {
@@ -75,7 +76,7 @@ export async function GET(req: Request) {
         let offset = 0
         const PAGE_SIZE = 100
         while (true) {
-          const result = await getCards(setId, { game, offset, limit: PAGE_SIZE })
+          const result = await getCards(setId, { game, offset, limit: PAGE_SIZE, includePriceHistory: false })
           apiCards.push(...(result.data || []))
           if (!result.meta.hasMore || (result.data || []).length < PAGE_SIZE) break
           offset += PAGE_SIZE
@@ -139,11 +140,19 @@ export async function GET(req: Request) {
         }
 
         // cards.justtcg_nm_price_usd を更新
+        let updateErrors = 0
         for (const { id, price } of cardUpdates) {
-          await supabase
+          const { error: updateError } = await supabase
             .from('cards')
             .update({ justtcg_nm_price_usd: price })
             .eq('id', id)
+          if (updateError) {
+            console.error(`[justtcg-price-sync] Update card ${id} error:`, updateError.message)
+            updateErrors++
+          }
+        }
+        if (updateErrors > 0) {
+          console.warn(`[justtcg-price-sync] ${setId}: ${updateErrors} card update errors`)
         }
 
         totalUpdated += cardUpdates.length

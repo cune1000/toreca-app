@@ -71,6 +71,8 @@ export async function GET(req: Request) {
       if (!isNaN(limit) && limit > 0) {
         query = query.limit(limit)
       }
+    } else {
+      query = query.limit(10000)
     }
 
     const { data: cards, error: cardsError } = await query

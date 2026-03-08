@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 export async function GET() {
     const supabase = createServiceClient()
@@ -23,20 +24,26 @@ export async function POST(req: Request) {
         const { path } = await req.json()
         if (!path) return NextResponse.json({ success: false, error: 'Path required' }, { status: 400 })
 
-        // Create the full URL based on the request origin
-        const origin = req.headers.get('origin') || 'http://localhost:3000'
-        const fullUrl = `${origin}${path}`
+        // Vercel本番では VERCEL_URL、ローカルでは host ヘッダーを使用
+        const host = process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host') || 'localhost:3000'}`
+        const triggerUrl = `${host}${path}?force=1`
 
-        console.log(`[Admin] Manually triggering cron: ${fullUrl}`)
+        console.log(`[Admin] Manually triggering cron: ${triggerUrl}`)
 
-        // Call the cron route with the secret
-        const res = await fetch(fullUrl, {
+        const res = await fetch(triggerUrl, {
             headers: {
                 'Authorization': `Bearer ${process.env.CRON_SECRET}`
             }
         })
 
         const result = await res.json()
+
+        if (!res.ok) {
+            return NextResponse.json({ success: false, error: result.error || `HTTP ${res.status}`, result }, { status: res.status })
+        }
+
         return NextResponse.json({ success: true, result })
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })

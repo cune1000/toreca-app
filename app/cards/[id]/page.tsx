@@ -10,7 +10,7 @@ import PriceChartTab from '@/components/card-detail/PriceChartTab'
 import SnkrdunkTab from '@/components/card-detail/SnkrdunkTab'
 import SettingsTab from '@/components/card-detail/SettingsTab'
 import CardEditForm from '@/components/CardEditForm'
-import { GRADE_SORT_ORDER } from '@/components/card-detail/constants'
+import { GRADE_SORT_ORDER, ALLOWED_GRADES } from '@/components/card-detail/constants'
 import { isSnkrdunkSiteName, isSnkrdunkUrl } from '@/lib/snkrdunk-api'
 
 interface Props {
@@ -257,7 +257,7 @@ export default function CardDetailPage({ params }: Props) {
       const d = formatDate(p.recorded_at || p.created_at); if (!d) return
       const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
       const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
-      if (p.grade) {
+      if (p.grade && ALLOWED_GRADES.has(p.grade)) {
         const gKey = `sale_grade_${p.grade}`
         if (!(gKey in existing)) existing[gKey] = p.price  // 最新値を優先
         if (p.stock != null && !(`stock_grade_${p.grade}` in existing)) existing[`stock_grade_${p.grade}`] = p.stock
@@ -271,7 +271,7 @@ export default function CardDetailPage({ params }: Props) {
 
     // スニダンチャート過去データを日次で合流（sale_pricesが同日にあればスキップ）
     if (snkrdunkChartHistory.length > 0) {
-      const ALLOWED_CONDITIONS = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
+      const ALLOWED_CONDITIONS = ALLOWED_GRADES
       const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
       for (const ch of snkrdunkChartHistory) {
         if (!ALLOWED_CONDITIONS.has(ch.condition)) continue
@@ -370,13 +370,11 @@ export default function CardDetailPage({ params }: Props) {
     const entries = Object.values(latestPurchaseByLabel); return entries.length === 0 ? null : Math.max(...entries.map(e => e.price))
   }, [latestPurchaseByLabel])
 
-  const hasGradeStockData = useMemo(() => salePrices.some((p: any) => p.stock != null && p.grade), [salePrices])
-  const purchaseConditions = useMemo(() => {
+const purchaseConditions = useMemo(() => {
     const order: Record<string, number> = { 'PSA10': 1, '素体': 2, '未開封': 3, '開封済み': 4 }
     const c = new Set<string>(); purchasePrices.forEach((p: any) => c.add(p.condition || (p.is_psa ? 'psa' : '素体')))
     return Array.from(c).sort((a, b) => (order[a] ?? 99) - (order[b] ?? 99))
   }, [purchasePrices])
-  const ALLOWED_GRADES = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
   const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade && ALLOWED_GRADES.has(p.grade)) g.add(p.grade) }); snkrdunkChartHistory.forEach((p: any) => { if (p.condition && ALLOWED_GRADES.has(p.condition)) g.add(p.condition) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices, snkrdunkChartHistory])
 
   const snkrdunkLatestByGrade = useMemo(() => {
@@ -527,7 +525,7 @@ export default function CardDetailPage({ params }: Props) {
                   isSiteHidden={isSiteHidden}
                   purchaseConditions={purchaseConditions}
                   saleGrades={saleGrades}
-                  hasGradeStockData={hasGradeStockData}
+
                   onRefreshOverseas={fetchOverseasPrices}
                 />
               )}

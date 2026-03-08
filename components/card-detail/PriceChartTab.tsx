@@ -23,7 +23,6 @@ interface PriceChartTabProps {
   isSiteHidden: (siteId: string) => boolean
   purchaseConditions: string[]
   saleGrades: string[]
-  hasGradeStockData?: boolean
   onRefreshOverseas?: () => void
 }
 
@@ -82,7 +81,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function PriceChartTab({
   card, chartData, selectedPeriod, onPeriodChange,
   siteList, visibleSites, onToggleSitePrice, onToggleSiteStock, onToggleSiteAll, isSiteHidden,
-  purchaseConditions, saleGrades, hasGradeStockData,
+  purchaseConditions, saleGrades,
   onRefreshOverseas,
 }: PriceChartTabProps) {
   // localStorage からトグル復元
@@ -119,9 +118,9 @@ export default function PriceChartTab({
   const showStockAxis = nonSnkrdunkSites.some(s => visibleSites[s.id]?.stock !== false)
 
   const isGradePriceVisible = (grade: string) => visibleGrades[grade]?.price !== false
-  const isGradeStockVisible = (grade: string) => visibleGrades[grade]?.stock !== false
+
   const toggleGradePrice = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: !(prev[grade]?.price !== false), stock: prev[grade]?.stock ?? true } }))
-  const toggleGradeStock = (grade: string) => setVisibleGrades(prev => ({ ...prev, [grade]: { price: prev[grade]?.price ?? true, stock: !(prev[grade]?.stock !== false) } }))
+
   const toggleGradeAll = (grade: string) => setVisibleGrades(prev => { const c = prev[grade] || { price: true, stock: true }; const allOn = c.price !== false || c.stock !== false; return { ...prev, [grade]: { price: !allOn, stock: !allOn } } })
 
   const isPurchaseVisible = (condition: string) => visiblePurchase[condition] !== false
