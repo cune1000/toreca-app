@@ -53,6 +53,9 @@ export default function CardDetailPage({ params }: Props) {
   const [justTcgHistory, setJustTcgHistory] = useState<any[]>([])
   const [exchangeRate, setExchangeRate] = useState<number>(155)
 
+  // ── Snkrdunk chart data (過去補填) ──
+  const [snkrdunkChartHistory, setSnkrdunkChartHistory] = useState<any[]>([])
+
   // ── Fetch card data ──
   useEffect(() => {
     const fetchCard = async () => {
@@ -84,6 +87,7 @@ export default function CardDetailPage({ params }: Props) {
       fetchPurchaseLinks()
       fetchOverseasPrices()
       fetchJustTcgHistory()
+      fetchSnkrdunkChartHistory()
     }
   }, [card?.id, card?.pricecharting_id])
 
@@ -149,6 +153,18 @@ export default function CardDetailPage({ params }: Props) {
       if (rateData?.[0]?.rate) setExchangeRate(rateData[0].rate)
       setJustTcgHistory(history || [])
     } catch (err) { console.error('Failed to fetch JustTCG history:', err) }
+  }
+
+  const fetchSnkrdunkChartHistory = async () => {
+    try {
+      const { data } = await supabase
+        .from('snkrdunk_chart_data')
+        .select('condition, date, price_cleaned')
+        .eq('card_id', card.id)
+        .order('date', { ascending: true })
+        .limit(10000)
+      setSnkrdunkChartHistory(data || [])
+    } catch (err) { console.error('Failed to fetch snkrdunk chart history:', err) }
   }
 
   const handleCardUpdated = async () => {
@@ -253,6 +269,26 @@ export default function CardDetailPage({ params }: Props) {
       dataMap.set(ts, existing)
     })
 
+    // スニダンチャート過去データを日次で合流（sale_pricesが同日にあればスキップ）
+    if (snkrdunkChartHistory.length > 0) {
+      const ALLOWED_CONDITIONS = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
+      const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
+      for (const ch of snkrdunkChartHistory) {
+        if (!ALLOWED_CONDITIONS.has(ch.condition)) continue
+        const d = formatDate(ch.date); if (!d) continue
+        if (cutoff && d < cutoff) continue
+        const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
+        const ts = dayNoon.getTime()
+        const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(dayNoon) }
+        const gKey = `sale_grade_${ch.condition}`
+        // sale_prices（リアルタイム）が既にあればそちらを優先
+        if (!(gKey in existing)) {
+          existing[gKey] = ch.price_cleaned
+        }
+        dataMap.set(ts, existing)
+      }
+    }
+
     // 海外価格データを日次で追加
     if (overseasHistory.length > 0) {
       const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
@@ -304,7 +340,7 @@ export default function CardDetailPage({ params }: Props) {
     }
 
     return Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp).slice(-300)
-  }, [purchasePrices, salePrices, overseasHistory, justTcgHistory, exchangeRate, snkrdunkSales, selectedPeriod])
+  }, [purchasePrices, salePrices, overseasHistory, justTcgHistory, exchangeRate, snkrdunkSales, snkrdunkChartHistory, selectedPeriod])
 
   const latestPrices = useMemo(() => {
     const latest: Record<string, { price: number; stock: number | null; siteName: string }> = {}
@@ -341,7 +377,7 @@ export default function CardDetailPage({ params }: Props) {
     return Array.from(c).sort((a, b) => (order[a] ?? 99) - (order[b] ?? 99))
   }, [purchasePrices])
   const ALLOWED_GRADES = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
-  const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade && ALLOWED_GRADES.has(p.grade)) g.add(p.grade) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices])
+  const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade && ALLOWED_GRADES.has(p.grade)) g.add(p.grade) }); snkrdunkChartHistory.forEach((p: any) => { if (p.condition && ALLOWED_GRADES.has(p.condition)) g.add(p.condition) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices, snkrdunkChartHistory])
 
   const snkrdunkLatestByGrade = useMemo(() => {
     const result: Record<string, { price: number; stock: number | null; grade: string; date: string; topPrices?: number[] }> = {}
