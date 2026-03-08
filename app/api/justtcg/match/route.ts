@@ -68,7 +68,11 @@ export async function POST(request: NextRequest) {
     const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game']
     const validGame = typeof game === 'string' && JAPANESE_GAMES.includes(game) ? game : 'pokemon-japan'
     const isJapaneseGame = JAPANESE_GAMES.includes(validGame)
-    const query = isJapaneseGame ? `${name} japanese` : name
+    // カード名からバリアント表記を除去して検索精度を上げる
+    // "Pikachu (Mirror Holofoil)" → "Pikachu"
+    // "Mew - 030/028" → "Mew"
+    const cleanName = name.replace(/\s*\(.*?\)/g, '').replace(/\s+-\s+.*$/, '').trim() || name
+    const query = isJapaneseGame ? `${cleanName} japanese` : cleanName
     const products = await searchProducts(query)
 
     if (!products || products.length === 0) {

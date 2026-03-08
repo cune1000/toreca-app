@@ -156,10 +156,11 @@ export async function POST(request: NextRequest) {
     let pcId: string | null = null
     let pcUrl: string | null = null
     try {
-      const searchName = str(name_en, 200) || trimmedName
+      const rawName = str(name_en, 200) || trimmedName
+      const cleanName = rawName.replace(/\s*\(.*?\)/g, '').replace(/\s+-\s+.*$/, '').trim() || rawName
       const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game']
       const isJapanese = JAPANESE_GAMES.includes(validGame)
-      const pcQuery = isJapanese ? `${searchName} japanese` : searchName
+      const pcQuery = isJapanese ? `${cleanName} japanese` : cleanName
       const products = await searchProducts(pcQuery)
 
       if (products && products.length > 0) {
