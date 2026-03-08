@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getRarityShortName } from '@/lib/rarity-mapping'
+import { searchProducts } from '@/lib/pricecharting-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -151,6 +152,32 @@ export async function POST(request: NextRequest) {
       rarityId = rarityRow?.id || null
     }
 
+    // PriceCharting 自動マッチング（name_en + card_number で検索）
+    let pcId: string | null = null
+    let pcUrl: string | null = null
+    try {
+      const searchName = str(name_en, 200) || trimmedName
+      const JAPANESE_GAMES = ['pokemon-japan', 'one-piece-card-game']
+      const isJapanese = JAPANESE_GAMES.includes(validGame)
+      const pcQuery = isJapanese ? `${searchName} japanese` : searchName
+      const products = await searchProducts(pcQuery)
+
+      if (products && products.length > 0) {
+        let matched = products
+        const cn = str(card_number, 50)
+        if (cn) {
+          const num = cn.split('/')[0]
+          const numRegex = new RegExp(`#\\s?${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\D|$)`)
+          const filtered = products.filter(p => numRegex.test(p['product-name'] || ''))
+          if (filtered.length > 0) matched = filtered
+        }
+        pcId = String(matched[0].id)
+        pcUrl = `https://www.pricecharting.com/offers?product=${pcId}`
+      }
+    } catch (e: any) {
+      console.warn('[tcgapi/register] PriceCharting match failed (non-blocking):', e.message)
+    }
+
     // tcgplayer_id が既に登録済み → 既存カードを最新データで上書きUPDATE
     if (existing) {
       const updateFields: Record<string, unknown> = { name: trimmedName }
@@ -164,6 +191,7 @@ export async function POST(request: NextRequest) {
       if (category?.id) updateFields.category_large_id = category.id
       if (rarityId) updateFields.rarity_id = rarityId
       if (urlVal(image_url)) updateFields.image_url = urlVal(image_url)
+      if (pcId) updateFields.pricecharting_id = pcId
 
       const { data: updated, error: updateError } = await supabase
         .from('cards')
@@ -179,7 +207,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         )
       }
-      return NextResponse.json({ success: true, data: updated, updated: true })
+      return NextResponse.json({ success: true, data: updated, updated: true, pricechartingMatched: !!pcId })
     }
 
     // 名前+型番+カテゴリで既存カードを検索（JustTCGから登録済みの場合マージ）
@@ -224,6 +252,7 @@ export async function POST(request: NextRequest) {
       if (category?.id) updateFields.category_large_id = category.id
       if (rarityId) updateFields.rarity_id = rarityId
       if (urlVal(image_url)) updateFields.image_url = urlVal(image_url)
+      if (pcId) updateFields.pricecharting_id = pcId
 
       const { data: merged, error: mergeError } = await supabase
         .from('cards')
@@ -239,7 +268,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         )
       }
-      return NextResponse.json({ success: true, data: merged, merged: true })
+      return NextResponse.json({ success: true, data: merged, merged: true, pricechartingMatched: !!pcId })
     }
 
     // INSERT
@@ -257,6 +286,7 @@ export async function POST(request: NextRequest) {
         expansion: str(expansion, 200),
         image_url: urlVal(image_url),
         tcgplayer_id: trimmedTcgplayerId,
+        pricecharting_id: pcId,
         category_large_id: category?.id || null,
       })
       .select()
@@ -303,7 +333,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ success: true, data: card })
+    return NextResponse.json({ success: true, data: card, pricechartingMatched: !!pcId })
   } catch (error: unknown) {
     console.error('TCG API register error:', error)
     return NextResponse.json(
