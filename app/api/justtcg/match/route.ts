@@ -72,7 +72,12 @@ export async function POST(request: NextRequest) {
     // "Pikachu (Mirror Holofoil)" → "Pikachu"
     // "Mew - 030/028" → "Mew"
     const cleanName = name.replace(/\s*\(.*?\)/g, '').replace(/\s+-\s+.*$/, '').trim() || name
-    const query = isJapaneseGame ? `${cleanName} japanese` : cleanName
+    const cleanSetName = typeof setName === 'string' ? setName.trim() : ''
+    // 検索クエリにセット名を含めて精度向上（APIは最大20件なのでクエリ段階で絞る）
+    const queryParts = [cleanName]
+    if (cleanSetName) queryParts.push(cleanSetName)
+    if (isJapaneseGame) queryParts.push('japanese')
+    const query = queryParts.join(' ')
     const products = await searchProducts(query)
 
     if (!products || products.length === 0) {
