@@ -354,10 +354,10 @@ async function syncListingPrices(
       overallMin = Math.min(...sizes.map(s => s.minPrice))
     }
 
-    // 各数量ごとのグレード（1個〜10個）
+    // 各数量ごとのグレード（"1個", "2個" 等、name から取得）
     for (const size of sizes) {
-      if (size.quantity >= 1 && size.quantity <= 10) {
-        gradePrices.push({ grade: `${size.quantity}個`, price: size.minPrice, stock: size.listingCount })
+      if (size.name) {
+        gradePrices.push({ grade: size.name, price: size.minPrice, stock: size.listingCount })
       }
     }
   }
