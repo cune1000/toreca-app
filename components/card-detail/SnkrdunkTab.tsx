@@ -11,17 +11,11 @@ import {
 
 // チャート条件のカラー定義
 const CHART_CONDITION_COLORS: Record<string, string> = {
-  'すべての状態': '#6366f1', // indigo
   'A': '#10b981',
   'B': '#f59e0b',
-  'C': '#ef4444',
-  'D': '#dc2626',
   'PSA10': '#8b5cf6',
   'PSA9': '#06b6d4',
-  'PSA8以下': '#64748b',
-  'すべて': '#6366f1',
   '1個': '#3b82f6',
-  '2個': '#06b6d4',
 }
 
 interface SnkrdunkTabProps {
@@ -96,15 +90,9 @@ export default function SnkrdunkTab({
           anomalies += points.filter((p: any) => p.isAnomaly).length
         }
         setAnomalyCount(anomalies)
-        // 初回: すべての状態 or 最初の条件を表示
-        if (json.data['すべての状態']) {
-          setVisibleConditions(new Set(['すべての状態']))
-        } else if (json.data['すべて']) {
-          setVisibleConditions(new Set(['すべて']))
-        } else {
-          const first = Object.keys(json.data)[0]
-          if (first) setVisibleConditions(new Set([first]))
-        }
+        // 初回: 最初の条件を表示
+        const first = Object.keys(json.data)[0]
+        if (first) setVisibleConditions(new Set([first]))
       }
     } catch (e: any) {
       console.error('Failed to fetch chart data:', e)

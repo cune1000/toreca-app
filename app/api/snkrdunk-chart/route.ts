@@ -135,15 +135,13 @@ export async function POST(req: Request) {
                 }
             }
         } else {
-            // BOX: 全数量オプション（1個〜10個等）を取得（「すべて」は平均値のため除外）
+            // BOX: 「1個」のみ取得
             const options = await getBoxChartOptions(apparelId)
             if (options.length === 0) {
                 return NextResponse.json({ success: true, message: 'BOXチャートオプションなし', results: [] })
             }
 
-            // リクエストされた条件、またはAPI返却の全オプション（「すべて」除外）
-            const conditionsToFetch = requestedConditions
-                || options.map(o => o.localizedName)
+            const conditionsToFetch = requestedConditions || ['1個']
 
             for (const condLabel of conditionsToFetch) {
                 const option = options.find(o => o.localizedName === condLabel)
