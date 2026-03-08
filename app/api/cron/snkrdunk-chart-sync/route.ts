@@ -28,13 +28,16 @@ export async function GET(req: Request) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const force = new URL(req.url).searchParams.get('force') === '1'
+    const params = new URL(req.url).searchParams
+    const force = params.get('force') === '1'
+    const limitParam = params.get('limit')
     const gate = await shouldRunCronJob('snkrdunk-chart-sync', { force })
     if (!gate.shouldRun) {
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
     const now = new Date()
+    const batchLimit = limitParam ? Math.min(parseInt(limitParam) || BATCH_SIZE, 500) : BATCH_SIZE
 
     // 紐づけ済みのスニダンURLを取得（最終チャート更新が古い順）
     const { data: saleUrls, error: fetchError } = await supabase
@@ -43,7 +46,7 @@ export async function GET(req: Request) {
       .like('product_url', '%snkrdunk.com%')
       .not('apparel_id', 'is', null)
       .order('last_scraped_at', { ascending: true, nullsFirst: true })
-      .limit(BATCH_SIZE)
+      .limit(batchLimit)
 
     if (fetchError) {
       await markCronJobRun('snkrdunk-chart-sync', 'error', fetchError.message)
