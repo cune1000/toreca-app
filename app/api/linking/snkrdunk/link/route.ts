@@ -66,6 +66,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // 4. チャートデータを自動取得（fire-and-forget）
+    //    紐づけ直後に過去の価格推移を取得し、価格チャートに即反映
+    const host = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host') || 'localhost:3000'}`
+    fetch(`${host}/api/snkrdunk-chart`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId }),
+    }).catch(e => console.error('[linking/snkrdunk/link] Chart fetch failed:', e.message))
+
     return NextResponse.json({ success: true, id: inserted?.[0]?.id })
   } catch (error: any) {
     console.error('[linking/snkrdunk/link] POST Error:', error)

@@ -1,0 +1,177 @@
+import { NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
+import {
+  extractApparelId,
+  getProductInfo,
+  getSalesChartUsed,
+  getSalesChart,
+  getBoxChartOptions,
+  SINGLE_CHART_OPTIONS,
+} from '@/lib/snkrdunk-api'
+import { cleanChartData } from '@/lib/snkrdunk-chart'
+
+export const maxDuration = 300
+
+const BATCH_SIZE = 10
+const supabase = createServiceClient()
+
+/**
+ * スニダンチャートデータ定期更新Cron
+ * 紐づけ済みカードの価格推移チャートを日次で更新
+ * 初回取得は紐づけ時にfire-and-forgetで実行済み → このcronは差分更新
+ */
+export async function GET(req: Request) {
+  try {
+    const authHeader = req.headers.get('authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    const force = new URL(req.url).searchParams.get('force') === '1'
+    const gate = await shouldRunCronJob('snkrdunk-chart-sync', { force })
+    if (!gate.shouldRun) {
+      return NextResponse.json({ skipped: true, reason: gate.reason })
+    }
+
+    const now = new Date()
+
+    // 紐づけ済みのスニダンURLを取得（最終チャート更新が古い順）
+    const { data: saleUrls, error: fetchError } = await supabase
+      .from('card_sale_urls')
+      .select('card_id, apparel_id, product_url, product_type')
+      .like('product_url', '%snkrdunk.com%')
+      .not('apparel_id', 'is', null)
+      .order('last_scraped_at', { ascending: true, nullsFirst: true })
+      .limit(BATCH_SIZE)
+
+    if (fetchError) {
+      await markCronJobRun('snkrdunk-chart-sync', 'error', fetchError.message)
+      return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
+    }
+
+    if (!saleUrls || saleUrls.length === 0) {
+      await markCronJobRun('snkrdunk-chart-sync', 'success')
+      return NextResponse.json({ success: true, processed: 0, message: 'No cards to update' })
+    }
+
+    const results: { cardId: string; status: string; conditions?: number; inserted?: number; error?: string }[] = []
+
+    for (const url of saleUrls) {
+      const cardId = url.card_id
+      const apparelId = url.apparel_id ?? extractApparelId(url.product_url)
+      if (!apparelId) {
+        results.push({ cardId, status: 'error', error: 'No apparel_id' })
+        continue
+      }
+
+      try {
+        // product_type判定
+        let productType = url.product_type
+        if (!productType) {
+          try {
+            const info = await getProductInfo(apparelId)
+            productType = info.isBox ? 'box' : 'single'
+          } catch {
+            productType = 'single'
+          }
+        }
+
+        const fetchedAt = now.toISOString()
+        let totalInserted = 0
+        let condCount = 0
+
+        if (productType === 'single') {
+          for (const condLabel of ['A', 'B', 'PSA10', 'PSA9']) {
+            const optionId = SINGLE_CHART_OPTIONS[condLabel]
+            if (optionId === undefined) continue
+            try {
+              const chartData = await getSalesChartUsed(apparelId, optionId, 'all')
+              if (!chartData.points || chartData.points.length === 0) continue
+              const cleaned = cleanChartData(chartData.points)
+              const inserted = await upsertChartData(cardId, apparelId, productType, condLabel, cleaned, fetchedAt)
+              totalInserted += inserted
+              condCount++
+              await sleep(300)
+            } catch (e: any) {
+              console.error(`[snkrdunk-chart-sync] ${cardId} ${condLabel}:`, e.message)
+            }
+          }
+        } else {
+          try {
+            const options = await getBoxChartOptions(apparelId)
+            const oneBox = options.find(o => o.localizedName === '1個')
+            if (oneBox) {
+              const chartData = await getSalesChart(apparelId, oneBox.id, 'all')
+              if (chartData.points && chartData.points.length > 0) {
+                const cleaned = cleanChartData(chartData.points)
+                totalInserted = await upsertChartData(cardId, apparelId, productType, '1個', cleaned, fetchedAt)
+                condCount = 1
+              }
+            }
+          } catch (e: any) {
+            console.error(`[snkrdunk-chart-sync] BOX ${cardId}:`, e.message)
+          }
+        }
+
+        results.push({ cardId, status: 'success', conditions: condCount, inserted: totalInserted })
+
+        // カード間のレート制限
+        await sleep(500)
+      } catch (e: any) {
+        console.error(`[snkrdunk-chart-sync] ${cardId}:`, e.message)
+        results.push({ cardId, status: 'error', error: e.message })
+      }
+    }
+
+    await markCronJobRun('snkrdunk-chart-sync', 'success')
+    return NextResponse.json({
+      success: true,
+      processed: results.length,
+      results,
+    })
+  } catch (error: any) {
+    console.error('[snkrdunk-chart-sync] Error:', error)
+    await markCronJobRun('snkrdunk-chart-sync', 'error', error.message)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+async function upsertChartData(
+  cardId: string,
+  apparelId: number,
+  productType: string,
+  condition: string,
+  cleaned: ReturnType<typeof cleanChartData>,
+  fetchedAt: string
+): Promise<number> {
+  const rows = cleaned.map(p => ({
+    card_id: cardId,
+    apparel_id: apparelId,
+    condition,
+    product_type: productType,
+    date: new Date(p.date).toISOString(),
+    price: p.price,
+    price_cleaned: p.priceCleaned,
+    is_anomaly: p.isAnomaly,
+    fetched_at: fetchedAt,
+  }))
+
+  let inserted = 0
+  for (let i = 0; i < rows.length; i += 100) {
+    const batch = rows.slice(i, i + 100)
+    const { error } = await supabase
+      .from('snkrdunk_chart_data')
+      .upsert(batch, { onConflict: 'card_id,condition,date' })
+    if (error) {
+      console.error(`[snkrdunk-chart-sync] Upsert error:`, error.message)
+    } else {
+      inserted += batch.length
+    }
+  }
+  return inserted
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
