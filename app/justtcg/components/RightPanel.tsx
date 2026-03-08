@@ -77,10 +77,10 @@ export default memo(function RightPanel({
   const japaneseVariants = useMemo(() => variants.filter(v => v.language === 'Japanese'), [variants])
   const otherVariants = useMemo(() => variants.filter(v => v.language !== 'Japanese'), [variants])
 
-  // R11-17: w-80 固定でレイアウトジャンプ防止（プレースホルダー表示）
+  // R11-17: w-96 固定でレイアウトジャンプ防止（プレースホルダー表示）
   // R12-15: scrollable propを空状態にも適用し、DOM構造の一貫性を保つ
   if (!card) return (
-    <aside aria-label="カード詳細" className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-80 shrink-0'}`}>
+    <aside aria-label="カード詳細" className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-96 shrink-0'}`}>
       <div className="flex items-center justify-center h-full">
         <p className="text-xs text-[var(--jtcg-text-muted)]">カードを選択してください</p>
       </div>
@@ -92,7 +92,7 @@ export default memo(function RightPanel({
   return (
     <aside
       aria-label="カード詳細"
-      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-80 shrink-0'} transition-opacity duration-200 ease-in-out ${open ? 'opacity-100' : 'opacity-0 overflow-hidden pointer-events-none'
+      className={`border-l border-[var(--jtcg-border)] bg-[var(--jtcg-surface)] ${scrollable ? 'overflow-y-auto' : ''} ${className || 'w-96 shrink-0'} transition-opacity duration-200 ease-in-out ${open ? 'opacity-100' : 'opacity-0 overflow-hidden pointer-events-none'
         }`}
     >
       <div className="p-4 space-y-4">
@@ -273,12 +273,17 @@ export default memo(function RightPanel({
                         <button
                           key={c.id}
                           onClick={() => onSelectPcCandidate?.(c)}
-                          className="w-full text-left px-2 py-1.5 rounded bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-300 transition-colors"
+                          className="w-full text-left px-2 py-1.5 rounded bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-300 transition-colors flex items-center gap-2"
                         >
-                          <p className="font-medium text-gray-800 truncate">{c.name}</p>
-                          <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                            <span>{c.consoleName}</span>
-                            {isValidPrice(c.loosePriceDollars) && <span>${c.loosePriceDollars!.toFixed(2)}</span>}
+                          {c.imageUrl && (
+                            <img src={c.imageUrl} alt="" className="w-8 h-11 object-contain rounded shrink-0" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-gray-800 truncate">{c.name}</p>
+                            <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                              <span>{c.consoleName}</span>
+                              {isValidPrice(c.loosePriceDollars) && <span>${c.loosePriceDollars!.toFixed(2)}</span>}
+                            </div>
                           </div>
                         </button>
                       ))}

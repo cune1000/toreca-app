@@ -53,6 +53,7 @@ export interface PCCandidate {
   loosePrice: number | null
   loosePriceDollars: number | null
   pricechartingUrl: string | null
+  imageUrl?: string | null
 }
 
 export interface PCMatch {
@@ -544,7 +545,7 @@ export function useJustTcgState() {
         ...prev,
         [cardId]: {
           ...candidate,
-          imageUrl: existing?.imageUrl || null,
+          imageUrl: candidate.imageUrl || existing?.imageUrl || null,
           candidates: existing?.candidates,
         },
       }

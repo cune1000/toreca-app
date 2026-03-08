@@ -133,38 +133,40 @@ export async function POST(request: NextRequest) {
 
     const best = candidates[0]
 
-    // 最上位候補のPriceChartingページから画像URL取得（5秒タイムアウト）
-    let imageUrl: string | null = null
-    try {
-      const imgController = new AbortController()
-      const imgTimeout = setTimeout(() => imgController.abort(), 5000)
-      const pageRes = await fetch(best.pricechartingUrl, { signal: imgController.signal })
-      clearTimeout(imgTimeout)
-      const resHost = new URL(pageRes.url).hostname
-      if (pageRes.ok && resHost === 'www.pricecharting.com') {
-        const contentType = pageRes.headers.get('content-type') || ''
-        if (contentType.includes('text/html')) {
-          const html = await pageRes.text()
-          if (html.length <= 500_000) {
-            const imgMatch = html.match(/src=["'](https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^"']+)/)
-            if (imgMatch) {
-              imageUrl = imgMatch[1].replace(/\/\d+\.jpg/, '/1600.jpg')
-            }
-          }
-        }
-      }
-    } catch (_e) {
-      // 画像取得失敗は無視
+    // 全候補のPriceChartingページから画像URL取得（並列、各3秒タイムアウト）
+    async function fetchPcImage(url: string): Promise<string | null> {
+      try {
+        const c = new AbortController()
+        const t = setTimeout(() => c.abort(), 3000)
+        const res = await fetch(url, { signal: c.signal })
+        clearTimeout(t)
+        const host = new URL(res.url).hostname
+        if (!res.ok || host !== 'www.pricecharting.com') return null
+        const ct = res.headers.get('content-type') || ''
+        if (!ct.includes('text/html')) return null
+        const html = await res.text()
+        if (html.length > 500_000) return null
+        const m = html.match(/src=["'](https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^"']+)/)
+        return m ? m[1].replace(/\/\d+\.jpg/, '/1600.jpg') : null
+      } catch { return null }
     }
+
+    const imageResults = await Promise.allSettled(
+      candidates.slice(0, 5).map(c => fetchPcImage(c.pricechartingUrl))
+    )
+    const candidatesWithImages = candidates.map((c, i) => ({
+      ...c,
+      imageUrl: i < 5 && imageResults[i].status === 'fulfilled' ? imageResults[i].value : null,
+    }))
 
     return NextResponse.json({
       success: true,
       data: {
         ...best,
-        imageUrl,
+        imageUrl: candidatesWithImages[0].imageUrl,
       },
-      // 候補が2件以上あれば candidates を返す
-      candidates: candidates.length > 1 ? candidates : undefined,
+      // 候補が2件以上あれば candidates を返す（画像付き）
+      candidates: candidatesWithImages.length > 1 ? candidatesWithImages : undefined,
     })
   } catch (error: unknown) {
     console.error('JustTCG match error:', error)
