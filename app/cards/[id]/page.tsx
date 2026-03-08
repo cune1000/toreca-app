@@ -245,7 +245,7 @@ export default function CardDetailPage({ params }: Props) {
         const gKey = `sale_grade_${p.grade}`
         if (!(gKey in existing)) existing[gKey] = p.price  // 最新値を優先
         if (p.stock != null && !(`stock_grade_${p.grade}` in existing)) existing[`stock_grade_${p.grade}`] = p.stock
-      } else {
+      } else if (!isSnkrdunkSiteName(p.site?.name || '')) {
         const siteId = p.site?.id || 'other'
         if (!(`price_${siteId}` in existing)) existing[`price_${siteId}`] = p.price
         if (p.stock != null && !(`stock_${siteId}` in existing)) existing[`stock_${siteId}`] = p.stock
@@ -308,7 +308,7 @@ export default function CardDetailPage({ params }: Props) {
 
   const latestPrices = useMemo(() => {
     const latest: Record<string, { price: number; stock: number | null; siteName: string }> = {}
-    salePrices.forEach((p: any) => { if (p.grade) return; const siteId = p.site?.id || 'other'; if (!latest[siteId]) latest[siteId] = { price: p.price, stock: p.stock, siteName: p.site?.name || 'その他' } })
+    salePrices.forEach((p: any) => { if (p.grade) return; if (isSnkrdunkSiteName(p.site?.name || '')) return; const siteId = p.site?.id || 'other'; if (!latest[siteId]) latest[siteId] = { price: p.price, stock: p.stock, siteName: p.site?.name || 'その他' } })
     return latest
   }, [salePrices])
 
