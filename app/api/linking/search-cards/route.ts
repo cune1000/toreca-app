@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('cards')
       .select('id, name, name_en, card_number, expansion, set_code, image_url, rarity')
-      .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,card_number.ilike.%${q}%,expansion.ilike.%${q}%`)
+      .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,card_number.ilike.%${q}%`)
       .order('name', { ascending: true })
       .limit(limit)
 
