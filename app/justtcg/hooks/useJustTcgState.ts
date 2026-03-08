@@ -379,7 +379,7 @@ export function useJustTcgState() {
       const res = await fetch('/api/justtcg/match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current }),
+        body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current, setName: selectedSetRef.current?.name }),
       })
       // R13-INT12: 429レート制限をユーザーフレンドリーに処理
       if (res.status === 429) {
@@ -472,7 +472,7 @@ export function useJustTcgState() {
           const res = await fetch('/api/justtcg/match', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current }),
+            body: JSON.stringify({ name: card.name, number: card.number, game: selectedGameRef.current, setName: selectedSetRef.current?.name }),
           })
 
           if (res.status === 429) {
@@ -568,6 +568,8 @@ export function useJustTcgState() {
   const selectedSet = useMemo(() =>
     sets.find(s => s.id === selectedSetId) || null
     , [sets, selectedSetId])
+  const selectedSetRef = useRef(selectedSet)
+  selectedSetRef.current = selectedSet
 
   const clearError = useCallback(() => setError(''), [])
   const toggleRegistration = useCallback(() => setShowRegistration(p => !p), [])

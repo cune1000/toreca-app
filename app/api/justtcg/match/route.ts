@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json({ success: false, error: '不正なリクエスト形式' }, { status: 400 })
     }
-    const { name, number: cardNumber, game } = body
+    const { name, number: cardNumber, game, setName } = body
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json(
@@ -79,15 +79,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: null, message: 'マッチなし' })
     }
 
-    // カード番号でフィルタリング
+    // 収録弾名（console-name）でフィルタリング
     let matched = products
+    if (typeof setName === 'string' && setName.trim()) {
+      const sn = setName.trim().toLowerCase()
+      const setFiltered = matched.filter(p => {
+        const cn = (p['console-name'] || '').toLowerCase()
+        return cn.includes(sn) || sn.includes(cn)
+      })
+      if (setFiltered.length > 0) {
+        matched = setFiltered
+      }
+      // セット名で絞れなくても番号フィルタに進む（フォールバック）
+    }
+
+    // カード番号でフィルタリング
     if (cardNumber) {
       // "008/028" -> "008" -> "8" (先頭ゼロ除去)
       const rawNum = cardNumber.split('/')[0]
       const num = rawNum.replace(/^0+/, '') || '0'
       // #8, #08, #008 のいずれにもマッチする正規表現
       const numRegex = new RegExp(`#\\s?0*${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\D|$)`)
-      const filtered = products.filter(p => {
+      const filtered = matched.filter(p => {
         const pName = p['product-name'] || ''
         return numRegex.test(pName)
       })
