@@ -463,16 +463,21 @@ export interface SnkrdunkCategoryResponse {
 
 /**
  * カテゴリ別商品一覧を取得（ポケカ全商品取得用）
- * GET /v1/apparel/market/category?apparelCategoryId=25&brandId=pokemon
+ * GET /v1/apparel/market/category?apparelCategoryId={catId}&brandId=pokemon
+ *
+ * apparelCategoryId:
+ *   25 = トレカ（シングル）  ~39,000件
+ *   14 = トレカ（ボックス・パック） ~1,100件
  */
 export async function getCategoryItems(
     page: number = 1,
     perPage: number = 120,
-    order: 'new' | 'popular' | 'default' = 'new'
+    order: 'new' | 'popular' | 'default' = 'new',
+    apparelCategoryId: number = 25
 ): Promise<SnkrdunkCategoryResponse> {
     const params = new URLSearchParams({
-        apparelCategoryId: '25',     // トレカカテゴリ
-        brandId: 'pokemon',          // ポケモン
+        apparelCategoryId: String(apparelCategoryId),
+        brandId: 'pokemon',
         page: page.toString(),
         perPage: perPage.toString(),
     })

@@ -14,6 +14,8 @@ const DEFAULT_MAX_PAGES_PER_RUN = 5
 const PER_PAGE = 120
 /** ページ間の待機時間（ms） */
 const PAGE_DELAY_MS = 500
+/** 同期対象のカテゴリID: 25=シングル(~39,571件), 14=BOX/パック(~1,108件) */
+const CATEGORY_IDS = [25, 14]
 
 /**
  * スニダン商品キャッシュ同期cron
@@ -39,65 +41,80 @@ export async function GET(req: Request) {
     const pagesParam = parseInt(searchParams.get('pages') || '0')
     const startPage = parseInt(searchParams.get('start') || '1')
     const maxPages = isFullSync ? 9999 : (pagesParam || DEFAULT_MAX_PAGES_PER_RUN)
+    // 特定カテゴリのみ同期する場合（例: ?catId=14）
+    const catIdParam = searchParams.get('catId')
+    const categoryIds = catIdParam ? [parseInt(catIdParam)] : CATEGORY_IDS
 
-    console.log(`[snkrdunk-items-sync] Starting ${isFullSync ? 'Full' : 'Light'} sync (start=${startPage}, max=${maxPages})...`)
+    console.log(`[snkrdunk-items-sync] Starting ${isFullSync ? 'Full' : 'Light'} sync (start=${startPage}, max=${maxPages}, categories=${categoryIds.join(',')})...`)
     const startTime = Date.now()
     const now = new Date().toISOString()
 
     let totalInserted = 0
-    let totalUpdated = 0
     let totalFetched = 0
-    let page = startPage
-    let totalPages = 9999
+    let totalPagesProcessed = 0
+    const categoryResults: Record<number, { fetched: number; upserted: number; pages: number }> = {}
 
-    // ページネーションで取得
-    const endPage = startPage + maxPages - 1
-    while (page <= totalPages && page <= endPage) {
-      console.log(`[snkrdunk-items-sync] Fetching page ${page}/${Math.min(totalPages, endPage)}...`)
+    for (const catId of categoryIds) {
+      console.log(`[snkrdunk-items-sync] Syncing categoryId=${catId}...`)
+      let catFetched = 0
+      let catUpserted = 0
+      let page = startPage
+      let totalPages = 9999
 
-      const result = await getCategoryItems(page, PER_PAGE)
-      totalPages = result.totalPages
-      totalFetched += result.items.length
+      const endPage = startPage + maxPages - 1
+      while (page <= totalPages && page <= endPage) {
+        console.log(`[snkrdunk-items-sync] [catId=${catId}] Fetching page ${page}/${Math.min(totalPages, endPage)}...`)
 
-      if (result.items.length === 0) break
+        const result = await getCategoryItems(page, PER_PAGE, 'new', catId)
+        totalPages = result.totalPages
+        catFetched += result.items.length
 
-      // バッチUPSERT（snkrdunk_items_cache）— 名前からset_code/languageをパース
-      const rows = result.items.map(item => {
-        const parsed = parseExternalName(item.name)
-        return {
-          apparel_id: item.id,
-          name: item.name,
-          localized_name: item.localizedName || null,
-          product_number: item.productNumber || null,
-          min_price: item.minPrice,
-          total_listing_count: item.totalListingCount,
-          image_url: item.imageUrl,
-          released_at: item.releasedAt,
-          parsed_set_code: parsed.setCode || null,
-          language: parsed.language || null,
-          synced_at: now,
+        if (result.items.length === 0) break
+
+        // バッチUPSERT（snkrdunk_items_cache）— 名前からset_code/languageをパース
+        const rows = result.items.map(item => {
+          const parsed = parseExternalName(item.name)
+          return {
+            apparel_id: item.id,
+            name: item.name,
+            localized_name: item.localizedName || null,
+            product_number: item.productNumber || null,
+            min_price: item.minPrice,
+            total_listing_count: item.totalListingCount,
+            image_url: item.imageUrl,
+            released_at: item.releasedAt,
+            parsed_set_code: parsed.setCode || null,
+            language: parsed.language || null,
+            synced_at: now,
+          }
+        })
+
+        const { error, count } = await supabase
+          .from('snkrdunk_items_cache')
+          .upsert(rows, { onConflict: 'apparel_id', count: 'exact' })
+
+        if (error) {
+          console.error(`[snkrdunk-items-sync] [catId=${catId}] Upsert error on page ${page}:`, error.message)
+        } else {
+          const upsertedCount = count ?? rows.length
+          catUpserted += upsertedCount
         }
-      })
 
-      const { error, count } = await supabase
-        .from('snkrdunk_items_cache')
-        .upsert(rows, { onConflict: 'apparel_id', count: 'exact' })
+        page++
 
-      if (error) {
-        console.error(`[snkrdunk-items-sync] Upsert error on page ${page}:`, error.message)
-        // エラーでも続行（部分同期）
-      } else {
-        // count は upsert された行数（挿入+更新の合計）
-        const upsertedCount = count ?? rows.length
-        totalInserted += upsertedCount
+        // レート制限対策
+        if (page <= totalPages && page <= endPage) {
+          await new Promise(resolve => setTimeout(resolve, PAGE_DELAY_MS))
+        }
       }
 
-      page++
+      const pagesProcessed = page - startPage
+      categoryResults[catId] = { fetched: catFetched, upserted: catUpserted, pages: pagesProcessed }
+      totalFetched += catFetched
+      totalInserted += catUpserted
+      totalPagesProcessed += pagesProcessed
 
-      // レート制限対策
-      if (page <= totalPages && page <= endPage) {
-        await new Promise(resolve => setTimeout(resolve, PAGE_DELAY_MS))
-      }
+      console.log(`[snkrdunk-items-sync] [catId=${catId}] Done: fetched=${catFetched}, upserted=${catUpserted}, pages=${pagesProcessed}`)
     }
 
     const durationMs = Date.now() - startTime
@@ -105,8 +122,8 @@ export async function GET(req: Request) {
       success: true,
       totalFetched,
       totalUpserted: totalInserted,
-      totalPages,
-      pagesProcessed: page - 1,
+      totalPagesProcessed,
+      categoryResults,
       durationMs,
     }
 
