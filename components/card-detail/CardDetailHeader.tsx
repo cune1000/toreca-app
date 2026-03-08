@@ -274,8 +274,8 @@ export default function CardDetailHeader({
               </div>
               <div className="space-y-2">
                 {(() => {
-                  const GRADE_COLOR: Record<string, string> = { PSA10: 'text-purple-700', A: 'text-green-700', B: 'text-amber-700', BOX: 'text-sky-700' }
-                  const GRADE_BG: Record<string, string> = { PSA10: 'bg-purple-100 text-purple-700', A: 'bg-green-100 text-green-700', B: 'bg-amber-100 text-amber-700', BOX: 'bg-sky-100 text-sky-700' }
+                  const GRADE_COLOR: Record<string, string> = { PSA10: 'text-purple-700', A: 'text-green-700', B: 'text-amber-700', BOX: 'text-sky-700', 'すべて': 'text-indigo-700', '1個': 'text-sky-700' }
+                  const GRADE_BG: Record<string, string> = { PSA10: 'bg-purple-100 text-purple-700', A: 'bg-green-100 text-green-700', B: 'bg-amber-100 text-amber-700', BOX: 'bg-sky-100 text-sky-700', 'すべて': 'bg-indigo-100 text-indigo-700', '1個': 'bg-sky-100 text-sky-700' }
                   return snkrdunkLatestByGrade.map((gd, idx) => (
                     <div key={gd.grade}>
                       {idx > 0 && <div className="border-t border-emerald-200 mb-2" />}

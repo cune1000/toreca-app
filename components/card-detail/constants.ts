@@ -58,12 +58,12 @@ export const GRADE_SORT_ORDER: Record<string, number> = {
   'BGS10BL': 10, 'BGS10GL': 11, 'BGS9.5': 12, 'BGS9以下': 13,
   'ARS10+': 20, 'ARS10': 21, 'ARS9': 22, 'ARS8以下': 23,
   A: 30, B: 31, C: 32, D: 33,
-  '1個': 100, '2個': 101, '3個': 102, '4個': 103, '5個': 104,
+  'すべて': 99, '1個': 100, '2個': 101, '3個': 102, '4個': 103, '5個': 104,
   '6個': 105, '7個': 106, '8個': 107, '9個': 108, '10個': 109,
 }
 
 // BOX系グレード判定
-export const isBoxGrade = (grade: string) => /^\d+個$/.test(grade) || grade === 'BOX'
+export const isBoxGrade = (grade: string) => /^\d+個$/.test(grade) || grade === 'BOX' || grade === 'すべて'
 
 // シングルカード用カテゴリ
 export const SINGLE_CATEGORIES = [
@@ -81,6 +81,8 @@ export const SALE_GRADE_COLORS: Record<string, { color: string; label: string }>
   A: { color: '#10b981', label: '状態A最安' },
   B: { color: '#f59e0b', label: '状態B最安' },
   BOX: { color: '#3b82f6', label: 'BOX最安' },
+  'すべて': { color: '#6366f1', label: 'すべて最安' },
+  '1個': { color: '#3b82f6', label: '1個最安' },
 }
 
 // 海外価格線カラー

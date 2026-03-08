@@ -348,14 +348,17 @@ async function syncListingPrices(
   } else {
     const sizes = await getBoxSizes(apparelId)
     totalListings = sizes.reduce((sum, s) => sum + s.listingCount, 0)
+
+    // すべて: 全サイズの最安値
+    if (sizes.length > 0) {
+      overallMin = Math.min(...sizes.map(s => s.minPrice))
+      gradePrices.push({ grade: 'すべて', price: overallMin, stock: totalListings })
+    }
+
+    // 1個: quantity=1 の最安値
     const oneBox = sizes.find(s => s.quantity === 1)
     if (oneBox) {
-      gradePrices.push({ grade: 'BOX', price: oneBox.minPrice })
-      overallMin = oneBox.minPrice
-    } else if (sizes.length > 0) {
-      const cheapest = sizes.reduce((a, b) => a.minPrice < b.minPrice ? a : b)
-      gradePrices.push({ grade: 'BOX', price: cheapest.minPrice })
-      overallMin = cheapest.minPrice
+      gradePrices.push({ grade: '1個', price: oneBox.minPrice, stock: oneBox.listingCount })
     }
   }
 
