@@ -99,24 +99,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 最もマッチ度が高い結果を返却
-    const best = matched[0]
-    // R13-INT05: price=0はデータなしとして扱う（PriceChartingが0を返す場合がある）
-    const rawPrice = best['loose-price']
-    const loosePrice = (typeof rawPrice === 'number' && rawPrice > 0) ? rawPrice : null
+    // 候補リストを構築（最大10件）
+    const candidates = matched.slice(0, 10).map(p => {
+      const rawPrice = p['loose-price']
+      const loosePrice = (typeof rawPrice === 'number' && rawPrice > 0) ? rawPrice : null
+      return {
+        id: String(p.id),
+        name: p['product-name'],
+        consoleName: p['console-name'],
+        loosePrice,
+        loosePriceDollars: loosePrice != null ? loosePrice / 100 : null,
+        pricechartingUrl: `https://www.pricecharting.com/offers?product=${p.id}`,
+      }
+    })
 
-    // PriceChartingページから画像URL取得（5秒タイムアウト）
+    const best = candidates[0]
+
+    // 最上位候補のPriceChartingページから画像URL取得（5秒タイムアウト）
     let imageUrl: string | null = null
-    const pricechartingUrl = `https://www.pricecharting.com/offers?product=${best.id}`
     try {
       const imgController = new AbortController()
       const imgTimeout = setTimeout(() => imgController.abort(), 5000)
-      // R12-28: redirect:'follow' + ドメイン検証（リダイレクト先の画像も取得可能に）
-      const pageRes = await fetch(pricechartingUrl, { signal: imgController.signal })
+      const pageRes = await fetch(best.pricechartingUrl, { signal: imgController.signal })
       clearTimeout(imgTimeout)
       const resHost = new URL(pageRes.url).hostname
       if (pageRes.ok && resHost === 'www.pricecharting.com') {
-        // R12-12: Content-Type確認 + サイズ制限（メモリ防御）
         const contentType = pageRes.headers.get('content-type') || ''
         if (contentType.includes('text/html')) {
           const html = await pageRes.text()
@@ -129,20 +136,17 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (_e) {
-      // 画像取得失敗は無視（価格データは返す）
+      // 画像取得失敗は無視
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        id: String(best.id),
-        name: best['product-name'],
-        consoleName: best['console-name'],
-        loosePrice,
-        loosePriceDollars: loosePrice != null ? loosePrice / 100 : null,
+        ...best,
         imageUrl,
-        pricechartingUrl,
       },
+      // 候補が2件以上あれば candidates を返す
+      candidates: candidates.length > 1 ? candidates : undefined,
     })
   } catch (error: unknown) {
     console.error('JustTCG match error:', error)

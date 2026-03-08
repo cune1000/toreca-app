@@ -5,7 +5,7 @@ import { X, ChevronDown, ChevronUp, Search as SearchIcon, ExternalLink } from 'l
 import RarityBadge from './RarityBadge'
 import VariantRow from './VariantRow'
 import PriceHistoryChart from './PriceHistoryChart'
-import type { JTCard, JTSet, PCMatch } from '../hooks/useJustTcgState'
+import type { JTCard, JTSet, PCMatch, PCCandidate } from '../hooks/useJustTcgState'
 import { getNmVariant, formatUpdated, isValidPrice } from '../hooks/useJustTcgState'
 import { getSetNameJa, extractSetCode, getSeriesFromSetCode, getRegulationFromSetCode } from '@/lib/justtcg-set-names'
 
@@ -30,6 +30,7 @@ interface RightPanelProps {
   isRegistering?: boolean
   registerError?: string
   onRegister?: () => void
+  onSelectPcCandidate?: (candidate: PCCandidate) => void
   /** false でスクロールを外部コンテナに委任（モバイルボトムシート用） */
   scrollable?: boolean
   /** セット情報（発売日表示用） */
@@ -55,6 +56,7 @@ export default memo(function RightPanel({
   isRegistering,
   registerError,
   onRegister,
+  onSelectPcCandidate,
   scrollable = true,
   selectedSet,
   translatedJaName,
@@ -234,30 +236,55 @@ export default memo(function RightPanel({
                 {pcLoading ? '検索中...' : 'PriceCharting 検索'}
               </button>
             ) : pcMatch ? (
-              <div className="bg-purple-50/60 rounded-[var(--jtcg-radius)] p-2.5 space-y-1.5">
-                <div className="flex items-start gap-2">
-                  {pcMatch.imageUrl && (
-                    <img src={pcMatch.imageUrl} alt={pcMatch.name} className="w-12 h-16 object-contain rounded shrink-0" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-purple-800 truncate">{pcMatch.name}</p>
-                    {isValidPrice(pcMatch.loosePriceDollars) && (
-                      <p className="text-xs text-purple-600" style={{ fontFamily: 'var(--font-price)' }}>
-                        PC: ${pcMatch.loosePriceDollars.toFixed(2)}
-                      </p>
+              <div className="space-y-1.5">
+                <div className="bg-purple-50/60 rounded-[var(--jtcg-radius)] p-2.5 space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    {pcMatch.imageUrl && (
+                      <img src={pcMatch.imageUrl} alt={pcMatch.name} className="w-12 h-16 object-contain rounded shrink-0" />
                     )}
-                    {pcMatch.pricechartingUrl && (
-                      <a
-                        href={pcMatch.pricechartingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 text-[10px] text-purple-600 hover:underline mt-0.5"
-                      >
-                        PriceCharting <ExternalLink size={9} />
-                      </a>
-                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-purple-800 truncate">{pcMatch.name}</p>
+                      {isValidPrice(pcMatch.loosePriceDollars) && (
+                        <p className="text-xs text-purple-600" style={{ fontFamily: 'var(--font-price)' }}>
+                          PC: ${pcMatch.loosePriceDollars.toFixed(2)}
+                        </p>
+                      )}
+                      {pcMatch.pricechartingUrl && (
+                        <a
+                          href={pcMatch.pricechartingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-[10px] text-purple-600 hover:underline mt-0.5"
+                        >
+                          PriceCharting <ExternalLink size={9} />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
+                {/* 複数候補がある場合 */}
+                {pcMatch.candidates && pcMatch.candidates.length > 1 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-purple-600 font-bold hover:text-purple-800">
+                      他の候補 ({pcMatch.candidates.length - 1}件)
+                    </summary>
+                    <div className="mt-1 space-y-1 max-h-40 overflow-y-auto">
+                      {pcMatch.candidates.filter(c => c.id !== pcMatch.id).map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => onSelectPcCandidate?.(c)}
+                          className="w-full text-left px-2 py-1.5 rounded bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-300 transition-colors"
+                        >
+                          <p className="font-medium text-gray-800 truncate">{c.name}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                            <span>{c.consoleName}</span>
+                            {isValidPrice(c.loosePriceDollars) && <span>${c.loosePriceDollars!.toFixed(2)}</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-between">

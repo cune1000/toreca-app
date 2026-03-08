@@ -46,6 +46,15 @@ export interface Usage {
   monthlyRemaining: number
 }
 
+export interface PCCandidate {
+  id: string
+  name: string
+  consoleName: string
+  loosePrice: number | null
+  loosePriceDollars: number | null
+  pricechartingUrl: string | null
+}
+
 export interface PCMatch {
   id: string
   name: string
@@ -54,6 +63,7 @@ export interface PCMatch {
   loosePriceDollars: number | null
   imageUrl: string | null
   pricechartingUrl: string | null
+  candidates?: PCCandidate[]
 }
 
 // === ユーティリティ ===
@@ -382,7 +392,9 @@ export function useJustTcgState() {
       const json = await res.json()
       // セット切替後のstale writeを防止
       if (selectedSetIdRef.current === capturedSetId) {
-        setPcMatches(prev => ({ ...prev, [card.id]: json.success ? json.data : null }))
+        const matchData = json.success ? json.data : null
+        if (matchData && json.candidates) matchData.candidates = json.candidates
+        setPcMatches(prev => ({ ...prev, [card.id]: matchData }))
       }
       // Gemini で日本語名を自動抽出（fire-and-forget、startTransitionで低優先度バッチ化）
       if (json.success && json.data?.imageUrl && setJaNameRef.current) {
@@ -473,6 +485,7 @@ export function useJustTcgState() {
           } else {
             const json = await res.json()
             const match: PCMatch | null = json.success ? json.data : null
+            if (match && json.candidates) match.candidates = json.candidates
             if (selectedSetIdRef.current === capturedSetId) {
               setPcMatches(prev => ({ ...prev, [card.id]: match }))
             }
@@ -523,6 +536,21 @@ export function useJustTcgState() {
     cancelBulkPcRef.current = true
   }, [])
 
+  // PC候補から1件を選択
+  const selectPcCandidate = useCallback((cardId: string, candidate: PCCandidate) => {
+    setPcMatches(prev => {
+      const existing = prev[cardId]
+      return {
+        ...prev,
+        [cardId]: {
+          ...candidate,
+          imageUrl: existing?.imageUrl || null,
+          candidates: existing?.candidates,
+        },
+      }
+    })
+  }, [])
+
   // アクション
   const setsRef = useRef(sets)
   setsRef.current = sets
@@ -567,7 +595,7 @@ export function useJustTcgState() {
     setSelectedGame, selectSet, selectCard,
     setSearch, toggleRarity, clearRarityFilter, setSetFilterText,
     setSortBy, setSortOrder, setJapaneseOnly,
-    handlePcMatch, handleBulkPcSearch, cancelBulkPcSearch,
+    handlePcMatch, handleBulkPcSearch, cancelBulkPcSearch, selectPcCandidate,
     injectSetJaName,
     injectCheckedCards: checkedCardsExtRef,
     clearError,

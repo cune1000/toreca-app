@@ -19,6 +19,8 @@ interface CardListItemProps {
   isRegistered: boolean
   onToggleCheck: (cardId: string) => void
   translatedJaName?: string
+  /** PC検索で複数候補がある場合の件数 */
+  pcCandidateCount?: number
 }
 
 export default memo(function CardListItem({
@@ -30,6 +32,7 @@ export default memo(function CardListItem({
   isRegistered,
   onToggleCheck,
   translatedJaName,
+  pcCandidateCount,
 }: CardListItemProps) {
   const nm = getNmVariant(card)
   const hasJapanese = Array.isArray(card.variants) && card.variants.some(v => v.language === 'Japanese')
@@ -62,6 +65,11 @@ export default memo(function CardListItem({
           </label>
           {isRegistered && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-bold">済</span>
+          )}
+          {pcCandidateCount && pcCandidateCount > 1 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold" title="PC候補が複数あります">
+              PC:{pcCandidateCount}
+            </span>
           )}
         </div>
       )}

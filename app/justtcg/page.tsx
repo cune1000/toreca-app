@@ -68,6 +68,7 @@ export default function JustTcgExplorer() {
   const handleJaNameChange = useCallback((v: string) => { if (card) reg.setJaName(card.id, v) }, [card, reg.setJaName])
   const handleExpansionChange = useCallback((v: string) => { reg.setExpansionOverride(v) }, [reg.setExpansionOverride])
   const handleRegister = useCallback(() => { if (card) reg.handleRegister(card) }, [card, reg.handleRegister])
+  const handleSelectPcCandidate = useCallback((candidate: any) => { if (card) state.selectPcCandidate(card.id, candidate) }, [card, state.selectPcCandidate])
 
   // 一括PC検索用の安定コールバック（R14-05: checkedCardsはref注入済みなのでdeps不要）
   // AI翻訳（全件）
@@ -221,6 +222,7 @@ export default function JustTcgExplorer() {
           handleBulkPcSearchChecked={handleBulkPcSearchChecked}
           handleBulkPcSearchFiltered={handleBulkPcSearchFiltered}
           cancelBulkPcSearch={state.cancelBulkPcSearch}
+          pcMatches={state.pcMatches}
           translatedNames={state.selectedSetId ? trans.translations[state.selectedSetId] : undefined}
           translating={trans.translating}
           translationProgress={trans.translationProgress}
@@ -251,6 +253,7 @@ export default function JustTcgExplorer() {
               isRegistering={card ? !!reg.registering[card.id] : false}
               registerError={card ? reg.registerError[card.id] : ''}
               onRegister={handleRegister}
+              onSelectPcCandidate={handleSelectPcCandidate}
               translatedJaName={card && state.selectedSetId ? trans.getJaName(state.selectedSetId, card.id) : undefined}
             />
           </div>
@@ -303,6 +306,7 @@ export default function JustTcgExplorer() {
               isRegistering={!!reg.registering[card.id]}
               registerError={reg.registerError[card.id] || ''}
               onRegister={handleRegister}
+              onSelectPcCandidate={handleSelectPcCandidate}
               translatedJaName={card && state.selectedSetId ? trans.getJaName(state.selectedSetId, card.id) : undefined}
             />
           </div>

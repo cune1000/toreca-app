@@ -42,6 +42,8 @@ interface CenterPanelProps {
   handleBulkPcSearchChecked: () => void
   handleBulkPcSearchFiltered: () => void
   cancelBulkPcSearch: () => void
+  // PC検索結果（候補数表示用）
+  pcMatches?: Record<string, { candidates?: { id: string }[] } | null>
   // AI翻訳
   translatedNames?: Record<string, string>
   translating?: boolean
@@ -63,7 +65,7 @@ export default memo(function CenterPanel({
   setSearch, toggleRarity, clearRarityFilter, onSelectCard,
   checkedCards, registered, checkedCount, readyCount, readyOverwriteCount, bulkProgress,
   toggleCheck, toggleAllFiltered, handleBulkRegister, handleBulkOverwrite, cancelBulkRegister,
-  bulkPcProgress, handleBulkPcSearchChecked, handleBulkPcSearchFiltered, cancelBulkPcSearch,
+  bulkPcProgress, handleBulkPcSearchChecked, handleBulkPcSearchFiltered, cancelBulkPcSearch, pcMatches,
   translatedNames, translating, translationProgress, onTranslateAll, onTranslateChecked,
   onTranslateAllByImage, onTranslateCheckedByImage, cancelTranslation,
   className = '',
@@ -340,6 +342,7 @@ export default memo(function CenterPanel({
                     isRegistered={!!registered[card.id]}
                     onToggleCheck={toggleCheck}
                     translatedJaName={translatedNames?.[card.id]}
+                    pcCandidateCount={pcMatches?.[card.id]?.candidates?.length}
                   />
                 </div>
               )
