@@ -76,15 +76,15 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'cardId is required' }, { status: 400 })
         }
 
-        // card_sale_urls から apparel_id と product_type を取得
-        const { data: saleUrl } = await supabase
+        // card_sale_urls から apparel_id を取得
+        const { data: saleUrls } = await supabase
             .from('card_sale_urls')
-            .select('apparel_id, product_url, product_type')
+            .select('apparel_id, product_url')
             .eq('card_id', cardId)
             .like('product_url', '%snkrdunk.com%')
             .limit(1)
-            .single()
 
+        const saleUrl = saleUrls?.[0]
         if (!saleUrl) {
             return NextResponse.json({ success: false, error: 'スニダンのURLが設定されていません' }, { status: 404 })
         }
@@ -94,11 +94,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'apparel_idを特定できません' }, { status: 400 })
         }
 
-        // product_type 判定
-        let productType = saleUrl.product_type
-        if (!productType) {
+        // product_type 判定（snkrdunk_items_cacheから判定、なければAPI）
+        let productType: string
+        try {
             const info = await getProductInfo(apparelId)
             productType = info.isBox ? 'box' : 'single'
+        } catch {
+            productType = 'single'
         }
 
         const results: { condition: string; fetched: number; inserted: number; anomalies: number }[] = []
