@@ -372,7 +372,6 @@ export interface SnkrdunkChartResponse {
 
 /** シングルカード用の状態ID（全商品共通） */
 export const SINGLE_CHART_OPTIONS: Record<string, number> = {
-    'すべての状態': -1,
     'A': 18,
     'B': 19,
     'C': 20,
