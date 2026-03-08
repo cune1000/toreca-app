@@ -338,7 +338,7 @@ export async function getBoxSizes(apparelId: number): Promise<SnkrdunkBoxSize[]>
 
     const data = await res.json()
 
-    return (data.sizePrices || [])
+    const result = (data.sizePrices || [])
         .filter((sp: any) => (sp.listingItemCount || 0) > 0)
         .map((sp: any) => ({
             sizeId: sp.size?.id || 0,
@@ -347,6 +347,11 @@ export async function getBoxSizes(apparelId: number): Promise<SnkrdunkBoxSize[]>
             minPrice: sp.minListingPrice || sp.minNewListingPrice || 0,
             listingCount: sp.listingItemCount || 0,
         }))
+
+    // デバッグ: サイズ名の確認
+    console.log(`[SnkrdunkAPI] getBoxSizes(${apparelId}): ${result.map(s => `${s.name}(q=${s.quantity},¥${s.minPrice})`).join(', ')}`)
+
+    return result
 }
 
 // ============================================================================
