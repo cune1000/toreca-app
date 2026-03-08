@@ -21,14 +21,16 @@ export async function GET() {
 
 export async function POST(req: Request) {
     try {
-        const { path } = await req.json()
+        const body = await req.json()
+        const { path, params } = body
         if (!path) return NextResponse.json({ success: false, error: 'Path required' }, { status: 400 })
 
         // Vercel本番では VERCEL_URL、ローカルでは host ヘッダーを使用
         const host = process.env.VERCEL_URL
             ? `https://${process.env.VERCEL_URL}`
             : `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host') || 'localhost:3000'}`
-        const triggerUrl = `${host}${path}?force=1`
+        const qs = new URLSearchParams({ force: '1', ...(params || {}) })
+        const triggerUrl = `${host}${path}?${qs.toString()}`
 
         console.log(`[Admin] Manually triggering cron: ${triggerUrl}`)
 
