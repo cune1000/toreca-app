@@ -67,6 +67,7 @@ export async function GET(req: Request) {
         return {
           apparel_id: item.id,
           name: item.name,
+          localized_name: item.localizedName || null,
           product_number: item.productNumber || null,
           min_price: item.minPrice,
           total_listing_count: item.totalListingCount,

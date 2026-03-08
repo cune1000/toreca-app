@@ -444,7 +444,8 @@ export async function getBoxChartOptions(apparelId: number): Promise<SnkrdunkCha
 
 export interface SnkrdunkCategoryItem {
     id: number                // apparelId
-    name: string
+    name: string              // 英語名
+    localizedName: string     // 日本語名
     productNumber: string
     minPrice: number | null
     totalListingCount: number
@@ -494,6 +495,7 @@ export async function getCategoryItems(
     const items: SnkrdunkCategoryItem[] = apparels.map((a: any) => ({
         id: a.id,
         name: a.name || a.localizedName || '',
+        localizedName: a.localizedName || a.name || '',
         productNumber: a.productNumber || '',
         minPrice: a.minPrice ?? null,
         totalListingCount: a.totalListingCount ?? 0,

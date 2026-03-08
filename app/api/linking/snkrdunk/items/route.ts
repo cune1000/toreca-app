@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       .select('*', { count: 'exact' })
 
     if (search) {
-      query = query.ilike('name', `%${search}%`)
+      query = query.or(`name.ilike.%${search}%,localized_name.ilike.%${search}%`)
     }
 
     // 除外フィルタ: 言語
@@ -132,7 +132,8 @@ export async function GET(req: NextRequest) {
     // 4. レスポンス整形
     const result = (items || []).map(item => ({
       id: String(item.apparel_id),
-      name: item.name,
+      name: item.localized_name || item.name,
+      nameEn: item.name,
       modelno: item.product_number,
       imageUrl: item.image_url,
       price: item.min_price,
