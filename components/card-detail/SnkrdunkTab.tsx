@@ -601,7 +601,11 @@ export default function SnkrdunkTab({
             </div>
           )}
 
-          {salePrices.length > 0 && (
+          {salePrices.length > 0 && (() => {
+            const ALLOWED = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
+            const filtered = (salePrices as any[]).filter((p: any) => p.grade && ALLOWED.has(p.grade))
+            if (filtered.length === 0) return null
+            return (
             <div className="max-h-[320px] overflow-auto rounded-lg border border-slate-100">
               <table className="w-full text-sm">
                 <thead className="bg-green-50/80 sticky top-0 z-10">
@@ -613,7 +617,7 @@ export default function SnkrdunkTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {(salePrices as any[]).slice(0, 30).map((p: any, i) => {
+                  {filtered.slice(0, 30).map((p: any, i) => {
                     const date = formatDate(p.recorded_at || p.created_at)
                     return (
                       <tr key={i} className="hover:bg-green-50/30 transition-colors">
@@ -635,7 +639,8 @@ export default function SnkrdunkTab({
                 </tbody>
               </table>
             </div>
-          )}
+            )
+          })()}
         </div>
       </div>
     </div>
