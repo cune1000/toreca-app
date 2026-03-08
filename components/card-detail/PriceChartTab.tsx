@@ -334,8 +334,7 @@ export default function PriceChartTab({
                     stroke={config.color}
                     strokeWidth={2.5}
                     name={`買取(${config.label})`}
-                    dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                    activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
+                    dot={false}
                     connectNulls
                   />
                 )
@@ -356,8 +355,7 @@ export default function PriceChartTab({
                       stroke={color}
                       strokeWidth={2.5}
                       name={`${site.name}(価格)`}
-                      dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                      activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
+                      dot={false}
                       connectNulls
                     />
                   )
@@ -376,8 +374,7 @@ export default function PriceChartTab({
                     strokeWidth={2.5}
                     strokeDasharray="8 4"
                     name={config.label}
-                    dot={{ r: 5, strokeWidth: 2, fill: '#fff' }}
-                    activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
+                    dot={false}
                     connectNulls
                   />
                 )
@@ -399,7 +396,7 @@ export default function PriceChartTab({
                       strokeWidth={1.5}
                       strokeDasharray="5 5"
                       name={`${site.name}(在庫)`}
-                      dot={<DiamondDot stroke={color} />}
+                      dot={false}
                       connectNulls
                     />
                   )
