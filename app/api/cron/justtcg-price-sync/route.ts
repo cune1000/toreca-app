@@ -70,8 +70,17 @@ export async function GET(req: Request) {
         // セットIDからゲームを判定
         const game = setId.endsWith('one-piece-card-game') ? 'one-piece-card-game' : 'pokemon-japan'
 
-        const result = await getCards(setId, { game })
-        const apiCards = result.data || []
+        // ページネーション対応: 全カード取得
+        let apiCards: any[] = []
+        let offset = 0
+        const PAGE_SIZE = 100
+        while (true) {
+          const result = await getCards(setId, { game, offset, limit: PAGE_SIZE })
+          apiCards.push(...(result.data || []))
+          if (!result.meta.hasMore || (result.data || []).length < PAGE_SIZE) break
+          offset += PAGE_SIZE
+          await new Promise(resolve => setTimeout(resolve, DELAY_MS))
+        }
 
         // justtcg_id → APIカードのマッピング
         const apiCardMap = new Map<string, any>()

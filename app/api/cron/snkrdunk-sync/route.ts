@@ -382,17 +382,40 @@ async function syncListingPrices(
   }
 
   if (salePriceRows.length > 0) {
-    const { error } = await supabase.from('sale_prices').insert(salePriceRows)
-    if (error) {
-      if (error.message?.includes('top_prices') || error.code === '42703') {
-        // top_prices カラム未存在時: カラムを除去してリトライ
-        const rowsWithoutTopPrices = salePriceRows.map(({ top_prices, ...rest }: any) => rest)
-        const { error: retryErr } = await supabase.from('sale_prices').insert(rowsWithoutTopPrices)
-        if (retryErr) {
-          console.error(`[snkrdunk-sync] sale_prices batch insert error (fallback):`, retryErr.message)
+    // 既存の最新レコードを取得して、価格が変わっていない場合はスキップ
+    const { data: existingPrices } = await supabase
+      .from('sale_prices')
+      .select('grade, price, stock')
+      .eq('card_id', cardId)
+      .eq('site_id', siteId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    const existingMap = new Map<string, { price: number; stock: number | null }>()
+    for (const ep of existingPrices || []) {
+      const key = ep.grade || '__null__'
+      if (!existingMap.has(key)) existingMap.set(key, { price: ep.price, stock: ep.stock })
+    }
+
+    const newRows = salePriceRows.filter((row: any) => {
+      const key = row.grade || '__null__'
+      const existing = existingMap.get(key)
+      if (!existing) return true  // 新規グレード
+      return existing.price !== row.price || existing.stock !== row.stock  // 価格or在庫変動時のみ
+    })
+
+    if (newRows.length > 0) {
+      const { error } = await supabase.from('sale_prices').insert(newRows)
+      if (error) {
+        if (error.message?.includes('top_prices') || error.code === '42703') {
+          const rowsWithoutTopPrices = newRows.map(({ top_prices, ...rest }: any) => rest)
+          const { error: retryErr } = await supabase.from('sale_prices').insert(rowsWithoutTopPrices)
+          if (retryErr) {
+            console.error(`[snkrdunk-sync] sale_prices batch insert error (fallback):`, retryErr.message)
+          }
+        } else {
+          console.error(`[snkrdunk-sync] sale_prices batch insert error:`, error.message)
         }
-      } else {
-        console.error(`[snkrdunk-sync] sale_prices batch insert error:`, error.message)
       }
     }
   }
