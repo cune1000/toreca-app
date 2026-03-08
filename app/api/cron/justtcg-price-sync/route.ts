@@ -115,13 +115,26 @@ export async function GET(req: Request) {
           cardUpdates.push({ id: cardId, price })
         }
 
-        // バッチINSERT（justtcg_price_history に追記）
+        // バッチINSERT（同日の既存レコードがあればスキップ）
         if (historyRows.length > 0) {
-          for (let i = 0; i < historyRows.length; i += 50) {
-            const { error } = await supabase
-              .from('justtcg_price_history')
-              .insert(historyRows.slice(i, i + 50))
-            if (error) console.error(`[justtcg-price-sync] Insert error:`, error.message)
+          const today = now.substring(0, 10) // YYYY-MM-DD
+          const cardIds = historyRows.map((r: any) => r.card_id)
+          const { data: existing } = await supabase
+            .from('justtcg_price_history')
+            .select('card_id')
+            .in('card_id', cardIds)
+            .gte('recorded_at', `${today}T00:00:00`)
+            .lte('recorded_at', `${today}T23:59:59`)
+          const existingSet = new Set((existing || []).map((e: any) => e.card_id))
+          const newRows = historyRows.filter((r: any) => !existingSet.has(r.card_id))
+
+          if (newRows.length > 0) {
+            for (let i = 0; i < newRows.length; i += 50) {
+              const { error } = await supabase
+                .from('justtcg_price_history')
+                .insert(newRows.slice(i, i + 50))
+              if (error) console.error(`[justtcg-price-sync] Insert error:`, error.message)
+            }
           }
         }
 

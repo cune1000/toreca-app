@@ -116,6 +116,7 @@ export async function GET(req: Request) {
         updatePayload.last_stock = syncResult.totalListings
         updatePayload.last_checked_at = now.toISOString()
         updatePayload.apparel_id = syncResult.apparelId
+        updatePayload.product_type = syncResult.productType
       }
 
       const { error: updateError } = await supabase
@@ -166,6 +167,7 @@ export async function GET(req: Request) {
 
 interface SyncResult {
   apparelId: number
+  productType: string
   salesInserted: number
   salesSkipped: number
   overallMin: number | null
@@ -209,6 +211,7 @@ async function syncCard(saleUrl: any, now: Date): Promise<SyncResult> {
 
   return {
     apparelId,
+    productType,
     salesInserted,
     salesSkipped,
     overallMin,
