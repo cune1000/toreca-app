@@ -116,7 +116,7 @@ export default function PriceChartTab({
 
   // スニダン判定（グレード別で表示するのでサイト別からは除外）
   const nonSnkrdunkSites = siteList.filter(s => !isSnkrdunkSiteName(s.name || ''))
-  const showStockAxis = nonSnkrdunkSites.some(s => visibleSites[s.id]?.stock !== false) || hasGradeStockData
+  const showStockAxis = nonSnkrdunkSites.some(s => visibleSites[s.id]?.stock !== false)
 
   const isGradePriceVisible = (grade: string) => visibleGrades[grade]?.price !== false
   const isGradeStockVisible = (grade: string) => visibleGrades[grade]?.stock !== false
@@ -237,16 +237,7 @@ export default function PriceChartTab({
                   <div key={grade} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border bg-white border-slate-200">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: config.color }}></span>
                     <span className="text-slate-600 cursor-pointer select-none" onClick={() => toggleGradeAll(grade)}>{grade}</span>
-                    <label className="flex items-center gap-0.5 cursor-pointer">
-                      <span className="text-xs text-slate-500">価格</span>
-                      <input type="checkbox" checked={isGradePriceVisible(grade)} onChange={() => toggleGradePrice(grade)} className="w-3.5 h-3.5 accent-purple-500" />
-                    </label>
-                    {hasGradeStockData && (
-                      <label className="flex items-center gap-0.5 cursor-pointer">
-                        <span className="text-xs text-slate-500">在庫</span>
-                        <input type="checkbox" checked={isGradeStockVisible(grade)} onChange={() => toggleGradeStock(grade)} className="w-3.5 h-3.5 accent-purple-500" />
-                      </label>
-                    )}
+                    <input type="checkbox" checked={isGradePriceVisible(grade)} onChange={() => toggleGradePrice(grade)} className="w-3.5 h-3.5 accent-purple-500" />
                   </div>
                 )
               })}
@@ -414,24 +405,6 @@ export default function PriceChartTab({
                   )
                 })}
 
-              {/* グレード別在庫線 */}
-              {hasGradeStockData && saleGrades.filter(grade => isGradeStockVisible(grade)).map((grade) => {
-                const config = SALE_GRADE_COLORS[grade] || { color: '#6b7280', label: grade }
-                return (
-                  <Line
-                    key={`stock_grade_${grade}`}
-                    yAxisId="stock"
-                    type="stepAfter"
-                    dataKey={`stock_grade_${grade}`}
-                    stroke={config.color}
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    name={`${config.label.replace('最安', '')}在庫`}
-                    dot={<DiamondDot stroke={config.color} />}
-                    connectNulls
-                  />
-                )
-              })}
 
               {/* 海外素体線 */}
               {showOverseasLoose && hasOverseasData && (

@@ -340,13 +340,14 @@ export default function CardDetailPage({ params }: Props) {
     const c = new Set<string>(); purchasePrices.forEach((p: any) => c.add(p.condition || (p.is_psa ? 'psa' : '素体')))
     return Array.from(c).sort((a, b) => (order[a] ?? 99) - (order[b] ?? 99))
   }, [purchasePrices])
-  const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade) g.add(p.grade) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices])
+  const ALLOWED_GRADES = new Set(['A', 'B', 'PSA10', 'PSA9', '1個'])
+  const saleGrades = useMemo(() => { const g = new Set<string>(); salePrices.forEach((p: any) => { if (p.grade && ALLOWED_GRADES.has(p.grade)) g.add(p.grade) }); return Array.from(g).sort((a, b) => (GRADE_SORT_ORDER[a] ?? 999) - (GRADE_SORT_ORDER[b] ?? 999)) }, [salePrices])
 
   const snkrdunkLatestByGrade = useMemo(() => {
     const result: Record<string, { price: number; stock: number | null; grade: string; date: string; topPrices?: number[] }> = {}
     for (const p of salePrices as any[]) {
       if (!isSnkrdunkSiteName(p.site?.name || '')) continue
-      if (!p.grade) continue
+      if (!p.grade || !ALLOWED_GRADES.has(p.grade)) continue
       if (!result[p.grade]) result[p.grade] = {
         price: p.price, stock: p.stock, grade: p.grade, date: p.created_at,
         topPrices: p.top_prices || [p.price],

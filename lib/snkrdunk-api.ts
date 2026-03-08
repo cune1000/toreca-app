@@ -348,9 +348,6 @@ export async function getBoxSizes(apparelId: number): Promise<SnkrdunkBoxSize[]>
             listingCount: sp.listingItemCount || 0,
         }))
 
-    // デバッグ: サイズ名の確認
-    console.log(`[SnkrdunkAPI] getBoxSizes(${apparelId}): ${result.map(s => `${s.name}(q=${s.quantity},¥${s.minPrice})`).join(', ')}`)
-
     return result
 }
 

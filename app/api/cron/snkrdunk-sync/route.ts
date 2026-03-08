@@ -354,11 +354,10 @@ async function syncListingPrices(
       overallMin = Math.min(...sizes.map(s => s.minPrice))
     }
 
-    // 各数量ごとのグレード（"1個", "2個" 等、name から取得）
-    for (const size of sizes) {
-      if (size.name) {
-        gradePrices.push({ grade: size.name, price: size.minPrice, stock: size.listingCount })
-      }
+    // BOXは「1個」のみグレード保存
+    const oneBox = sizes.find(s => s.name === '1個')
+    if (oneBox) {
+      gradePrices.push({ grade: '1個', price: oneBox.minPrice, stock: oneBox.listingCount })
     }
   }
 
