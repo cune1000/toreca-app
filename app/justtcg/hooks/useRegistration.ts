@@ -150,7 +150,7 @@ export function useRegistration(
           release_year: releaseYear,
           release_date: currentSet?.release_date || null,
           expansion: expansionOverrideRef.current || (currentSet ? getSetNameJa(currentSet.id, currentSet.name) : card.set_name),
-          image_url: pc?.imageUrl || (card.tcgplayerId ? `https://product-images.tcgplayer.com/fit-in/400x560/${card.tcgplayerId}.jpg` : null),
+          image_url: (card.tcgplayerId ? `https://product-images.tcgplayer.com/fit-in/400x560/${card.tcgplayerId}.jpg` : null) || pc?.imageUrl,
           justtcg_id: card.id,
           tcgplayer_id: card.tcgplayerId || null,
           pricecharting_id: pc?.id ? String(pc.id) : null,
