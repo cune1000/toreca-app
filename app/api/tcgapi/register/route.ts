@@ -166,13 +166,17 @@ export async function POST(request: NextRequest) {
         let matched = products
         const cn = str(card_number, 50)
         if (cn) {
-          const num = cn.split('/')[0]
-          const numRegex = new RegExp(`#\\s?${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\D|$)`)
+          const rawNum = cn.split('/')[0]
+          const num = rawNum.replace(/^0+/, '') || '0'
+          const numRegex = new RegExp(`#\\s?0*${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\D|$)`)
           const filtered = products.filter(p => numRegex.test(p['product-name'] || ''))
           if (filtered.length > 0) matched = filtered
+          else matched = [] // 番号不一致はマッチなし
         }
-        pcId = String(matched[0].id)
-        pcUrl = `https://www.pricecharting.com/offers?product=${pcId}`
+        if (matched.length > 0) {
+          pcId = String(matched[0].id)
+          pcUrl = `https://www.pricecharting.com/offers?product=${pcId}`
+        }
       }
     } catch (e: any) {
       console.warn('[tcgapi/register] PriceCharting match failed (non-blocking):', e.message)

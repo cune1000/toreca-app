@@ -78,15 +78,21 @@ export async function POST(request: NextRequest) {
     // カード番号でフィルタリング
     let matched = products
     if (cardNumber) {
-      // "115/080" -> "115" (スラッシュ前)
-      const num = cardNumber.split('/')[0]
-      // R13-INT04: 単語境界で正確にマッチ（#1が#10,#100等に誤マッチしない）
-      const numRegex = new RegExp(`#\\s?${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\D|$)`)
+      // "008/028" -> "008" -> "8" (先頭ゼロ除去)
+      const rawNum = cardNumber.split('/')[0]
+      const num = rawNum.replace(/^0+/, '') || '0'
+      // #8, #08, #008 のいずれにもマッチする正規表現
+      const numRegex = new RegExp(`#\\s?0*${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\D|$)`)
       const filtered = products.filter(p => {
         const pName = p['product-name'] || ''
         return numRegex.test(pName)
       })
-      if (filtered.length > 0) matched = filtered
+      if (filtered.length > 0) {
+        matched = filtered
+      } else {
+        // 番号が一致しない場合はマッチなしとして返す
+        return NextResponse.json({ success: true, data: null, message: `番号 #${rawNum} に一致するPriceCharting商品なし` })
+      }
     }
 
     // 最もマッチ度が高い結果を返却
