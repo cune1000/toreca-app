@@ -87,13 +87,13 @@ export const SALE_GRADE_COLORS: Record<string, { color: string; label: string }>
 
 // 海外価格線カラー
 export const OVERSEAS_LINE_COLORS: Record<string, { color: string; label: string }> = {
-  loose: { color: '#6366f1', label: '海外素体' },   // indigo
-  graded: { color: '#a78bfa', label: '海外PSA10' },  // violet
+  loose: { color: '#6366f1', label: 'eBay素体' },   // indigo
+  graded: { color: '#a78bfa', label: 'eBayPSA10' },  // violet
 }
 
 // JustTCG NM価格線カラー
 export const JUSTTCG_LINE_COLORS: Record<string, { color: string; label: string }> = {
-  nm: { color: '#06b6d4', label: 'JT NM' },          // cyan
+  nm: { color: '#06b6d4', label: 'TCGPlayer' },       // cyan
 }
 
 // 日次平均カラー
