@@ -57,27 +57,24 @@ export async function GET(req: Request) {
       .from('justtcg_price_history')
       .select('card_id')
       .gte('recorded_at', `${today}T00:00:00`)
+      .limit(10000)
       .lte('recorded_at', `${today}T23:59:59`)
     const syncedSet = new Set((alreadySynced || []).map((r: any) => r.card_id))
 
-    // 3. セットIDでグルーピング（未更新カードがあるセットを優先）
+    // 3. 未更新カードをセットIDでグルーピング
     const unsyncedSetGroups = new Map<string, { cardId: string; justtcgId: string }[]>()
-    const syncedSetGroups = new Map<string, { cardId: string; justtcgId: string }[]>()
     let unmatchedCount = 0
 
     for (const card of cards) {
+      if (syncedSet.has(card.id)) continue // 今日更新済みはスキップ
       const setId = extractSetIdFromJusttcgId(card.justtcg_id)
       if (!setId) {
         unmatchedCount++
         continue
       }
-      const targetMap = syncedSet.has(card.id) ? syncedSetGroups : unsyncedSetGroups
-      if (!targetMap.has(setId)) targetMap.set(setId, [])
-      targetMap.get(setId)!.push({ cardId: card.id, justtcgId: card.justtcg_id })
+      if (!unsyncedSetGroups.has(setId)) unsyncedSetGroups.set(setId, [])
+      unsyncedSetGroups.get(setId)!.push({ cardId: card.id, justtcgId: card.justtcg_id })
     }
-
-    // 未更新セットを先に、更新済みセットは後
-    const orderedSets = [...unsyncedSetGroups.entries(), ...syncedSetGroups.entries()]
 
     // 全カード更新済みなら完了
     if (unsyncedSetGroups.size === 0) {
@@ -89,19 +86,20 @@ export async function GET(req: Request) {
       })
     }
 
-    console.log(`[justtcg-price-sync] ${cards.length} cards → ${orderedSets.length} sets (${unsyncedSetGroups.size} unsynced, ${unmatchedCount} unmatched)`)
+    // 4. 未更新セットのみ処理（更新済みセットはスキップ）
+    const unsyncedSets = [...unsyncedSetGroups.entries()]
 
-    // 4. セットごとにAPI呼び出し
+    console.log(`[justtcg-price-sync] ${cards.length} cards → ${unsyncedSets.length} unsynced sets (${unmatchedCount} unmatched)`)
     let totalUpdated = 0
     let totalErrors = 0
     let setsProcessed = 0
     let timedOut = false
 
-    for (const [setId, group] of orderedSets) {
+    for (const [setId, group] of unsyncedSets) {
       // 270秒で安全に打ち切り
       if (Date.now() - startTime > 270_000) {
         timedOut = true
-        console.warn(`[justtcg-price-sync] Timeout at ${setsProcessed}/${orderedSets.length} sets`)
+        console.warn(`[justtcg-price-sync] Timeout at ${setsProcessed}/${unsyncedSets.length} sets`)
         break
       }
 
@@ -190,8 +188,8 @@ export async function GET(req: Request) {
       await new Promise(resolve => setTimeout(resolve, DELAY_MS))
     }
 
-    // 未処理セットが残っていたらチェーン再実行
-    const remaining = orderedSets.length - setsProcessed
+    // 未処理の未更新セットが残っていたらチェーン再実行
+    const remaining = unsyncedSets.length - setsProcessed
     if (timedOut && remaining > 0) {
       const host = process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
@@ -205,7 +203,7 @@ export async function GET(req: Request) {
     const summary = {
       success: true,
       totalCards: cards.length,
-      totalSets: orderedSets.length,
+      totalSets: unsyncedSets.length,
       setsProcessed,
       totalUpdated,
       totalErrors,
