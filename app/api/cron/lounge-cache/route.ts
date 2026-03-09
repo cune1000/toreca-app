@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
         const allCards = await fetchAllLoungeCards()
 
         if (allCards.length === 0) {
+            await markCronJobRun('lounge-cache', 'error', 'No cards fetched')
             return NextResponse.json({ success: false, error: 'No cards fetched' }, { status: 500 })
         }
 
@@ -38,13 +39,11 @@ export async function GET(request: NextRequest) {
         }
         const uniqueCards = Array.from(cardMap.values())
 
-        // ③ 既存キャッシュを全削除してから一括INSERT
-        await supabase.from('lounge_cards_cache').delete().neq('id', 0)
-
-        // 50件ずつバッチINSERT
+        // ③ バッチUPSERT（card_keyで重複排除済み）
         const batchSize = 50
         let insertedCount = 0
         let errorCount = 0
+        const syncTimestamp = new Date().toISOString()
 
         for (let i = 0; i < uniqueCards.length; i += batchSize) {
             const batch = uniqueCards.slice(i, i + batchSize).map(card => ({
@@ -57,7 +56,7 @@ export async function GET(request: NextRequest) {
                 price: card.price,
                 card_key: card.key,
                 image_url: card.imageUrl || '',
-                updated_at: new Date().toISOString(),
+                updated_at: syncTimestamp,
             }))
 
             const { error } = await supabase
@@ -70,6 +69,18 @@ export async function GET(request: NextRequest) {
             } else {
                 insertedCount += batch.length
             }
+        }
+
+        // ④ 今回の同期で更新されなかった古いキャッシュを削除
+        //    （スクレイピング元から消えた商品をキャッシュに残さない）
+        const { error: cleanupError, count: cleanupCount } = await supabase
+            .from('lounge_cards_cache')
+            .delete({ count: 'exact' })
+            .lt('updated_at', syncTimestamp)
+        if (cleanupError) {
+            console.error('[lounge-cache] Cleanup error:', cleanupError.message)
+        } else if (cleanupCount && cleanupCount > 0) {
+            console.log(`[lounge-cache] Cleaned up ${cleanupCount} stale cache entries`)
         }
 
         // ⑤ lounge_known_keys に新規キーを登録（新商品検知用）
@@ -114,6 +125,7 @@ export async function GET(request: NextRequest) {
                 unique: uniqueCards.length,
                 duplicates: allCards.length - uniqueCards.length,
                 cached: insertedCount,
+                stale_removed: cleanupCount || 0,
                 new_products: newProductCount,
                 errors: errorCount,
                 elapsed: `${elapsed}s`,
@@ -127,6 +139,7 @@ export async function GET(request: NextRequest) {
             unique: uniqueCards.length,
             duplicates: allCards.length - uniqueCards.length,
             cached: insertedCount,
+            stale_removed: cleanupCount || 0,
             new_products: newProductCount,
             errors: errorCount,
             elapsed: `${elapsed}s`,
