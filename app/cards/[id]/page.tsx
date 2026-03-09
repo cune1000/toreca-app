@@ -243,11 +243,24 @@ export default function CardDetailPage({ params }: Props) {
     const filteredPurchase = filterByPeriod(purchasePrices)
     const filteredSale = filterByPeriod(salePrices)
     const dataMap = new Map<number, any>()
-    const makeDateLabel = (d: Date) => d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+    // 期間7日超の場合は日次集約（dayNoon）、7日以下は分単位を維持
+    const useDailyBucket = selectedPeriod === null || selectedPeriod > 7
+    const makeDateLabel = (d: Date) => useDailyBucket
+      ? d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric' })
+      : d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+    // タイムスタンプの丸め: 日次 or 分単位
+    const roundTimestamp = (d: Date) => {
+      if (useDailyBucket) {
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
+      }
+      return new Date(Math.floor(d.getTime() / 60000) * 60000)
+    }
 
     filteredPurchase.forEach((p: any) => {
       const d = formatDate(p.tweet_time || p.recorded_at || p.created_at); if (!d) return
-      const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
+      const rd = roundTimestamp(d); const ts = rd.getTime()
       const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
       const pKey = `purchase_${p.condition || (p.is_psa ? 'psa' : '素体')}`
       existing[pKey] = Math.max(existing[pKey] || 0, p.price)  // 同一時刻は最高値を採用
@@ -255,7 +268,7 @@ export default function CardDetailPage({ params }: Props) {
     })
     filteredSale.forEach((p: any) => {
       const d = formatDate(p.recorded_at || p.created_at); if (!d) return
-      const rd = new Date(Math.floor(d.getTime() / 60000) * 60000); const ts = rd.getTime()
+      const rd = roundTimestamp(d); const ts = rd.getTime()
       const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(rd) }
       if (p.grade && ALLOWED_GRADES.has(p.grade)) {
         const gKey = `sale_grade_${p.grade}`
@@ -298,8 +311,9 @@ export default function CardDetailPage({ params }: Props) {
         const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
         const ts = dayNoon.getTime()
         const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(dayNoon) }
-        if (op.loose_price_jpy) existing.overseas_loose = op.loose_price_jpy
-        if (op.graded_price_jpy) existing.overseas_graded = op.graded_price_jpy
+        // null チェック（0円も有効な値として扱う）
+        if (op.loose_price_jpy != null) existing.overseas_loose = op.loose_price_jpy
+        if (op.graded_price_jpy != null) existing.overseas_graded = op.graded_price_jpy
         dataMap.set(ts, existing)
       }
     }
@@ -339,7 +353,31 @@ export default function CardDetailPage({ params }: Props) {
       }
     }
 
-    return Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp).slice(-300)
+    // 日次データ（overseas, justTCG, snkrdunk等）と分単位データ（sale_prices等）を
+    // 分離してサンプリングし、日次データが分単位データに押し出されないようにする
+    const sorted = Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp)
+
+    if (sorted.length <= 300) return sorted
+
+    // 日次データを持つポイント（12:00:00のタイムスタンプ）を特定
+    const dailyPoints: any[] = []
+    const minutePoints: any[] = []
+    for (const point of sorted) {
+      const d = new Date(point.timestamp)
+      const isDailySlot = d.getHours() === 12 && d.getMinutes() === 0
+      if (isDailySlot) {
+        dailyPoints.push(point)
+      } else {
+        minutePoints.push(point)
+      }
+    }
+
+    // 日次ポイントは全て保持し、残り枠を分単位データで埋める
+    const minuteLimit = Math.max(300 - dailyPoints.length, 50)
+    const sampledMinutes = minutePoints.slice(-minuteLimit)
+
+    // マージして再ソート
+    return [...dailyPoints, ...sampledMinutes].sort((a, b) => a.timestamp - b.timestamp)
   }, [purchasePrices, salePrices, overseasHistory, justTcgHistory, exchangeRate, snkrdunkSales, snkrdunkChartHistory, selectedPeriod])
 
   const latestPrices = useMemo(() => {

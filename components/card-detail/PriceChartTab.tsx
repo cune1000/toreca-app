@@ -109,13 +109,14 @@ export default function PriceChartTab({
   useEffect(() => { saveSetting('visibleGrades', visibleGrades) }, [visibleGrades, saveSetting])
   useEffect(() => { saveSetting('visiblePurchase', visiblePurchase) }, [visiblePurchase, saveSetting])
 
-  const hasOverseasData = chartData.some(d => d.overseas_loose || d.overseas_graded)
+  const hasOverseasData = chartData.some(d => d.overseas_loose != null || d.overseas_graded != null)
   const hasJustTcgData = chartData.some(d => d.justtcg_nm_jpy)
   const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
 
   // スニダン判定（グレード別で表示するのでサイト別からは除外）
   const nonSnkrdunkSites = siteList.filter(s => !isSnkrdunkSiteName(s.name || ''))
   const showStockAxis = nonSnkrdunkSites.some(s => visibleSites[s.id]?.stock !== false)
+  const showOverseasAxis = hasOverseasData && (showOverseasLoose || showOverseasGraded)
 
   const isGradePriceVisible = (grade: string) => visibleGrades[grade]?.price !== false
 
@@ -319,6 +320,17 @@ export default function PriceChartTab({
                   domain={[0, 'auto']}
                 />
               )}
+              {showOverseasAxis && (
+                <YAxis
+                  yAxisId="overseas"
+                  orientation="right"
+                  tick={{ fontSize: 10, fill: '#818cf8' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `¥${v.toLocaleString()}`}
+                  domain={[(dataMin: number) => Math.floor(dataMin * 0.9), (dataMax: number) => Math.ceil(dataMax * 1.1)]}
+                />
+              )}
 
               <Tooltip content={<CustomTooltip />} />
 
@@ -403,10 +415,10 @@ export default function PriceChartTab({
                 })}
 
 
-              {/* 海外素体線 */}
+              {/* 海外素体線（独立Y軸で変動を可視化） */}
               {showOverseasLoose && hasOverseasData && (
                 <Line
-                  yAxisId="price"
+                  yAxisId="overseas"
                   type="monotone"
                   dataKey="overseas_loose"
                   stroke={OVERSEAS_LINE_COLORS.loose.color}
@@ -418,10 +430,10 @@ export default function PriceChartTab({
                 />
               )}
 
-              {/* 海外PSA10線 */}
+              {/* 海外PSA10線（独立Y軸で変動を可視化） */}
               {showOverseasGraded && hasOverseasData && (
                 <Line
-                  yAxisId="price"
+                  yAxisId="overseas"
                   type="monotone"
                   dataKey="overseas_graded"
                   stroke={OVERSEAS_LINE_COLORS.graded.color}
@@ -433,10 +445,10 @@ export default function PriceChartTab({
                 />
               )}
 
-              {/* JustTCG NM線 */}
+              {/* JustTCG NM線（USD→JPY変換なので海外Y軸） */}
               {showJustTcgNm && hasJustTcgData && (
                 <Line
-                  yAxisId="price"
+                  yAxisId={showOverseasAxis ? "overseas" : "price"}
                   type="monotone"
                   dataKey="justtcg_nm_jpy"
                   stroke={JUSTTCG_LINE_COLORS.nm.color}
@@ -468,6 +480,9 @@ export default function PriceChartTab({
             <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded"></span> 価格（左軸）</span>
             {showStockAxis && (
               <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded" style={{ borderTop: '2px dashed #9ca3af' }}></span> 在庫（右軸）</span>
+            )}
+            {showOverseasAxis && (
+              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 inline-block rounded" style={{ backgroundColor: '#818cf8' }}></span> 海外（右軸）</span>
             )}
           </div>
         </>
