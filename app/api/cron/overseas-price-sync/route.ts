@@ -4,39 +4,37 @@ import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300 // 5分（大量カード対応）
+export const maxDuration = 300
 
 /**
  * 海外価格同期 Cron
  * pricecharting_id が設定済みの全カードの価格を PriceCharting API から取得し
  * overseas_prices テーブルに保存する
  *
+ * 1回で回りきらない場合、自動的に再実行して全カード完走する
  * レート制限: 1リクエスト/秒を遵守
- * 毎日 AM3:00 JST に実行
  */
 export async function GET(req: Request) {
   try {
-    // CRON_SECRET認証
     const authHeader = req.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
     const { searchParams } = new URL(req.url)
-    const limitParam = searchParams.get('limit')
+    const isChain = searchParams.get('chain') === '1'
 
     if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
-    const forceParam = searchParams.get('force') === '1'
-    const gate = await shouldRunCronJob('overseas-price-sync', { force: forceParam })
-    if (!gate.shouldRun) {
-      return NextResponse.json({ skipped: true, reason: gate.reason })
+    // チェーン呼び出し時はcron-gateをスキップ（同日の2回目以降）
+    if (!isChain) {
+      const forceParam = searchParams.get('force') === '1'
+      const gate = await shouldRunCronJob('overseas-price-sync', { force: forceParam })
+      if (!gate.shouldRun) {
+        return NextResponse.json({ skipped: true, reason: gate.reason })
+      }
     }
 
-    console.log('[Overseas Price Sync] Starting...')
-
+    const startTime = Date.now()
     const supabase = createServiceClient()
 
     // 最新の為替レートを取得
@@ -51,26 +49,26 @@ export async function GET(req: Request) {
 
     const exchangeRate = rateData?.rate
     if (!exchangeRate) {
-      console.error('[Overseas Price Sync] No exchange rate found. Run exchange-rate-sync first.')
       return NextResponse.json(
-        { success: false, error: '為替レートが見つかりません。exchange-rate-sync を先に実行してください。' },
+        { success: false, error: '為替レートが見つかりません' },
         { status: 500 }
       )
     }
 
-    console.log(`[Overseas Price Sync] Exchange rate: USD/JPY = ${exchangeRate}`)
-
-    // pricecharting_id が設定済みのカードを取得
-    const batchLimit = limitParam ? Math.min(parseInt(limitParam) || 200, 10000) : 200
-    const startTime = Date.now()
-
+    // 全対象カードを取得
     const { data: allCards, error: cardsError } = await supabase
       .from(TABLES.CARDS)
       .select('id, pricecharting_id')
       .not('pricecharting_id', 'is', null)
       .limit(10000)
 
-    // 今日既に更新済みのカードを除外（ローテーション）
+    if (cardsError) throw cardsError
+    if (!allCards || allCards.length === 0) {
+      await markCronJobRun('overseas-price-sync', 'success')
+      return NextResponse.json({ success: true, processed: 0, message: 'No cards' })
+    }
+
+    // 今日未更新のカードだけを処理
     const today = new Date().toISOString().substring(0, 10)
     const { data: alreadySynced } = await supabase
       .from(TABLES.OVERSEAS_PRICES)
@@ -79,44 +77,35 @@ export async function GET(req: Request) {
       .lte('recorded_at', `${today}T23:59:59`)
 
     const syncedSet = new Set((alreadySynced || []).map((r: any) => r.card_id))
-    const unsyncedCards = (allCards || []).filter(c => !syncedSet.has(c.id))
-    // 未更新カードを優先、残り枠は更新済みカードで埋める
-    const cards = [...unsyncedCards, ...(allCards || []).filter(c => syncedSet.has(c.id))].slice(0, batchLimit)
+    const unsyncedCards = allCards.filter(c => !syncedSet.has(c.id))
 
-    if (cardsError) {
-      console.error('[Overseas Price Sync] Cards fetch error:', cardsError)
-      return NextResponse.json(
-        { success: false, error: cardsError.message },
-        { status: 500 }
-      )
-    }
-
-    if (!cards || cards.length === 0) {
-      console.log('[Overseas Price Sync] No cards with pricecharting_id found')
+    if (unsyncedCards.length === 0) {
+      await markCronJobRun('overseas-price-sync', 'success')
       return NextResponse.json({
         success: true,
-        message: 'PriceCharting IDが設定されたカードがありません',
         processed: 0,
+        total: allCards.length,
+        message: 'All cards already synced today',
       })
     }
 
-    console.log(`[Overseas Price Sync] Processing ${cards.length} cards (${unsyncedCards.length} unsynced today)...`)
+    console.log(`[Overseas Price Sync] ${unsyncedCards.length}/${allCards.length} cards to sync (rate: ${exchangeRate})`)
 
     let success = 0
     let failed = 0
-    const errors: string[] = []
+    let timedOut = false
 
-    for (const card of cards) {
-      // タイムアウト防止（270秒で打ち切り）
+    for (const card of unsyncedCards) {
+      // 270秒で安全に打ち切り
       if (Date.now() - startTime > 270_000) {
-        console.warn(`[Overseas Price Sync] Timeout approaching, stopping at ${success + failed}/${cards.length}`)
+        timedOut = true
+        console.warn(`[Overseas Price Sync] Timeout at ${success + failed}/${unsyncedCards.length}`)
         break
       }
+
       try {
         const product = await getProduct(card.pricecharting_id!)
-
         const looseUsd = product['loose-price'] ?? null
-        // トレカではmanual-only-price = PSA 10（graded-priceはGrade 9）
         const psa10Usd = product['manual-only-price'] ?? null
 
         const { error: insertError } = await supabase
@@ -135,37 +124,45 @@ export async function GET(req: Request) {
 
         if (insertError) {
           failed++
-          errors.push(`${card.id}: ${insertError.message}`)
-          console.error(`[Overseas Price Sync] Insert error for ${card.id}:`, insertError)
+          console.error(`[Overseas Price Sync] Insert error ${card.id}:`, insertError.message)
         } else {
           success++
         }
       } catch (err: any) {
         failed++
-        errors.push(`${card.id}: ${err.message}`)
-        console.error(`[Overseas Price Sync] API error for ${card.id}:`, err.message)
+        console.error(`[Overseas Price Sync] API error ${card.id}:`, err.message)
       }
 
-      // レート制限: 1リクエスト/秒を遵守
       await new Promise(resolve => setTimeout(resolve, 1100))
     }
 
-    console.log(`[Overseas Price Sync] Done: ${success} success, ${failed} failed`)
+    const remaining = unsyncedCards.length - success - failed
+    console.log(`[Overseas Price Sync] Done: ${success} ok, ${failed} err, ${remaining} remaining`)
+
+    // 未処理カードが残っていたら自分自身をチェーン呼び出し
+    if (timedOut && remaining > 0) {
+      const host = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : `http://localhost:3000`
+      console.log(`[Overseas Price Sync] Chaining: ${remaining} cards remaining`)
+      fetch(`${host}/api/cron/overseas-price-sync?chain=1`, {
+        headers: { 'Authorization': `Bearer ${cronSecret}` },
+      }).catch(e => console.error('[Overseas Price Sync] Chain failed:', e.message))
+    }
 
     await markCronJobRun('overseas-price-sync', 'success')
     return NextResponse.json({
       success: true,
-      processed: cards.length,
+      processed: success + failed,
       successCount: success,
       failed,
-      errors: errors.slice(0, 10),
+      remaining,
+      chained: timedOut && remaining > 0,
+      total: allCards.length,
     })
   } catch (error: any) {
     console.error('[Overseas Price Sync] Error:', error)
     await markCronJobRun('overseas-price-sync', 'error', error.message)
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    )
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
