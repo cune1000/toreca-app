@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Database, Search, RefreshCw, Plus, Globe, CheckSquare, Square, Settings } from 'lucide-react'
+import { Database, Search, RefreshCw, Plus, Globe, CheckSquare, Square, Settings, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
 import { getRarityDisplayName } from '@/lib/rarity-mapping'
@@ -53,11 +53,11 @@ export default function CardsPage({
   const [expansions, setExpansions] = useState<string[]>([])
   const [setCodes, setSetCodes] = useState<string[]>([])
   const [seriesList, setSeriesList] = useState<string[]>([])
-  // セットコード→シリーズのマッピング（フィルタ連動用）
   const [codeToSeries, setCodeToSeries] = useState<Record<string, string>>({})
-  // セットコード→収録弾名のマッピング（連動フィルタ用）
   const [codeToExpansions, setCodeToExpansions] = useState<Record<string, Set<string>>>({})
   const [currentPage, setCurrentPage] = useSessionState('page', 1)
+  const [sortField, setSortField] = useSessionState<string>('sortField', 'created_at')
+  const [sortAsc, setSortAsc] = useSessionState<boolean>('sortAsc', false)
 
   // マウント後にsessionStorageから全フィルタを一括復元
   useEffect(() => {
@@ -76,7 +76,8 @@ export default function CardsPage({
     const e = restore('expansion'); if (e !== undefined) setFilterExpansion(e)
     const cn = restore('cardNumber'); if (cn !== undefined) setFilterCardNumber(cn)
     const p = restore('page'); if (p !== undefined) setCurrentPage(p)
-    // 旧カテゴリフィルターキーのクリーンアップ
+    const sf = restore('sortField'); if (sf !== undefined) setSortField(sf)
+    const sa = restore('sortAsc'); if (sa !== undefined) setSortAsc(sa)
     sessionStorage.removeItem('cards-filter-categoryMedium')
     sessionStorage.removeItem('cards-filter-categorySmall')
     setFiltersHydrated(true)
@@ -86,32 +87,20 @@ export default function CardsPage({
   const [isLoading, setIsLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  // Categories & Rarities
   const [categories, setCategories] = useState<CategoryLarge[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
-
-  // Card monitoring statuses
   const [cardStatuses, setCardStatuses] = useState<Record<string, any>>({})
-
-  // Image hover zoom
   const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null)
-  // Page jump input
   const [pageJumpInput, setPageJumpInput] = useState('')
 
-  // Checkbox & batch edit
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [batchUpdates, setBatchUpdates] = useState<Record<string, string | null>>({})
   const [batchLoading, setBatchLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-
-  // Batch modal
   const [batchRarities, setBatchRarities] = useState<Rarity[]>([])
 
-  // サイトURL表示用
   const [cardSaleUrls, setCardSaleUrls] = useState<Record<string, any[]>>({})
-
-  // 買取紐付け状態（card_purchase_links）
   const [cardPurchaseLinks, setCardPurchaseLinks] = useState<Record<string, string[]>>({})
 
   const ITEMS_PER_PAGE = 50
@@ -120,7 +109,6 @@ export default function CardsPage({
   // Data Fetching
   // =============================================================================
 
-  // カード一覧が変わったら登録URL情報 + 買取紐付け情報を取得
   useEffect(() => {
     const fetchCardSaleUrls = async () => {
       if (filteredCards.length === 0) return
@@ -161,9 +149,6 @@ export default function CardsPage({
     fetchPurchaseLinks()
   }, [filteredCards, refreshKey])
 
-
-
-  // カテゴリ取得
   useEffect(() => {
     const fetchFilters = async () => {
       const { data: catData } = await supabase
@@ -178,7 +163,6 @@ export default function CardsPage({
         .order('sort_order')
       setRarities(rarData || [])
 
-      // 収録弾 + セットコードの一覧を取得（デフォルト1000行を超えるケース対応）
       const { data: expData } = await supabase
         .from('cards')
         .select('expansion, set_code')
@@ -191,7 +175,6 @@ export default function CardsPage({
         uniqueCodes.sort()
         setSetCodes(uniqueCodes)
 
-        // シリーズ一覧を構築 + コード→シリーズ/収録弾マッピング
         const c2s: Record<string, string> = {}
         const c2e: Record<string, Set<string>> = {}
         const seriesSet = new Set<string>()
@@ -202,14 +185,12 @@ export default function CardsPage({
             seriesSet.add(series)
           }
         }
-        // 各セットコードに紐づく収録弾を構築
         for (const d of expData) {
           if (d.set_code && d.expansion) {
             if (!c2e[d.set_code]) c2e[d.set_code] = new Set()
             c2e[d.set_code].add(d.expansion)
           }
         }
-        // シリーズのソート順（新しい順）
         const seriesOrder = ['M', 'SV', 'S', 'SM', 'XY', 'CP', 'BW', 'L', 'PT', 'DP', 'OP', 'WCS']
         const sorted = [...seriesSet].sort((a, b) => {
           const ia = seriesOrder.indexOf(a)
@@ -224,7 +205,6 @@ export default function CardsPage({
     fetchFilters()
   }, [])
 
-  // カードステータスを取得
   useEffect(() => {
     const fetchStatuses = async () => {
       const { data } = await supabase
@@ -235,7 +215,6 @@ export default function CardsPage({
       data?.forEach(url => {
         const isSnkrdunk = url.product_url?.includes('snkrdunk.com')
         const existing = statusMap[url.card_id]
-        // 価格監視情報
         if (!existing || url.error_count > 0) {
           statusMap[url.card_id] = {
             ...existing,
@@ -244,7 +223,6 @@ export default function CardsPage({
             lastChecked: url.last_checked_at
           }
         }
-        // スニダン売買履歴情報
         if (isSnkrdunk) {
           statusMap[url.card_id] = {
             ...statusMap[url.card_id],
@@ -263,7 +241,7 @@ export default function CardsPage({
     fetchStatuses()
   }, [])
 
-  // 検索・フィルタ・ページネーション（復元完了後にのみ実行）
+  // 検索・フィルタ・ページネーション
   useEffect(() => {
     if (!filtersHydrated) return
 
@@ -274,19 +252,17 @@ export default function CardsPage({
         .from('cards')
         .select(`*, category_large:category_large_id(name, icon), rarities:rarity_id(name)`, { count: 'exact' })
 
-      // 検索条件（name, name_en, card_number で検索）
-      if (searchQuery.length >= 2) {
+      // 検索条件（1文字から有効）
+      if (searchQuery.length >= 1) {
         query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'name_en', 'card_number']))
       }
 
-      // ゲーム（カテゴリ大）
       if (filterCategoryLarge === UNSET) {
         query = query.is('category_large_id', null)
       } else if (filterCategoryLarge) {
         query = query.eq('category_large_id', filterCategoryLarge)
       }
 
-      // シリーズ（セットコード群でフィルタ）
       if (filterSeries && !filterSetCode) {
         const seriesCodes = setCodes.filter(code => codeToSeries[code] === filterSeries)
         if (seriesCodes.length > 0) {
@@ -294,32 +270,27 @@ export default function CardsPage({
         }
       }
 
-      // セットコード
       if (filterSetCode === UNSET) {
         query = query.is('set_code', null)
       } else if (filterSetCode) {
         query = query.eq('set_code', filterSetCode)
       }
 
-      // レアリティ
       if (filterRarity === UNSET) {
         query = query.is('rarity_id', null)
       } else if (filterRarity) {
         query = query.eq('rarity_id', filterRarity)
       }
 
-      // 収録弾
       if (filterExpansion === UNSET) {
         query = query.is('expansion', null)
       } else if (filterExpansion) {
         query = query.eq('expansion', filterExpansion)
       }
 
-      // 型番フィルタ
       if (filterCardNumber === UNSET) {
         query = query.or('card_number.is.null,card_number.eq.')
       } else if (filterCardNumber === '__DUPLICATE__') {
-        // 重複カード: image_urlが同じカードを取得
         const { data: allCards } = await supabase.from('cards').select('id, image_url')
         if (allCards) {
           const urlCount = new Map<string, string[]>()
@@ -333,7 +304,6 @@ export default function CardsPage({
           if (dupIds.length > 0) {
             query = query.in('id', dupIds)
           } else {
-            // 重複なし
             setFilteredCards([])
             setTotalCount(0)
             setIsLoading(false)
@@ -344,12 +314,11 @@ export default function CardsPage({
         query = query.ilike('card_number', `%${filterCardNumber}%`)
       }
 
-      // ページネーション
       const from = (currentPage - 1) * ITEMS_PER_PAGE
       const to = from + ITEMS_PER_PAGE - 1
 
       const { data, count, error } = await query
-        .order('created_at', { ascending: false })
+        .order(sortField, { ascending: sortAsc })
         .range(from, to)
 
       if (!error) {
@@ -361,13 +330,11 @@ export default function CardsPage({
 
     const timer = setTimeout(fetchFilteredCards, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filterCategoryLarge, filterSeries, filterSetCode, filterRarity, filterExpansion, filterCardNumber, currentPage, refreshKey, filtersHydrated])
+  }, [searchQuery, filterCategoryLarge, filterSeries, filterSetCode, filterRarity, filterExpansion, filterCardNumber, currentPage, sortField, sortAsc, refreshKey, filtersHydrated])
 
-  // フィルタ変更時は1ページ目に戻る（sessionStorage復元時はスキップ）
   const filterChangeCount = useRef(0)
   useEffect(() => {
     if (!filtersHydrated) return
-    // 初回（復元直後）はスキップ
     filterChangeCount.current++
     if (filterChangeCount.current <= 1) return
     setCurrentPage(1)
@@ -425,7 +392,6 @@ export default function CardsPage({
   }
 
   const executeBatchUpdate = async () => {
-    // 値があるフィールドだけ送信
     const updates: Record<string, string | null> = {}
     for (const [key, value] of Object.entries(batchUpdates)) {
       if (value !== undefined) {
@@ -448,32 +414,30 @@ export default function CardsPage({
 
       const json = await res.json()
       if (json.success) {
-        alert(`✅ ${json.updated}件のカードを更新しました`)
+        alert(`${json.updated}件のカードを更新しました`)
         setShowBatchModal(false)
         setShowConfirm(false)
         setSelectedIds(new Set())
-        // フィルタを保持したままリフェッチ
         setRefreshKey(k => k + 1)
       } else {
-        alert(`❌ エラー: ${json.error}`)
+        alert(`エラー: ${json.error}`)
       }
     } catch (err: any) {
-      alert(`❌ エラー: ${err.message}`)
+      alert(`エラー: ${err.message}`)
     } finally {
       setBatchLoading(false)
     }
   }
 
-  // 変更内容のラベルを取得
   const getBatchChangeLabel = () => {
     const labels: string[] = []
     if (batchUpdates.category_large_id !== undefined) {
       const cat = categories.find(c => c.id === batchUpdates.category_large_id)
-      labels.push(`ゲーム → ${cat?.name || '（クリア）'}`)
+      labels.push(`ゲーム: ${cat?.name || '（クリア）'}`)
     }
     if (batchUpdates.rarity_id !== undefined) {
       const r = batchRarities.find(r => r.id === batchUpdates.rarity_id)
-      labels.push(`レアリティ → ${r?.name || '（クリア）'}`)
+      labels.push(`レアリティ: ${r?.name || '（クリア）'}`)
     }
     return labels
   }
@@ -483,12 +447,6 @@ export default function CardsPage({
   // =============================================================================
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
-
-  const formatIntervalLabel = (minutes: number) => {
-    if (minutes >= 1440) return `${Math.floor(minutes / 1440)}日`
-    if (minutes >= 60) return `${Math.floor(minutes / 60)}h`
-    return `${minutes}分`
-  }
 
   const formatRelTime = (dateStr: string | null) => {
     if (!dateStr) return null
@@ -500,54 +458,19 @@ export default function CardsPage({
     return `${Math.floor(diffHours / 24)}日前`
   }
 
-  const getStatusBadge = (cardId: string) => {
-    const status = cardStatuses[cardId]
-    if (!status) return <span className="text-xs text-gray-400">−</span>
-
-    return (
-      <div className="flex flex-col items-center gap-0.5">
-        {/* 価格監視 */}
-        {status.hasError ? (
-          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">🔴 エラー</span>
-        ) : (
-          <span className={`px-2 py-0.5 text-xs rounded ${status.interval <= 180 ? 'bg-green-100 text-green-700' :
-            status.interval <= 720 ? 'bg-yellow-100 text-yellow-700' :
-              'bg-gray-100 text-gray-600'
-            }`}>💰 {formatIntervalLabel(status.interval)}</span>
-        )}
-        {/* スニダン売買 */}
-        {status.snkrdunk && (
-          <span className={`px-2 py-0.5 text-xs rounded ${status.snkrdunk.status === 'error' ? 'bg-red-100 text-red-700' :
-            status.snkrdunk.mode === 'off' ? 'bg-gray-100 text-gray-400' :
-              'bg-blue-100 text-blue-700'
-            }`}>
-            📊 {status.snkrdunk.mode === 'off' ? '停止' :
-              status.snkrdunk.status === 'error' ? 'エラー' :
-                formatRelTime(status.snkrdunk.lastScraped) || '未取得'}
-          </span>
-        )}
-      </div>
-    )
-  }
-
-  // フィルタ用レアリティ（カテゴリで絞り込み）
   const filteredRarities = filterCategoryLarge && filterCategoryLarge !== UNSET
     ? rarities.filter(r => r.large_id === filterCategoryLarge)
     : rarities
 
-  // シリーズでフィルタされたセットコード一覧
   const filteredSetCodes = filterSeries
     ? setCodes.filter(code => codeToSeries[code] === filterSeries)
     : setCodes
 
-  // シリーズ（+セットコード）でフィルタされた収録弾一覧
   const filteredExpansions = (() => {
     if (filterSetCode && filterSetCode !== UNSET) {
-      // セットコード指定時はそのコードの収録弾のみ
       return [...(codeToExpansions[filterSetCode] || [])].sort()
     }
     if (filterSeries) {
-      // シリーズ指定時はそのシリーズ内のセットコードに紐づく収録弾のみ
       const exps = new Set<string>()
       for (const code of filteredSetCodes) {
         const e = codeToExpansions[code]
@@ -558,80 +481,161 @@ export default function CardsPage({
     return expansions
   })()
 
+  const hasActiveFilter = !!(searchQuery || filterCategoryLarge || filterSeries || filterSetCode || filterRarity || filterExpansion || filterCardNumber)
+
+  const resetFilters = () => {
+    setSearchQuery('')
+    setFilterCategoryLarge('')
+    setFilterSeries('')
+    setFilterSetCode('')
+    setFilterRarity('')
+    setFilterExpansion('')
+    setFilterCardNumber('')
+    setCurrentPage(1)
+  }
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc)
+    } else {
+      setSortField(field)
+      setSortAsc(field === 'name') // 名前は昇順デフォルト、他は降順
+    }
+  }
+
+  const SortHeader = ({ field, children, className = '' }: { field: string; children: React.ReactNode; className?: string }) => (
+    <th
+      className={`px-3 py-2.5 text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-800 select-none ${className}`}
+      onClick={() => handleSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        {sortField === field && (
+          <span className="text-blue-500">{sortAsc ? '↑' : '↓'}</span>
+        )}
+      </span>
+    </th>
+  )
+
+  // 連携バッジ
+  const getLinkBadges = (card: CardWithRelations) => {
+    const badges: React.ReactNode[] = []
+    const urls = cardSaleUrls[card.id] || []
+    const purchases = cardPurchaseLinks[card.id] || []
+
+    urls.forEach((u: any, i: number) => {
+      badges.push(
+        <span key={`url-${i}`} title={`${u.site?.name || '不明'}\n${u.product_url}`} className="text-sm leading-none">
+          {u.site?.icon || '🔗'}
+        </span>
+      )
+    })
+    if (card.pricecharting_id) {
+      badges.push(<span key="pc" title="PriceCharting" className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1 rounded">PC</span>)
+    }
+    if (card.justtcg_id) {
+      badges.push(<span key="jt" title="JustTCG" className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">JT</span>)
+    }
+    if (purchases.some(s => s.includes('シンソク'))) {
+      badges.push(<span key="ss" title="シンソク" className="text-[10px] font-bold text-green-700 bg-green-50 px-1 rounded">SS</span>)
+    }
+    if (purchases.some(s => s.includes('ラウンジ'))) {
+      badges.push(<span key="lg" title="ラウンジ" className="text-[10px] font-bold text-orange-700 bg-orange-50 px-1 rounded">LG</span>)
+    }
+    return badges.length > 0 ? badges : <span className="text-gray-300 text-xs">-</span>
+  }
+
+  // 監視バッジ
+  const getStatusBadge = (cardId: string) => {
+    const status = cardStatuses[cardId]
+    if (!status) return null
+    const badges: React.ReactNode[] = []
+
+    if (status.hasError) {
+      badges.push(<span key="err" className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] rounded font-medium">ERR</span>)
+    }
+    if (status.snkrdunk) {
+      const sn = status.snkrdunk
+      if (sn.status === 'error') {
+        badges.push(<span key="sn" className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] rounded font-medium">SN:ERR</span>)
+      } else if (sn.mode !== 'off') {
+        const rel = formatRelTime(sn.lastScraped)
+        badges.push(<span key="sn" className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] rounded font-medium">SN:{rel || '-'}</span>)
+      }
+    }
+
+    return badges.length > 0 ? <div className="flex gap-0.5 flex-wrap">{badges}</div> : null
+  }
+
   // =============================================================================
   // Render
   // =============================================================================
 
   return (
-    <div className="p-6">
+    <div className="p-4">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         {/* ヘッダー */}
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-gray-800">カード一覧</h2>
-            <div className="flex gap-2">
+        <div className="px-4 pt-3 pb-3 border-b border-gray-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="font-bold text-gray-800">カード管理</h2>
+              <span className="text-xs text-gray-400 tabular-nums">{totalCount}件</span>
+            </div>
+            <div className="flex gap-1.5">
               {selectedIds.size > 0 && (
                 <button
                   onClick={openBatchModal}
-                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2"
+                  className="px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-xs font-medium flex items-center gap-1.5"
                 >
-                  <Settings size={18} /> 一括設定 ({selectedIds.size}件)
+                  <Settings size={14} /> 一括設定 ({selectedIds.size})
                 </button>
               )}
               <button
                 onClick={onImportCards}
-                className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-2"
+                className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-xs font-medium"
               >
-                <Globe size={18} /> 公式からインポート
+                公式インポート
               </button>
               <button
                 onClick={onPriceChartingImport}
-                className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 flex items-center gap-2"
+                className="px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 text-xs font-medium"
               >
-                <Globe size={18} /> PC Import
+                PC Import
               </button>
               <button
                 onClick={onAddCard}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
+                className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs font-medium flex items-center gap-1"
               >
-                <Plus size={18} /> カード追加
+                <Plus size={14} /> 追加
               </button>
             </div>
           </div>
 
-          {/* 検索 */}
-          <div className="flex gap-3 items-center mb-3">
-            <div className="relative flex-1 max-w-md">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          {/* 検索 + フィルタ */}
+          <div className="flex gap-2 items-center flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="カード名・型番で検索（2文字以上）"
-                className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                placeholder="カード名・英語名・型番で検索..."
+                className="w-full pl-8 pr-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
             </div>
-            <span className="text-sm text-gray-500">
-              {totalCount}件中 {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, totalCount)}-{Math.min(currentPage * ITEMS_PER_PAGE, totalCount)}件
-            </span>
-          </div>
 
-          {/* フィルタ行 */}
-          <div className="flex gap-2 flex-wrap items-center">
-            {/* ゲーム */}
             <select
               value={filterCategoryLarge}
               onChange={(e) => setFilterCategoryLarge(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
+              className="px-2 py-1.5 border rounded-lg text-xs"
             >
               <option value="">全ゲーム</option>
-              <option value={UNSET}>⚠️ 未設定</option>
+              <option value={UNSET}>未設定</option>
               {categories.map(cat => (
                 <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
               ))}
             </select>
 
-            {/* シリーズ */}
             <select
               value={filterSeries}
               onChange={(e) => {
@@ -639,7 +643,7 @@ export default function CardsPage({
                 setFilterSetCode('')
                 setFilterExpansion('')
               }}
-              className="px-3 py-1.5 border rounded-lg text-sm"
+              className="px-2 py-1.5 border rounded-lg text-xs"
             >
               <option value="">全シリーズ</option>
               {seriesList.map(s => (
@@ -647,66 +651,47 @@ export default function CardsPage({
               ))}
             </select>
 
-            {/* 収録弾 */}
             <select
               value={filterExpansion}
               onChange={(e) => setFilterExpansion(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
+              className="px-2 py-1.5 border rounded-lg text-xs max-w-[180px]"
             >
               <option value="">全収録弾</option>
-              <option value={UNSET}>⚠️ 未設定</option>
+              <option value={UNSET}>未設定</option>
               {filteredExpansions.map(exp => (
                 <option key={exp} value={exp}>{exp}</option>
               ))}
             </select>
 
-            {/* レアリティ */}
             <select
               value={filterRarity}
               onChange={(e) => setFilterRarity(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
+              className="px-2 py-1.5 border rounded-lg text-xs"
             >
               <option value="">全レアリティ</option>
-              <option value={UNSET}>⚠️ 未設定</option>
+              <option value={UNSET}>未設定</option>
               {filteredRarities.map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </select>
 
-            {/* 型番フィルタ */}
             <select
               value={filterCardNumber}
               onChange={(e) => setFilterCardNumber(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
+              className="px-2 py-1.5 border rounded-lg text-xs"
             >
-              <option value="">全型番</option>
-              <option value={UNSET}>⚠️ 未登録</option>
-              <option value="__DUPLICATE__">🔁 重複</option>
+              <option value="">型番</option>
+              <option value={UNSET}>未登録</option>
+              <option value="__DUPLICATE__">重複</option>
             </select>
 
-            {/* 選択数 */}
-            {selectedIds.size > 0 && (
-              <span className="text-sm font-medium text-orange-600 ml-2">
-                ✓ {selectedIds.size}件選択中
-              </span>
-            )}
-
-            {/* フィルタリセット */}
-            {(searchQuery || filterCategoryLarge || filterSeries || filterSetCode || filterRarity || filterExpansion || filterCardNumber) && (
+            {hasActiveFilter && (
               <button
-                onClick={() => {
-                  setSearchQuery('')
-                  setFilterCategoryLarge('')
-                  setFilterSeries('')
-                  setFilterSetCode('')
-                  setFilterRarity('')
-                  setFilterExpansion('')
-                  setFilterCardNumber('')
-                  setCurrentPage(1)
-                }}
-                className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-lg flex items-center gap-1"
+                onClick={resetFilters}
+                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                title="フィルタリセット"
               >
-                × リセット
+                <X size={16} />
               </button>
             )}
           </div>
@@ -715,147 +700,127 @@ export default function CardsPage({
         {/* テーブル */}
         {isLoading ? (
           <div className="p-8 text-center">
-            <RefreshCw className="animate-spin mx-auto text-gray-400" size={32} />
+            <RefreshCw className="animate-spin mx-auto text-gray-400" size={28} />
           </div>
         ) : filteredCards.length > 0 ? (
           <div className="overflow-auto">
             <table className="w-full">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50/80 sticky top-0">
                 <tr>
-                  <th className="px-3 py-3 w-10">
-                    <button onClick={toggleSelectAll} className="text-gray-500 hover:text-gray-800">
-                      {isAllSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                  <th className="px-2 py-2.5 w-8">
+                    <button onClick={toggleSelectAll} className="text-gray-400 hover:text-gray-700">
+                      {isAllSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                     </button>
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">画像</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">カード名</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">サイト</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">ゲーム</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">シリーズ</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">収録弾</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">レアリティ</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">型番</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">監視</th>
-                  <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">シンソク</th>
-                  <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">ラウンジ</th>
+                  <th className="text-left px-2 py-2.5 text-xs font-medium text-gray-500 w-14"></th>
+                  <SortHeader field="name" className="text-left">カード名</SortHeader>
+                  <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">収録弾</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">レアリティ</th>
+                  <th className="text-center px-2 py-2.5 text-xs font-medium text-gray-500">連携</th>
+                  <th className="text-center px-2 py-2.5 text-xs font-medium text-gray-500">状態</th>
+                  <SortHeader field="created_at" className="text-right">登録日</SortHeader>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredCards.map((card) => (
-                  <tr
-                    key={card.id}
-                    className={`hover:bg-gray-50 cursor-pointer ${selectedIds.has(card.id) ? 'bg-orange-50' : ''}`}
-                  >
-                    <td className="px-3 py-2" onClick={(e) => { e.stopPropagation(); toggleSelect(card.id) }}>
-                      {selectedIds.has(card.id)
-                        ? <CheckSquare size={18} className="text-orange-500" />
-                        : <Square size={18} className="text-gray-300" />
-                      }
-                    </td>
-                    <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.image_url ? (
-                        <img
-                          src={card.image_url}
-                          alt={card.name}
-                          className="w-12 h-auto max-h-20 object-contain rounded cursor-pointer"
-                          onMouseEnter={e => {
-                            const rect = e.currentTarget.getBoundingClientRect()
-                            setHoveredImage({ url: card.image_url!, x: rect.right + 8, y: rect.top })
-                          }}
-                          onMouseLeave={() => setHoveredImage(null)}
-                        />
-                      ) : (
-                        <div className="w-12 h-16 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">No Image</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 font-medium text-gray-800" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>{card.name}</td>
-                    <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      <div className="flex gap-0.5 flex-wrap">
-                        {(cardSaleUrls[card.id] || []).map((u: any, i: number) => (
-                          <span key={i} title={`${u.site?.name || '不明'}\n${u.product_url}`} className="cursor-default text-base">
-                            {u.site?.icon || '🔗'}
+                {filteredCards.map((card) => {
+                  const series = card.set_code ? getSeriesFromSetCode(card.set_code) : null
+                  return (
+                    <tr
+                      key={card.id}
+                      className={`hover:bg-gray-50/80 cursor-pointer transition-colors ${selectedIds.has(card.id) ? 'bg-orange-50/60' : ''}`}
+                    >
+                      <td className="px-2 py-1.5" onClick={(e) => { e.stopPropagation(); toggleSelect(card.id) }}>
+                        {selectedIds.has(card.id)
+                          ? <CheckSquare size={16} className="text-orange-500" />
+                          : <Square size={16} className="text-gray-300" />
+                        }
+                      </td>
+                      <td className="px-2 py-1.5" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                        {card.image_url ? (
+                          <img
+                            src={card.image_url}
+                            alt={card.name}
+                            className="w-10 h-14 object-contain rounded"
+                            onMouseEnter={e => {
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              setHoveredImage({ url: card.image_url!, x: rect.right + 8, y: rect.top })
+                            }}
+                            onMouseLeave={() => setHoveredImage(null)}
+                          />
+                        ) : (
+                          <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-[10px]">-</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                        <p className="text-sm font-medium text-gray-800 leading-tight truncate max-w-[280px]">{card.name}</p>
+                        {card.name_en && (
+                          <p className="text-[11px] text-gray-400 leading-tight truncate max-w-[280px]">{card.name_en}</p>
+                        )}
+                        {card.card_number && (
+                          <span className="text-[10px] text-gray-400 font-mono">#{card.card_number}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                        <div className="flex items-center gap-1.5">
+                          {series && (
+                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-mono font-bold shrink-0">{series}</span>
+                          )}
+                          <span className="text-xs text-gray-600 truncate max-w-[140px]">{card.expansion || <span className="text-gray-300">-</span>}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-1.5" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                        {card.rarities?.name ? (
+                          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-medium">
+                            {card.rarities.name}
                           </span>
-                        ))}
-                        {card.pricecharting_id && (
-                          <span title="PriceCharting" className="cursor-default text-xs font-bold text-blue-600">PC</span>
+                        ) : card.rarity ? (
+                          <span className="px-1.5 py-0.5 bg-purple-50 text-purple-500 rounded text-[10px] font-medium">
+                            {getRarityDisplayName(card.rarity)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">-</span>
                         )}
-                        {card.justtcg_id && (
-                          <span title="JustTCG" className="cursor-default text-xs font-bold text-emerald-600">JT</span>
-                        )}
-                        {!(cardSaleUrls[card.id]?.length) && !card.pricecharting_id && !card.justtcg_id && <span className="text-gray-300 text-xs">−</span>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.category_large ? `${card.category_large.icon} ${card.category_large.name}` : <span className="text-gray-300">−</span>}
-                    </td>
-                    <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.set_code ? (
-                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-mono font-medium">{getSeriesFromSetCode(card.set_code) || card.set_code}</span>
-                      ) : (
-                        <span className="text-gray-300 text-sm">−</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.expansion || <span className="text-gray-300">−</span>}
-                    </td>
-                    <td className="px-4 py-2" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {card.rarities?.name ? (
-                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                          {card.rarities.name}
+                      </td>
+                      <td className="px-2 py-1.5" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                        <div className="flex gap-0.5 flex-wrap justify-center">{getLinkBadges(card)}</div>
+                      </td>
+                      <td className="px-2 py-1.5 text-center" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                        {getStatusBadge(card.id) || <span className="text-gray-300 text-xs">-</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-right" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
+                        <span className="text-[10px] text-gray-400 tabular-nums">
+                          {card.created_at ? new Date(card.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '-'}
                         </span>
-                      ) : card.rarity ? (
-                        <span className="px-2 py-1 bg-purple-50 text-purple-500 rounded text-xs font-medium">
-                          {getRarityDisplayName(card.rarity)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-sm">−</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>{card.card_number || '−'}</td>
-                    <td className="px-4 py-2 text-center" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>{getStatusBadge(card.id)}</td>
-                    <td className="px-3 py-2 text-center" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {(cardPurchaseLinks[card.id] || []).some(s => s.includes('シンソク')) ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">✅</span>
-                      ) : (
-                        <span className="text-gray-300 text-sm">−</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                      {(cardPurchaseLinks[card.id] || []).some(s => s.includes('ラウンジ')) ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-700">✅</span>
-                      ) : (
-                        <span className="text-gray-300 text-sm">−</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         ) : (
           <div className="p-8 text-center text-gray-500">
-            <Database size={48} className="mx-auto mb-4 text-gray-300" />
-            <p>{searchQuery || filterCategoryLarge || filterSeries || filterSetCode || filterRarity || filterExpansion || filterCardNumber ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
+            <Database size={40} className="mx-auto mb-3 text-gray-300" />
+            <p className="text-sm">{hasActiveFilter ? '条件に一致するカードがありません' : 'まだカードが登録されていません'}</p>
           </div>
         )}
 
         {/* ページネーション */}
         {totalPages > 1 && (
-          <div className="p-4 border-t flex flex-wrap items-center justify-center gap-2">
+          <div className="px-4 py-3 border-t flex flex-wrap items-center justify-center gap-1.5">
             <button
               onClick={() => setCurrentPage(1)}
               disabled={currentPage === 1}
-              className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
-              title="最初のページ"
+              className="px-2 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
             >
-              ⏮ 最初
+              最初
             </button>
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
+              className="px-2.5 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
             >
-              ← 前
+              ←
             </button>
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               let page = i + 1
@@ -867,7 +832,7 @@ export default function CardsPage({
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`px-3 py-1 rounded text-sm ${currentPage === page ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
+                  className={`px-2.5 py-1 rounded text-xs ${currentPage === page ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
                 >
                   {page}
                 </button>
@@ -876,19 +841,18 @@ export default function CardsPage({
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
+              className="px-2.5 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
             >
-              次 →
+              →
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage === totalPages}
-              className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-30 text-sm"
-              title="最後のページ"
+              className="px-2 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
             >
-              最後 ⏭
+              最後
             </button>
-            <span className="text-xs text-gray-400 mx-1">|</span>
+            <span className="text-[10px] text-gray-400 mx-1">|</span>
             <div className="flex items-center gap-1">
               <input
                 type="number"
@@ -906,7 +870,7 @@ export default function CardsPage({
                   }
                 }}
                 placeholder={`${currentPage}/${totalPages}`}
-                className="w-20 px-2 py-1 border rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="w-16 px-1.5 py-1 border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
               <button
                 onClick={() => {
@@ -916,9 +880,9 @@ export default function CardsPage({
                     setPageJumpInput('')
                   }
                 }}
-                className="px-2 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
               >
-                移動
+                Go
               </button>
             </div>
           </div>
@@ -944,18 +908,15 @@ export default function CardsPage({
         </div>
       )}
 
-      {/* ===================================================================== */}
       {/* 一括設定モーダル */}
-      {/* ===================================================================== */}
       {showBatchModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBatchModal(false)}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-4">
-              🔧 一括設定（{selectedIds.size}件）
+              一括設定（{selectedIds.size}件）
             </h3>
 
             <div className="space-y-4">
-              {/* ゲーム */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ゲーム</label>
                 <select
@@ -970,7 +931,6 @@ export default function CardsPage({
                 </select>
               </div>
 
-              {/* レアリティ */}
               {batchRarities.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">レアリティ</label>
@@ -988,7 +948,6 @@ export default function CardsPage({
               )}
             </div>
 
-            {/* アクションボタン */}
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowBatchModal(false)}
@@ -1008,14 +967,12 @@ export default function CardsPage({
         </div>
       )}
 
-      {/* ===================================================================== */}
       {/* 確認ダイアログ */}
-      {/* ===================================================================== */}
       {showConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
             <h3 className="text-lg font-bold mb-3 text-orange-600">
-              ⚠️ 変更の確認
+              変更の確認
             </h3>
             <p className="text-sm text-gray-600 mb-3">
               以下の変更を <strong>{selectedIds.size}件</strong> のカードに適用します：
@@ -1026,7 +983,7 @@ export default function CardsPage({
               ))}
             </ul>
             <p className="text-xs text-red-500 mb-4">
-              ※ この操作は元に戻せません。内容をよく確認してください。
+              ※ この操作は元に戻せません
             </p>
             <div className="flex gap-3">
               <button
