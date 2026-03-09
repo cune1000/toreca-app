@@ -23,6 +23,8 @@ export interface ChartCard {
 }
 
 export interface CardDetail extends ChartCard {
+    expansion?: string
+    release_date?: string
     pricecharting_id?: string | null
     pricecharting_url?: string | null
     high_price: number

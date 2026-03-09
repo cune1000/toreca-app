@@ -145,9 +145,6 @@ export default function CardDetailPage({ params }: Props) {
                                     </span>
                                 )}
                             </div>
-                            {card.category && (
-                                <p className="text-xs text-gray-400 mt-1">{card.category}</p>
-                            )}
 
                             {/* 現在価格（素体） */}
                             <div className="mt-3">
@@ -259,7 +256,8 @@ export default function CardDetailPage({ params }: Props) {
                                 ['カード名', card.name],
                                 ['レアリティ', card.rarity],
                                 ['カード番号', card.card_number || '-'],
-                                ['カテゴリ', card.category],
+                                ['収録弾', card.expansion || '-'],
+                                ['発売時期', card.release_date || '-'],
                             ].filter(([_, v]) => v).map(([k, v]) => (
                                 <div key={k} className="flex justify-between">
                                     <span className="text-gray-400">{k}</span>

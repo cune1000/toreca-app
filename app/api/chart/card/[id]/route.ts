@@ -16,10 +16,11 @@ export async function GET(
             name,
             image_url,
             card_number,
+            expansion,
+            release_date,
             pricecharting_id,
             pricecharting_url,
-            rarity:rarity_id (name),
-            category:category_large_id (name)
+            rarity:rarity_id (name)
         `)
         .eq('id', id)
         .single()
@@ -130,9 +131,10 @@ export async function GET(
         id: (card as any).id,
         name: (card as any).name,
         image_url: (card as any).image_url,
-        category: (card as any).category?.name || '',
         rarity: (card as any).rarity?.name || '',
         card_number: (card as any).card_number || '',
+        expansion: (card as any).expansion || '',
+        release_date: (card as any).release_date || '',
         pricecharting_id: (card as any).pricecharting_id || null,
         pricecharting_url: (card as any).pricecharting_url || null,
         loose_price_jpy: latest?.loose_price_jpy || 0,
