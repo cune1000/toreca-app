@@ -130,13 +130,16 @@ export async function GET(req: Request) {
           const apiCard = apiCardMap.get(justtcgId)
           if (!apiCard) continue
 
-          const nmVariant = apiCard.variants?.find(
-            (v: any) => v.condition === 'Near Mint' && v.language === 'Japanese'
-          ) || apiCard.variants?.find(
-            (v: any) => v.condition === 'Near Mint'
-          )
+          // 優先順: NM Japanese > NM Any > Sealed Japanese > Sealed Any > 最初のprice付きvariant
+          const variants = apiCard.variants || []
+          const bestVariant =
+            variants.find((v: any) => v.condition === 'Near Mint' && v.language === 'Japanese') ||
+            variants.find((v: any) => v.condition === 'Near Mint') ||
+            variants.find((v: any) => v.condition === 'Sealed' && v.language === 'Japanese') ||
+            variants.find((v: any) => v.condition === 'Sealed') ||
+            variants.find((v: any) => typeof v.price === 'number' && v.price > 0)
 
-          const price = nmVariant?.price
+          const price = bestVariant?.price
           if (typeof price !== 'number' || price <= 0) continue
 
           historyRows.push({ card_id: cardId, price_usd: price, recorded_at: now })
