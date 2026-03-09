@@ -50,7 +50,7 @@ export async function GET(req: Request) {
             const { data: catData } = await supabase
                 .from('category_large')
                 .select('id')
-                .ilike('name', `%${category}%`)
+                .ilike('name', `%${category.replace(/[%_\\]/g, '\\$&')}%`)
 
             if (catData && catData.length > 0) {
                 query = query.in('category_large_id', catData.map(c => c.id))
@@ -62,7 +62,7 @@ export async function GET(req: Request) {
             const { data: rarityData } = await supabase
                 .from('rarities')
                 .select('id')
-                .ilike('name', `%${rarity}%`)
+                .ilike('name', `%${rarity.replace(/[%_\\]/g, '\\$&')}%`)
 
             if (rarityData && rarityData.length > 0) {
                 query = query.in('rarity_id', rarityData.map(r => r.id))

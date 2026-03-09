@@ -54,7 +54,8 @@ export async function GET(req: NextRequest) {
       .eq('brand', 'ポケモン')
 
     if (search) {
-      query = query.ilike('name', `%${search}%`)
+      const escaped = search.replace(/[%_\\]/g, '\\$&')
+      query = query.ilike('name', `%${escaped}%`)
     }
 
     // DB側フィルタ

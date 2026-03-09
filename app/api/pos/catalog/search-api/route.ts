@@ -18,11 +18,13 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(searchParams.get('limit') || '30'), 100)
         const offset = parseInt(searchParams.get('offset') || '0')
 
+        const escaped = q.replace(/[%_\\]/g, '\\$&')
+
         // 総件数を取得
         const { count, error: countError } = await supabase
             .from('cards')
             .select('id', { count: 'exact', head: true })
-            .ilike('name', `%${q}%`)
+            .ilike('name', `%${escaped}%`)
 
         if (countError) throw countError
 
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest) {
         const { data, error } = await supabase
             .from('cards')
             .select('id, name, image_url, category_large_id, rarity_id')
-            .ilike('name', `%${q}%`)
+            .ilike('name', `%${escaped}%`)
             .range(offset, offset + limit - 1)
 
         if (error) throw error

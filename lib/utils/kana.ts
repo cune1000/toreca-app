@@ -40,18 +40,20 @@ export function containsKatakana(str: string): boolean {
  * → "name.ilike.%ぴかちゅう%,card_number.ilike.%ぴかちゅう%,name.ilike.%ピカチュウ%,card_number.ilike.%ピカチュウ%"
  */
 export function buildKanaSearchFilter(query: string, columns: string[]): string {
-    const variants = [query]
+    // PostgREST ilike特殊文字 + フィルタインジェクション文字をエスケープ
+    const escaped = query.replace(/[%_\\,()]/g, '\\$&')
+    const variants = [escaped]
 
-    if (containsHiragana(query)) {
-        const katakanaVersion = toKatakana(query)
-        if (katakanaVersion !== query) {
+    if (containsHiragana(escaped)) {
+        const katakanaVersion = toKatakana(escaped)
+        if (katakanaVersion !== escaped) {
             variants.push(katakanaVersion)
         }
     }
 
-    if (containsKatakana(query)) {
-        const hiraganaVersion = toHiragana(query)
-        if (hiraganaVersion !== query) {
+    if (containsKatakana(escaped)) {
+        const hiraganaVersion = toHiragana(escaped)
+        if (hiraganaVersion !== escaped) {
             variants.push(hiraganaVersion)
         }
     }

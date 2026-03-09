@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
             .order('updated_at', { ascending: false })
 
         if (search) {
-            query = query.ilike('name', `%${search}%`)
+            const escaped = search.replace(/[%_\\]/g, '\\$&')
+            query = query.ilike('name', `%${escaped}%`)
         }
         if (category && category !== 'all') {
             query = query.eq('category', category)

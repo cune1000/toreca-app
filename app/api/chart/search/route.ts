@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
             rarity:rarity_id (name),
             category:category_large_id (name)
         `)
-        .ilike('name', `%${q}%`)
+        .ilike('name', `%${q.replace(/[%_\\]/g, '\\$&')}%`)
         .limit(50)
 
     if (category !== 'all') {
