@@ -295,7 +295,7 @@ export default function PriceChartTab({
       {chartData.length > 0 ? (
         <>
           <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={chartData} margin={{ top: 10, right: 80, left: 20, bottom: 5 }}>
+            <LineChart data={chartData} margin={{ top: 10, right: 60, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
               <YAxis
@@ -319,17 +319,7 @@ export default function PriceChartTab({
                   domain={[0, 'auto']}
                 />
               )}
-              {((showOverseasLoose || showOverseasGraded) && hasOverseasData || showJustTcgNm && hasJustTcgData) && (
-                <YAxis
-                  yAxisId="overseas"
-                  orientation="right"
-                  tick={{ fontSize: 10, fill: '#818cf8' }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `¥${(v / 1000).toFixed(0)}k`}
-                  domain={[(dataMin: number) => Math.floor(dataMin * 0.9), (dataMax: number) => Math.ceil(dataMax * 1.1)]}
-                />
-              )}
+
               <Tooltip content={<CustomTooltip />} />
 
               {/* 買取価格線（condition別トグル） */}
@@ -416,7 +406,7 @@ export default function PriceChartTab({
               {/* 海外素体線 */}
               {showOverseasLoose && hasOverseasData && (
                 <Line
-                  yAxisId="overseas"
+                  yAxisId="price"
                   type="monotone"
                   dataKey="overseas_loose"
                   stroke={OVERSEAS_LINE_COLORS.loose.color}
@@ -431,7 +421,7 @@ export default function PriceChartTab({
               {/* 海外PSA10線 */}
               {showOverseasGraded && hasOverseasData && (
                 <Line
-                  yAxisId="overseas"
+                  yAxisId="price"
                   type="monotone"
                   dataKey="overseas_graded"
                   stroke={OVERSEAS_LINE_COLORS.graded.color}
@@ -446,7 +436,7 @@ export default function PriceChartTab({
               {/* JustTCG NM線 */}
               {showJustTcgNm && hasJustTcgData && (
                 <Line
-                  yAxisId="overseas"
+                  yAxisId="price"
                   type="monotone"
                   dataKey="justtcg_nm_jpy"
                   stroke={JUSTTCG_LINE_COLORS.nm.color}
@@ -475,10 +465,7 @@ export default function PriceChartTab({
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-2 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded"></span> 国内価格（左軸）</span>
-            {((showOverseasLoose || showOverseasGraded) && hasOverseasData || showJustTcgNm && hasJustTcgData) && (
-              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 inline-block rounded" style={{ backgroundColor: '#818cf8' }}></span> 海外価格（右軸）</span>
-            )}
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded"></span> 価格（左軸）</span>
             {showStockAxis && (
               <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-500 inline-block rounded" style={{ borderTop: '2px dashed #9ca3af' }}></span> 在庫（右軸）</span>
             )}
