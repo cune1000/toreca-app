@@ -254,7 +254,7 @@ export default function CardsPage({
 
       // 検索条件（1文字から有効）
       if (searchQuery.length >= 1) {
-        query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'name_en', 'card_number']))
+        query = query.or(buildKanaSearchFilter(searchQuery, ['name', 'name_en', 'card_number', 'expansion']))
       }
 
       if (filterCategoryLarge === UNSET) {
