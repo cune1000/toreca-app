@@ -272,7 +272,6 @@ export default function SettingsTab({
             <div className="p-4">
               <JustTcgLink
                 cardId={card.id}
-                cardName={card.name}
                 justtcgId={card.justtcg_id}
                 justtcgPrice={card.justtcg_nm_price_usd}
                 onLinked={() => onUpdated?.()}

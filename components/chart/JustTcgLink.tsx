@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 
 interface Props {
   cardId: string
-  cardName: string
   justtcgId?: string | null
   justtcgPrice?: number | null
   onLinked?: () => void
@@ -29,7 +28,22 @@ const formatUsd = (price: number | null | undefined) => {
   return `$${price.toFixed(2)}`
 }
 
-export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice, onLinked }: Props) {
+const getErrorMessage = (err: unknown): string => {
+  if (err instanceof Error) return err.message
+  return '予期しないエラーが発生しました'
+}
+
+/** レスポンスをパースし、エラー時は例外を投げる */
+const parseResponse = async (res: Response) => {
+  if (!res.ok && res.status >= 500) {
+    throw new Error(`サーバーエラー (${res.status})`)
+  }
+  const json = await res.json()
+  if (!json.success) throw new Error(json.error || '不明なエラー')
+  return json
+}
+
+export default function JustTcgLink({ cardId, justtcgId, justtcgPrice, onLinked }: Props) {
   const game = 'pokemon-japan'
   const [sets, setSets] = useState<JustTcgSet[]>([])
   const [cards, setCards] = useState<JustTcgCard[]>([])
@@ -45,14 +59,13 @@ export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice,
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/justtcg/sets?game=${game}`)
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      const res = await fetch(`/api/justtcg/sets?game=${encodeURIComponent(game)}`)
+      const json = await parseResponse(res)
       setSets(json.data || [])
       setCards([])
       setSelectedSetId('')
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -63,31 +76,31 @@ export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice,
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/justtcg/cards?set=${setId}&game=${game}`)
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      const res = await fetch(`/api/justtcg/cards?set=${encodeURIComponent(setId)}&game=${encodeURIComponent(game)}`)
+      const json = await parseResponse(res)
       setCards(json.data || [])
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
   }
 
   const link = async (jtcgId: string) => {
+    const trimmed = jtcgId.trim()
+    if (!trimmed) return
     setLinking(true)
     setError('')
     try {
       const res = await fetch('/api/justtcg/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ card_id: cardId, justtcg_id: jtcgId }),
+        body: JSON.stringify({ card_id: cardId, justtcg_id: trimmed }),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      await parseResponse(res)
       onLinked?.()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(getErrorMessage(err))
     } finally {
       setLinking(false)
     }
@@ -97,14 +110,13 @@ export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice,
     setLinking(true)
     setError('')
     try {
-      const res = await fetch(`/api/justtcg/link?card_id=${cardId}`, { method: 'DELETE' })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      const res = await fetch(`/api/justtcg/link?card_id=${encodeURIComponent(cardId)}`, { method: 'DELETE' })
+      await parseResponse(res)
       setCards([])
       setSets([])
       onLinked?.()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(getErrorMessage(err))
     } finally {
       setLinking(false)
     }
@@ -112,18 +124,20 @@ export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice,
 
   const getBestPrice = (card: JustTcgCard) => {
     const v = card.variants || []
-    const best =
+    return (
       v.find(x => x.condition === 'Near Mint' && x.language === 'Japanese') ||
       v.find(x => x.condition === 'Near Mint') ||
       v.find(x => x.condition === 'Sealed' && x.language === 'Japanese') ||
       v.find(x => x.condition === 'Sealed') ||
       v.find(x => x.price != null && x.price > 0)
-    return best?.price
+    )?.price
   }
 
-  const filteredSets = setQuery
-    ? sets.filter(s => s.name.toLowerCase().includes(setQuery.toLowerCase()) || s.id.toLowerCase().includes(setQuery.toLowerCase()))
-    : sets
+  const filteredSets = useMemo(() => {
+    if (!setQuery) return sets
+    const q = setQuery.toLowerCase()
+    return sets.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
+  }, [sets, setQuery])
 
   return (
     <div className="space-y-3">
@@ -263,8 +277,8 @@ export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice,
                 className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
               />
               <button
-                onClick={() => manualId && link(manualId)}
-                disabled={linking || !manualId}
+                onClick={() => link(manualId)}
+                disabled={linking || !manualId.trim()}
                 className="px-4 py-2 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 disabled:opacity-50"
               >
                 紐付け
@@ -274,7 +288,7 @@ export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice,
         )}
       </div>
 
-      {loading && sets.length === 0 && (
+      {loading && sets.length === 0 && !selectedSetId && (
         <div className="py-4 text-center">
           <div className="inline-block w-5 h-5 border-2 border-gray-200 border-t-emerald-600 rounded-full animate-spin" />
           <p className="text-xs text-gray-400 mt-2">JustTCGからセット取得中...</p>
