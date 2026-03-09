@@ -146,7 +146,7 @@ export const SET_NAME_JA: Record<string, string> = {
   'sm11a-remix-bout-pokemon-japan': 'リミックスバウト',
   'sm11-miracle-twin-pokemon-japan': 'ミラクルツイン',
   'sm10b-sky-legend-pokemon-japan': 'スカイレジェンド',
-  'sm10a-gg-end-pokemon-japan': 'GGエンド',
+  'sm10a-gg-end-pokemon-japan': 'ジージーエンド',
   'sm10-double-blaze-pokemon-japan': 'ダブルブレイズ',
   'sm9b-full-metal-wall-pokemon-japan': 'フルメタルウォール',
   'sm9a-night-unison-pokemon-japan': 'ナイトユニゾン',
