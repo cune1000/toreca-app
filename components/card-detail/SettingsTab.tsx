@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ExternalLink, RefreshCw, Zap, Clock, AlertTriangle, Link2, ChevronRight, Pencil, Trash2, Check, X } from 'lucide-react'
 import PriceChartingLink from '@/components/chart/PriceChartingLink'
+import JustTcgLink from '@/components/chart/JustTcgLink'
 import { formatRelativeTime } from './constants'
 import { isSnkrdunkSiteName, isSnkrdunkUrl } from '@/lib/snkrdunk-api'
 
@@ -257,6 +258,28 @@ export default function SettingsTab({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* JustTCG (TCGPlayer) */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 border-b border-emerald-100/60">
+              <div className="flex items-center gap-2">
+                <span className="text-base">💲</span>
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-700">JustTCG (TCGPlayer価格)</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">TCGPlayer NM価格を自動追跡</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-4">
+              <JustTcgLink
+                cardId={card.id}
+                cardName={card.name}
+                justtcgId={card.justtcg_id}
+                justtcgPrice={card.justtcg_nm_price_usd}
+                onLinked={() => onUpdated?.()}
+              />
+            </div>
+          </div>
+
           {/* PriceCharting */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b border-blue-100/60">
