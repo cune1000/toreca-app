@@ -30,7 +30,7 @@ const formatUsd = (price: number | null | undefined) => {
 }
 
 export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice, onLinked }: Props) {
-  const [game, setGame] = useState<'pokemon-japan' | 'one-piece-card-game'>('pokemon-japan')
+  const game = 'pokemon-japan'
   const [sets, setSets] = useState<JustTcgSet[]>([])
   const [cards, setCards] = useState<JustTcgCard[]>([])
   const [selectedSetId, setSelectedSetId] = useState('')
@@ -151,24 +151,14 @@ export default function JustTcgLink({ cardId, cardName, justtcgId, justtcgPrice,
         </div>
       )}
 
-      {/* ゲーム選択 + セット取得 */}
-      <div className="flex gap-2">
-        <select
-          value={game}
-          onChange={e => setGame(e.target.value as any)}
-          className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm"
-        >
-          <option value="pokemon-japan">ポケモン</option>
-          <option value="one-piece-card-game">ワンピース</option>
-        </select>
-        <button
-          onClick={fetchSets}
-          disabled={loading}
-          className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 disabled:opacity-50"
-        >
-          {loading && sets.length === 0 ? '読込中...' : 'セット一覧を取得'}
-        </button>
-      </div>
+      {/* セット取得 */}
+      <button
+        onClick={fetchSets}
+        disabled={loading}
+        className="w-full px-4 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 disabled:opacity-50"
+      >
+        {loading && sets.length === 0 ? '読込中...' : 'セット一覧を取得'}
+      </button>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
