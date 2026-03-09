@@ -29,9 +29,9 @@ function CustomTooltip({ active, payload }: any) {
             <p className="text-gray-500 mb-1">{d?.date}</p>
             {payload.map((p: any, i: number) => (
                 <div key={i}>
-                    <p className="font-bold" style={{ color: p.color }}>
-                        {p.name}: {p.dataKey === 'justtcg_nm_usd' ? `$${(p.value || 0).toFixed(2)}` : formatPrice(p.value || 0)}
-                    </p>
+                    {p.value != null && <p className="font-bold" style={{ color: p.color }}>
+                        {p.name}: {p.dataKey === 'justtcg_nm_usd' ? `$${p.value.toFixed(2)}` : formatPrice(p.value)}
+                    </p>}
                     {p.dataKey === 'loose_price_jpy' && d?.loose_price_usd != null && d.loose_price_usd > 0 && (
                         <p className="text-gray-400 text-[10px]">({formatUsd(d.loose_price_usd)})</p>
                     )}
@@ -182,6 +182,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                 name="素体価格"
                                 dot={false}
                                 activeDot={{ r: 4, fill: '#ef4444' }}
+                                connectNulls
                             />
                             {showGraded && (
                                 <Area
@@ -194,6 +195,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                     dot={false}
                                     activeDot={{ r: 4, fill: '#10b981' }}
                                     strokeDasharray="4 2"
+                                    connectNulls
                                 />
                             )}
                             {showJtcg && hasJtcgData && (
@@ -207,6 +209,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                     dot={false}
                                     activeDot={{ r: 4, fill: '#3b82f6' }}
                                     yAxisId="usd"
+                                    connectNulls
                                 />
                             )}
                         </AreaChart>

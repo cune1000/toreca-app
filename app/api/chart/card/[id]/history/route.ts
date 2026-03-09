@@ -45,30 +45,50 @@ export async function GET(
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // 日付をキーにしてマージ
+    // 日付をキーにしてマージ（デフォルトは null = データなし）
     const dateMap = new Map<string, any>()
 
     for (const row of (data || [])) {
         const date = (row.recorded_at || '').split('T')[0]
         if (!dateMap.has(date)) {
-            dateMap.set(date, { date, loose_price_jpy: 0, loose_price_usd: 0, graded_price_jpy: 0, graded_price_usd: 0 })
+            dateMap.set(date, { date, loose_price_jpy: null, loose_price_usd: null, graded_price_jpy: null, graded_price_usd: null })
         }
         const entry = dateMap.get(date)!
-        entry.loose_price_jpy = row.loose_price_jpy || entry.loose_price_jpy
-        entry.loose_price_usd = row.loose_price_usd || entry.loose_price_usd
-        entry.graded_price_jpy = row.graded_price_jpy || entry.graded_price_jpy
-        entry.graded_price_usd = row.graded_price_usd || entry.graded_price_usd
+        if (row.loose_price_jpy) entry.loose_price_jpy = row.loose_price_jpy
+        if (row.loose_price_usd) entry.loose_price_usd = row.loose_price_usd
+        if (row.graded_price_jpy) entry.graded_price_jpy = row.graded_price_jpy
+        if (row.graded_price_usd) entry.graded_price_usd = row.graded_price_usd
     }
 
     for (const row of (jtcgData || [])) {
         const date = (row.recorded_at || '').split('T')[0]
         if (!dateMap.has(date)) {
-            dateMap.set(date, { date, loose_price_jpy: 0, loose_price_usd: 0, graded_price_jpy: 0, graded_price_usd: 0 })
+            dateMap.set(date, { date, loose_price_jpy: null, loose_price_usd: null, graded_price_jpy: null, graded_price_usd: null })
         }
         dateMap.get(date)!.justtcg_nm_usd = row.price_usd
     }
 
-    const result = Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+    const sorted = Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+
+    // 前方補完: 各系列で初回データ取得後の欠損は直前の値で埋める
+    const priceKeys = ['loose_price_jpy', 'loose_price_usd', 'graded_price_jpy', 'graded_price_usd', 'justtcg_nm_usd'] as const
+    const lastSeen: Record<string, number | null> = {}
+    for (const key of priceKeys) lastSeen[key] = null
+
+    for (const entry of sorted) {
+        for (const key of priceKeys) {
+            if (entry[key] != null && entry[key] > 0) {
+                // 実データがある → 記憶を更新
+                lastSeen[key] = entry[key]
+            } else if (lastSeen[key] != null) {
+                // 初回データ取得済みだが今回欠損 → 前日値で補完
+                entry[key] = lastSeen[key]
+            }
+            // lastSeen が null = まだ初回データなし → null のまま（線を描かない）
+        }
+    }
+
+    const result = sorted
 
     return NextResponse.json(result, {
         headers: {
