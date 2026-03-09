@@ -92,6 +92,7 @@ export async function getCronStats(hours: number = 24): Promise<CronStats> {
     .from('cron_logs')
     .select('status, price_changed')
     .gte('executed_at', cutoff)
+    .limit(10000)
 
   if (error) {
     console.error('Error fetching cron stats:', error)
@@ -148,12 +149,15 @@ export async function searchCardsForDashboard(
       .from('snkrdunk_sales_history')
       .select('card_id, price, grade, sold_at')
       .in('card_id', cardIds)
-      .order('sold_at', { ascending: false }),
+      .in('grade', ['A', 'PSA10'])
+      .order('sold_at', { ascending: false })
+      .limit(100),
     supabase
       .from('overseas_prices')
       .select('card_id, loose_price_usd, loose_price_jpy, graded_price_usd, graded_price_jpy')
       .in('card_id', cardIds)
-      .order('recorded_at', { ascending: false }),
+      .order('recorded_at', { ascending: false })
+      .limit(50),
   ])
 
   // カードごとにAランク・PSA10の最新価格を取得
@@ -220,7 +224,7 @@ export interface CategoryLarge {
 export async function getLargeCategories(): Promise<CategoryLarge[]> {
   const { data, error } = await supabase
     .from('category_large')
-    .select('*')
+    .select('id, name, icon, sort_order')
     .order('sort_order')
 
   if (error) {

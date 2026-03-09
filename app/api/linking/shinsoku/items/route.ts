@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
-const supabase = createServiceClient()
-
 /**
  * シンソク商品一覧API（紐づけ状態付き）
  * GET /api/linking/shinsoku/items?page=1&perPage=100&search=xxx&filter=all|linked|unlinked
  */
 export async function GET(req: NextRequest) {
   try {
+    const supabase = createServiceClient()
     const { searchParams } = new URL(req.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const perPage = Math.min(200, Math.max(1, parseInt(searchParams.get('perPage') || '100')))

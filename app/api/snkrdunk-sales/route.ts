@@ -23,7 +23,7 @@ export async function GET(req: Request) {
         // 期間フィルタ（days=0 は全期間）
         let query = supabase
             .from('snkrdunk_sales_history')
-            .select('*')
+            .select('id, card_id, grade, price, sold_at, product_type, size, condition, label')
             .eq('card_id', cardId)
             .order('sold_at', { ascending: true })
 
@@ -43,7 +43,11 @@ export async function GET(req: Request) {
             )
         }
 
-        return NextResponse.json({ success: true, data: data || [] })
+        return NextResponse.json({ success: true, data: data || [] }, {
+            headers: {
+                'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=60',
+            },
+        })
     } catch (error: any) {
         console.error('API error:', error)
         return NextResponse.json(

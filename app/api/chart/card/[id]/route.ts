@@ -28,13 +28,45 @@ export async function GET(
         return NextResponse.json({ error: 'Card not found' }, { status: 404 })
     }
 
-    // 最新の overseas_prices を取得（最新31日分）
-    const { data: latestPrices } = await supabase
-        .from('overseas_prices')
-        .select('loose_price_jpy, loose_price_usd, graded_price_jpy, graded_price_usd, recorded_at')
-        .eq('card_id', id)
-        .order('recorded_at', { ascending: false })
-        .limit(31)
+    // 全サブクエリを並列実行
+    const [
+        { data: latestPrices },
+        { data: maxPrice },
+        { data: minPrice },
+        { data: purchaseData },
+    ] = await Promise.all([
+        // 最新の overseas_prices を取得（最新31日分）
+        supabase
+            .from('overseas_prices')
+            .select('loose_price_jpy, loose_price_usd, graded_price_jpy, graded_price_usd, recorded_at')
+            .eq('card_id', id)
+            .order('recorded_at', { ascending: false })
+            .limit(31),
+        // 最高値（loose_price_jpy）
+        supabase
+            .from('overseas_prices')
+            .select('loose_price_jpy')
+            .eq('card_id', id)
+            .not('loose_price_jpy', 'is', null)
+            .order('loose_price_jpy', { ascending: false })
+            .limit(1),
+        // 最安値（loose_price_jpy）
+        supabase
+            .from('overseas_prices')
+            .select('loose_price_jpy')
+            .eq('card_id', id)
+            .not('loose_price_jpy', 'is', null)
+            .order('loose_price_jpy', { ascending: true })
+            .limit(1),
+        // 買取価格（店舗別・条件別）
+        supabase
+            .from('purchase_prices')
+            .select('price, condition, created_at, shop:shop_id(name, icon), link:link_id(label)')
+            .eq('card_id', id)
+            .gt('price', 0)
+            .order('created_at', { ascending: false })
+            .limit(200),
+    ])
 
     const latest = latestPrices?.[0]
     const yesterday = latestPrices?.find((_, i) => i > 0)
@@ -45,32 +77,6 @@ export async function GET(
         if (!oldPrice || !newPrice || oldPrice === 0) return 0
         return ((newPrice - oldPrice) / oldPrice) * 100
     }
-
-    // 最高値・最安値（loose_price_jpy）
-    const { data: maxPrice } = await supabase
-        .from('overseas_prices')
-        .select('loose_price_jpy')
-        .eq('card_id', id)
-        .not('loose_price_jpy', 'is', null)
-        .order('loose_price_jpy', { ascending: false })
-        .limit(1)
-
-    const { data: minPrice } = await supabase
-        .from('overseas_prices')
-        .select('loose_price_jpy')
-        .eq('card_id', id)
-        .not('loose_price_jpy', 'is', null)
-        .order('loose_price_jpy', { ascending: true })
-        .limit(1)
-
-    // 買取価格（店舗別・条件別）
-    const { data: purchaseData } = await supabase
-        .from('purchase_prices')
-        .select('price, condition, created_at, shop:shop_id(name, icon), link:link_id(label)')
-        .eq('card_id', id)
-        .gt('price', 0)
-        .order('created_at', { ascending: false })
-        .limit(200)
 
     // 店舗×条件ごとに最新価格だけ取得
     const shopCondMap = new Map<string, {

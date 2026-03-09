@@ -169,14 +169,18 @@ export async function GET(req: Request) {
           }
         }
 
-        // cards.justtcg_nm_price_usd を更新
-        for (const { id, price } of cardUpdates) {
-          const { error: updateError } = await supabase
-            .from('cards')
-            .update({ justtcg_nm_price_usd: price })
-            .eq('id', id)
-          if (updateError) {
-            console.error(`[justtcg-price-sync] Update card ${id}:`, updateError.message)
+        // cards.justtcg_nm_price_usd をバッチ並列更新（10件ずつ）
+        for (let i = 0; i < cardUpdates.length; i += 10) {
+          const batch = cardUpdates.slice(i, i + 10)
+          const results = await Promise.all(
+            batch.map(({ id, price }) =>
+              supabase.from('cards').update({ justtcg_nm_price_usd: price }).eq('id', id)
+            )
+          )
+          for (const { error: updateError } of results) {
+            if (updateError) {
+              console.error(`[justtcg-price-sync] Update card error:`, updateError.message)
+            }
           }
         }
 

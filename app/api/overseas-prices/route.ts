@@ -24,9 +24,10 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceClient()
     let query = supabase
       .from(TABLES.OVERSEAS_PRICES)
-      .select('*')
+      .select('card_id, loose_price_usd, loose_price_jpy, graded_price_usd, graded_price_jpy, recorded_at')
       .eq('card_id', cardId)
       .order('recorded_at', { ascending: true })
+      .limit(1000)
 
     if (days) {
       const since = new Date()
@@ -46,6 +47,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: data || [],
+    }, {
+      headers: {
+        'Cache-Control': 'private, s-maxage=3600, stale-while-revalidate=300',
+      },
     })
   } catch (error: any) {
     console.error('Overseas prices fetch error:', error)

@@ -122,12 +122,24 @@ async function scrapeCardList(listUrl: string, limit: number = 20) {
   }
 }
 
+// SSRF防止: pokemon-card.com のみ許可
+const ALLOWED_SCRAPE_HOSTS = ['www.pokemon-card.com', 'pokemon-card.com']
+
+function isAllowedScrapeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return ALLOWED_SCRAPE_HOSTS.includes(parsed.hostname) && ['http:', 'https:'].includes(parsed.protocol)
+  } catch {
+    return false
+  }
+}
+
 // GET: カードリストまたは単体カード情報を取得
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const url = searchParams.get('url')
   const limit = parseInt(searchParams.get('limit') || '20')
-  
+
   if (!url) {
     return NextResponse.json({
       message: 'Pokemon Card Scrape API',
@@ -137,11 +149,18 @@ export async function GET(request: NextRequest) {
       }
     })
   }
-  
+
+  if (!isAllowedScrapeUrl(url)) {
+    return NextResponse.json(
+      { success: false, error: 'pokemon-card.com のURLのみ許可されています' },
+      { status: 400 }
+    )
+  }
+
   try {
     // URLの種類を判定
     const isListPage = url.includes('index.php') || url.includes('card-search/?')
-    
+
     if (isListPage) {
       const result = await scrapeCardList(url, limit)
       return NextResponse.json(result)
@@ -149,7 +168,7 @@ export async function GET(request: NextRequest) {
       const result = await scrapePokemonCard(url)
       return NextResponse.json(result)
     }
-    
+
   } catch (error: any) {
     console.error('Scrape error:', error)
     return NextResponse.json(
@@ -166,7 +185,14 @@ export async function POST(request: NextRequest) {
   if (!url) {
     return NextResponse.json({ error: 'url is required' }, { status: 400 })
   }
-  
+
+  if (!isAllowedScrapeUrl(url)) {
+    return NextResponse.json(
+      { success: false, error: 'pokemon-card.com のURLのみ許可されています' },
+      { status: 400 }
+    )
+  }
+
   try {
     // リストページからカード一覧を取得
     const listResult = await scrapeCardList(url, limit)

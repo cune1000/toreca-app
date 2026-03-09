@@ -103,8 +103,8 @@ export default function CardDetailPage({ params }: Props) {
     setLoading(true)
     try {
       const [purchaseRes, saleRes, urlRes] = await Promise.all([
-        supabase.from('purchase_prices').select('*, shop:shop_id(id, name, icon), link:link_id(label)').eq('card_id', card.id).order('created_at', { ascending: false }).limit(200),
-        supabase.from('sale_prices').select('*, site:site_id(id, name, icon), grade').eq('card_id', card.id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('purchase_prices').select('*, shop:shop_id(id, name, icon), link:link_id(label)').eq('card_id', card.id).order('created_at', { ascending: false }).limit(2000),
+        supabase.from('sale_prices').select('*, site:site_id(id, name, icon), grade').eq('card_id', card.id).order('created_at', { ascending: false }).limit(2000),
         supabase.from('card_sale_urls').select('*, site:site_id(id, name, icon, url)').eq('card_id', card.id),
       ])
       setPurchasePrices(purchaseRes.data || [])
@@ -162,7 +162,7 @@ export default function CardDetailPage({ params }: Props) {
         .select('condition, date, price_cleaned')
         .eq('card_id', card.id)
         .order('date', { ascending: true })
-        .limit(10000)
+        .limit(3000)
       setSnkrdunkChartHistory(data || [])
     } catch (err) { console.error('Failed to fetch snkrdunk chart history:', err) }
   }

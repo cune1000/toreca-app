@@ -4,6 +4,9 @@ import { createServiceClient } from '@/lib/supabase'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
+// 許可するcronパスのプレフィックス（SSRF防止）
+const ALLOWED_CRON_PREFIX = '/api/cron/'
+
 export async function GET() {
     const supabase = createServiceClient()
 
@@ -24,6 +27,22 @@ export async function POST(req: Request) {
         const body = await req.json()
         const { path, params } = body
         if (!path) return NextResponse.json({ success: false, error: 'Path required' }, { status: 400 })
+
+        // SSRF防止: /api/cron/ で始まるパスのみ許可
+        if (typeof path !== 'string' || !path.startsWith(ALLOWED_CRON_PREFIX)) {
+            return NextResponse.json(
+                { success: false, error: `Path must start with ${ALLOWED_CRON_PREFIX}` },
+                { status: 400 }
+            )
+        }
+
+        // パストラバーサル防止: ../ を含むパスを拒否
+        if (path.includes('..') || path.includes('//')) {
+            return NextResponse.json(
+                { success: false, error: 'Invalid path' },
+                { status: 400 }
+            )
+        }
 
         // Vercel本番では VERCEL_URL、ローカルでは host ヘッダーを使用
         const host = process.env.VERCEL_URL

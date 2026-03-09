@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
+  // 認証チェック: CRON_SECRET必須（twitter/monitorからの内部呼び出し専用）
+  const authHeader = request.headers.get('authorization')
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(request.url)
   const username = searchParams.get('username')
 
   if (!username) {
     return NextResponse.json({ error: 'username is required' }, { status: 400 })
+  }
+
+  // ユーザー名バリデーション（X/Twitterのルール: 英数字とアンダースコアのみ、15文字以内）
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(username)) {
+    return NextResponse.json({ error: 'Invalid username format' }, { status: 400 })
   }
 
   const bearerToken = process.env.X_BEARER_TOKEN

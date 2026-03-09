@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { parseExternalName, normalizeName } from '@/app/linking/lib/matching'
 
-const supabase = createServiceClient()
-
 const SELECT_FIELDS = 'id, name, name_en, card_number, expansion, set_code, image_url, rarity'
 
 /**
@@ -21,6 +19,7 @@ const SELECT_FIELDS = 'id, name, name_en, card_number, expansion, set_code, imag
  */
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createServiceClient()
     const body = await req.json()
     const { name, modelno, limit = 10 } = body
 

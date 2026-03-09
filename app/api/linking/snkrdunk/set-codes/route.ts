@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getSetCodeToJaMap } from '@/lib/justtcg-set-names'
 
-const supabase = createServiceClient()
-
 /**
  * スニダン収録弾一覧API
  * GET /api/linking/snkrdunk/set-codes
@@ -11,6 +9,7 @@ const supabase = createServiceClient()
  */
 export async function GET() {
   try {
+    const supabase = createServiceClient()
     // parsed_set_code の DISTINCT + COUNT を取得
     const { data, error } = await supabase
       .from('snkrdunk_items_cache')

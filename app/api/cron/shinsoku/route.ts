@@ -106,16 +106,17 @@ export async function GET(request: NextRequest) {
                 const condition = conditionNormalize[rawCondition] || rawCondition
 
                 // condition → price_* マッピング
+                // シンソクのランク: S=未開封, A=素体美品, A-=小傷, B=傷あり, C=大傷
                 const conditionToPriceMap: Record<string, number | null> = {
                     '未開封': itemRow.price_s,
-                    '素体': itemRow.price_s,
-                    'PSA10': itemRow.price_s,
+                    '素体': itemRow.price_a,
+                    'PSA10': itemRow.price_s,  // PSA10はシンソクにランクなし → S(最高値)で代用
                     'A': itemRow.price_a,
                     'A-': itemRow.price_am,
                     'B': itemRow.price_b,
                     'C': itemRow.price_c,
                 }
-                const priceYen = conditionToPriceMap[condition] ?? itemRow.price_s
+                const priceYen = conditionToPriceMap[condition] ?? itemRow.price_a
 
                 if (!priceYen || priceYen === 0) {
                     skippedCount++

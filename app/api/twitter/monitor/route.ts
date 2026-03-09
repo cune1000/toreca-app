@@ -85,7 +85,9 @@ export async function POST(request: NextRequest) {
 
             try {
                 // ツイート取得
-                const tweetsRes = await fetch(`${baseUrl}/api/twitter?username=${shop.x_account}`)
+                const tweetsRes = await fetch(`${baseUrl}/api/twitter?username=${encodeURIComponent(shop.x_account)}`, {
+                    headers: { 'Authorization': `Bearer ${cronSecret}` }
+                })
                 const tweetsData = await tweetsRes.json()
 
                 if (!tweetsData.success) {

@@ -57,14 +57,25 @@ export async function GET(request: NextRequest) {
     // Content-Typeを取得
     const contentType = response.headers.get('content-type') || 'image/jpeg'
 
+    // サイズ上限チェック（10MB）
+    const contentLength = response.headers.get('content-length')
+    if (contentLength && parseInt(contentLength) > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Image too large (max 10MB)' }, { status: 413 })
+    }
+
     // 画像データを取得
     const imageBuffer = await response.arrayBuffer()
+
+    // ダウンロード後のサイズチェック（Content-Lengthが無い場合のフォールバック）
+    if (imageBuffer.byteLength > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Image too large (max 10MB)' }, { status: 413 })
+    }
 
     // レスポンスを返す
     return new NextResponse(imageBuffer, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400', // 1日キャッシュ
+        'Cache-Control': 'public, max-age=604800, immutable', // 7日キャッシュ（画像URLは不変）
         'Access-Control-Allow-Origin': '*',
       }
     })
@@ -115,8 +126,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // サイズ上限チェック（10MB）
+    const contentLengthPost = response.headers.get('content-length')
+    if (contentLengthPost && parseInt(contentLengthPost) > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Image too large (max 10MB)' }, { status: 413 })
+    }
+
     const contentType = response.headers.get('content-type') || 'image/jpeg'
     const imageBuffer = await response.arrayBuffer()
+
+    if (imageBuffer.byteLength > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Image too large (max 10MB)' }, { status: 413 })
+    }
 
     if (returnBase64) {
       // Base64で返す
@@ -133,7 +154,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse(imageBuffer, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400',
+        'Cache-Control': 'public, max-age=604800, immutable',
       }
     })
 

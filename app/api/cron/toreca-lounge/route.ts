@@ -48,9 +48,30 @@ export async function GET(request: NextRequest) {
         const loungeCards = await fetchAllLoungeCards()
         const loungeMap = new Map(loungeCards.map(c => [c.key, c]))
 
-        // ④ 各紐付けの価格を毎回記録（バッチINSERT）
+        // ④ 各紐付けの最新価格を取得（差分チェック用）
+        const linkIds = links.map(l => l.id)
+        const latestPriceMap = new Map<string, number>()
+        for (let i = 0; i < linkIds.length; i += 100) {
+            const batch = linkIds.slice(i, i + 100)
+            const { data: latestPrices } = await supabase
+                .from('purchase_prices')
+                .select('link_id, price')
+                .in('link_id', batch)
+                .order('created_at', { ascending: false })
+                .limit(10000)
+            if (latestPrices) {
+                for (const p of latestPrices) {
+                    if (!latestPriceMap.has(p.link_id)) {
+                        latestPriceMap.set(p.link_id, p.price)
+                    }
+                }
+            }
+        }
+
+        // ⑤ 各紐付けの価格を差分がある場合のみINSERT（データ肥大化防止）
         let updatedCount = 0
         let skippedCount = 0
+        let unchangedCount = 0
         const errors: string[] = []
         const inserts: { card_id: string; shop_id: string; price: number; condition: string; link_id: string }[] = []
 
@@ -62,7 +83,13 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
-                // 毎回INSERTリストに追加（価格変動の有無に関係なく）
+                // 前回と同じ価格ならスキップ（データ肥大化防止）
+                const lastPrice = latestPriceMap.get(link.id)
+                if (lastPrice === loungeCard.price) {
+                    unchangedCount++
+                    continue
+                }
+
                 inserts.push({
                     card_id: link.card_id,
                     shop_id: shop.id,
@@ -97,6 +124,7 @@ export async function GET(request: NextRequest) {
             total_links: links.length,
             scraped: loungeCards.length,
             updated: updatedCount,
+            unchanged: unchangedCount,
             skipped: skippedCount,
             elapsed: `${elapsed}s`,
             errors: errors.length > 0 ? errors : undefined,

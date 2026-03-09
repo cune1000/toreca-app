@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-
-const supabase = createServiceClient()
 import { parseRelativeTime, normalizeGrade, extractGradePrices } from '@/lib/scraping/helpers'
 import {
     extractApparelId,
@@ -19,6 +17,7 @@ import {
  */
 export async function POST(req: Request) {
     try {
+        const supabase = createServiceClient()
         const { cardId, url, backfill } = await req.json()
 
         if (!cardId || !url) {

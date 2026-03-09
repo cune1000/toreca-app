@@ -44,7 +44,7 @@ export async function GET(req: Request) {
     // 紐づけ済みのスニダンURLを取得（最終チャート更新が古い順）
     const { data: saleUrls, error: fetchError } = await supabase
       .from('card_sale_urls')
-      .select('card_id, apparel_id, product_url')
+      .select('card_id, apparel_id, product_url, product_type')
       .like('product_url', '%snkrdunk.com%')
       .not('apparel_id', 'is', null)
       .order('last_scraped_at', { ascending: true, nullsFirst: true })
@@ -71,13 +71,17 @@ export async function GET(req: Request) {
       }
 
       try {
-        // product_type判定
+        // product_type判定: DB保存済みなら getProductInfo をスキップ
         let productType: string
-        try {
-          const info = await getProductInfo(apparelId)
-          productType = info.isBox ? 'box' : 'single'
-        } catch {
-          productType = 'single'
+        if (url.product_type) {
+          productType = url.product_type
+        } else {
+          try {
+            const info = await getProductInfo(apparelId)
+            productType = info.isBox ? 'box' : 'single'
+          } catch {
+            productType = 'single'
+          }
         }
 
         const fetchedAt = now.toISOString()

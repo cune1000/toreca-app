@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { isSnkrdunkSiteName } from '@/lib/snkrdunk-api'
 
-const supabase = createServiceClient()
-
 /**
  * スニダン紐づけAPI
  * POST /api/linking/snkrdunk/link
@@ -16,6 +14,7 @@ const supabase = createServiceClient()
  */
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createServiceClient()
     const body = await req.json()
     const { cardId, apparelId } = body
 
@@ -86,6 +85,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const supabase = createServiceClient()
     const body = await req.json()
     const { apparelId } = body
 

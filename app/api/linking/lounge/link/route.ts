@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 
-const supabase = createServiceClient()
-
 /**
  * トレカラウンジ紐づけAPI
  * POST /api/linking/lounge/link
@@ -15,6 +13,7 @@ const supabase = createServiceClient()
  */
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createServiceClient()
     const body = await req.json()
     const { cardId, cardKey, label, condition } = body
 
@@ -59,6 +58,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const supabase = createServiceClient()
     const body = await req.json()
     const { cardKey } = body
 

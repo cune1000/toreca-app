@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
         .gte('recorded_at', thirtyDaysAgo)
         .not(priceCol, 'is', null)
         .order('recorded_at', { ascending: false })
+        .limit(10000)
 
     if (categoryFilter) {
         query = query.eq('cards.category.name', categoryFilter)
@@ -205,6 +206,7 @@ async function handlePurchaseRanking(
         `)
         .gte('date', monthAgo)
         .not('purchase_avg', 'is', null)
+        .limit(10000)
 
     if (categoryFilter) {
         query = query.eq('cards.category.name', categoryFilter)

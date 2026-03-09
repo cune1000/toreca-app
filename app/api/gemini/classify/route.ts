@@ -2,11 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
+// SSRF防止: 画像取得元を制限
+const ALLOWED_IMAGE_HOSTS = ['pbs.twimg.com', 'abs.twimg.com']
+
+function isAllowedImageUrl(url: string): boolean {
+    try {
+        const parsed = new URL(url)
+        return ALLOWED_IMAGE_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`))
+            && ['http:', 'https:'].includes(parsed.protocol)
+    } catch {
+        return false
+    }
+}
+
 /**
  * 画像が買取表かどうかをGeminiで判別
  * POST /api/gemini/classify
  * Body: { imageUrl: string, tweetText?: string }
  * Response: { is_purchase_list: boolean, confidence: number, reason: string }
+ *
+ * 注意: twitter/monitor cronから内部的に呼ばれる。外部からの直接呼び出しは想定しないが、
+ * imageUrl制限でSSRFは防止する。
  */
 export async function POST(request: NextRequest) {
     try {
@@ -14,6 +30,10 @@ export async function POST(request: NextRequest) {
 
         if (!imageUrl) {
             return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
+        }
+
+        if (!isAllowedImageUrl(imageUrl)) {
+            return NextResponse.json({ error: 'Image URL domain not allowed' }, { status: 400 })
         }
 
         if (!GEMINI_API_KEY) {

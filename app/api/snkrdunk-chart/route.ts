@@ -11,8 +11,6 @@ import {
 import { cleanChartData } from '@/lib/snkrdunk-chart'
 import { ALLOWED_GRADES } from '@/components/card-detail/constants'
 
-const supabase = createServiceClient()
-
 /**
  * GET /api/snkrdunk-chart?cardId=xxx
  * カードのチャートデータをDBから取得
@@ -26,6 +24,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: 'cardId is required' }, { status: 400 })
     }
 
+    const supabase = createServiceClient()
     const query = supabase
         .from('snkrdunk_chart_data')
         .select('condition, date, price, price_cleaned, is_anomaly')
@@ -71,6 +70,7 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
     try {
+        const supabase = createServiceClient()
         const { cardId, conditions: requestedConditions } = await req.json()
 
         if (!cardId) {
@@ -195,6 +195,7 @@ async function upsertChartData(
     cleaned: ReturnType<typeof cleanChartData>,
     fetchedAt: string
 ): Promise<{ fetched: number; inserted: number; anomalies: number }> {
+    const supabase = createServiceClient()
     const rows = cleaned.map(p => ({
         card_id: cardId,
         apparel_id: apparelId,
