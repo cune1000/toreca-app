@@ -61,21 +61,27 @@ export async function GET(req: Request) {
     console.log(`[Overseas Price Sync] Exchange rate: USD/JPY = ${exchangeRate}`)
 
     // pricecharting_id が設定済みのカードを取得
-    let query = supabase
+    const batchLimit = limitParam ? Math.min(parseInt(limitParam) || 200, 10000) : 200
+    const startTime = Date.now()
+
+    const { data: allCards, error: cardsError } = await supabase
       .from(TABLES.CARDS)
       .select('id, pricecharting_id')
       .not('pricecharting_id', 'is', null)
+      .limit(10000)
 
-    if (limitParam) {
-      const limit = parseInt(limitParam)
-      if (!isNaN(limit) && limit > 0) {
-        query = query.limit(limit)
-      }
-    } else {
-      query = query.limit(10000)
-    }
+    // 今日既に更新済みのカードを除外（ローテーション）
+    const today = new Date().toISOString().substring(0, 10)
+    const { data: alreadySynced } = await supabase
+      .from(TABLES.OVERSEAS_PRICES)
+      .select('card_id')
+      .gte('recorded_at', `${today}T00:00:00`)
+      .lte('recorded_at', `${today}T23:59:59`)
 
-    const { data: cards, error: cardsError } = await query
+    const syncedSet = new Set((alreadySynced || []).map((r: any) => r.card_id))
+    const unsyncedCards = (allCards || []).filter(c => !syncedSet.has(c.id))
+    // 未更新カードを優先、残り枠は更新済みカードで埋める
+    const cards = [...unsyncedCards, ...(allCards || []).filter(c => syncedSet.has(c.id))].slice(0, batchLimit)
 
     if (cardsError) {
       console.error('[Overseas Price Sync] Cards fetch error:', cardsError)
@@ -94,13 +100,18 @@ export async function GET(req: Request) {
       })
     }
 
-    console.log(`[Overseas Price Sync] Processing ${cards.length} cards...`)
+    console.log(`[Overseas Price Sync] Processing ${cards.length} cards (${unsyncedCards.length} unsynced today)...`)
 
     let success = 0
     let failed = 0
     const errors: string[] = []
 
     for (const card of cards) {
+      // タイムアウト防止（270秒で打ち切り）
+      if (Date.now() - startTime > 270_000) {
+        console.warn(`[Overseas Price Sync] Timeout approaching, stopping at ${success + failed}/${cards.length}`)
+        break
+      }
       try {
         const product = await getProduct(card.pricecharting_id!)
 

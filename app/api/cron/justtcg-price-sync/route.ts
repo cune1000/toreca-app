@@ -45,8 +45,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, message: 'No cards with justtcg_id', processed: 0 })
     }
 
-    // 2. セットIDでグルーピング
+    // 2. 今日既に更新済みのカードを特定
+    const today = new Date().toISOString().substring(0, 10) // YYYY-MM-DD
+    const { data: alreadySynced } = await supabase
+      .from('justtcg_price_history')
+      .select('card_id')
+      .gte('recorded_at', `${today}T00:00:00`)
+      .lte('recorded_at', `${today}T23:59:59`)
+    const syncedSet = new Set((alreadySynced || []).map((r: any) => r.card_id))
+
+    // 3. セットIDでグルーピング（未更新カードがあるセットを優先）
     const setGroups = new Map<string, { cardId: string; justtcgId: string }[]>()
+    const syncedSetGroups = new Map<string, { cardId: string; justtcgId: string }[]>()
     let unmatchedCount = 0
 
     for (const card of cards) {
@@ -55,18 +65,23 @@ export async function GET(req: Request) {
         unmatchedCount++
         continue
       }
-      if (!setGroups.has(setId)) setGroups.set(setId, [])
-      setGroups.get(setId)!.push({ cardId: card.id, justtcgId: card.justtcg_id })
+      const hasUnsyncedCard = !syncedSet.has(card.id)
+      const targetMap = hasUnsyncedCard ? setGroups : syncedSetGroups
+      if (!targetMap.has(setId)) targetMap.set(setId, [])
+      targetMap.get(setId)!.push({ cardId: card.id, justtcgId: card.justtcg_id })
     }
 
-    console.log(`[justtcg-price-sync] ${cards.length} cards → ${setGroups.size} sets (${unmatchedCount} unmatched)`)
+    // 未更新セットを先に処理し、その後に更新済みセットを処理
+    const orderedSets = [...setGroups.entries(), ...syncedSetGroups.entries()]
+
+    console.log(`[justtcg-price-sync] ${cards.length} cards → ${setGroups.size + syncedSetGroups.size} sets (${setGroups.size} unsynced, ${unmatchedCount} unmatched)`)
 
     // 3. セットごとにAPI呼び出し
     let totalUpdated = 0
     let totalErrors = 0
     const now = new Date().toISOString()
 
-    for (const [setId, group] of setGroups) {
+    for (const [setId, group] of orderedSets) {
       try {
         // セットIDからゲームを判定
         const game = setId.endsWith('one-piece-card-game') ? 'one-piece-card-game' : 'pokemon-japan'
@@ -176,7 +191,7 @@ export async function GET(req: Request) {
     const summary = {
       success: true,
       totalCards: cards.length,
-      totalSets: setGroups.size,
+      totalSets: orderedSets.length,
       totalUpdated,
       totalErrors,
       unmatchedCount,
