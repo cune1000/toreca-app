@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { X, ExternalLink, Edit, Store, Globe, Package, TrendingUp, TrendingDown, ShoppingCart } from 'lucide-react'
+import { X, Edit, Store, Globe, Package, TrendingUp, TrendingDown, ShoppingCart } from 'lucide-react'
 import { getRarityDisplayName } from '@/lib/rarity-mapping'
 
 interface PriceDiff {
@@ -334,22 +334,22 @@ export default function CardDetailHeader({
           )}
 
           {/* 海外相場 & 転売シミュレーション */}
-          {overseasLatest && (overseasLatest.loose_price_jpy || overseasLatest.graded_price_jpy) && (() => {
+          {overseasLatest && (overseasLatest.loose_price_jpy != null || overseasLatest.graded_price_jpy != null) && (() => {
             const looseJpy = overseasLatest.loose_price_jpy
             const gradedJpy = overseasLatest.graded_price_jpy
             // スニダンデータがあれば比較行を作成
             const rows: { label: string; domestic: number; overseasJpy: number; overseasUsd: number; profit: number; pct: number }[] = []
             if (snkrdunkLatestByGrade && snkrdunkLatestByGrade.length > 0) {
               const salePSA10 = snkrdunkLatestByGrade.find(g => g.grade === 'PSA10')
-              if (gradedJpy && overseasLatest.graded_price_usd && salePSA10 && salePSA10.price > 0) {
+              if (gradedJpy != null && gradedJpy > 0 && overseasLatest.graded_price_usd && salePSA10 && salePSA10.price > 0) {
                 rows.push({ label: 'PSA10→海外', domestic: salePSA10.price, overseasJpy: gradedJpy, overseasUsd: overseasLatest.graded_price_usd, profit: gradedJpy - salePSA10.price, pct: ((gradedJpy - salePSA10.price) / salePSA10.price) * 100 })
               }
               const saleA = snkrdunkLatestByGrade.find(g => g.grade === 'A')
-              if (looseJpy && overseasLatest.loose_price_usd && saleA && saleA.price > 0) {
+              if (looseJpy != null && looseJpy > 0 && overseasLatest.loose_price_usd && saleA && saleA.price > 0) {
                 rows.push({ label: '素体(A)→海外', domestic: saleA.price, overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleA.price, pct: ((looseJpy - saleA.price) / saleA.price) * 100 })
               }
               const saleB = snkrdunkLatestByGrade.find(g => g.grade === 'B')
-              if (looseJpy && overseasLatest.loose_price_usd && saleB && saleB.price > 0) {
+              if (looseJpy != null && looseJpy > 0 && overseasLatest.loose_price_usd && saleB && saleB.price > 0) {
                 rows.push({ label: '素体(B)→海外', domestic: saleB.price, overseasJpy: looseJpy, overseasUsd: overseasLatest.loose_price_usd, profit: looseJpy - saleB.price, pct: ((looseJpy - saleB.price) / saleB.price) * 100 })
               }
             }
@@ -361,7 +361,7 @@ export default function CardDetailHeader({
                 </div>
                 <div className="space-y-1.5">
                   {/* 海外相場の値段表示（PSA10を上、素体を下） */}
-                  {gradedJpy && (
+                  {gradedJpy != null && gradedJpy > 0 && (
                     <>
                       <div className="flex items-baseline gap-2">
                         <span className="text-xs text-indigo-400 w-[90px] shrink-0">PSA10 相場</span>
@@ -375,7 +375,7 @@ export default function CardDetailHeader({
                       </div>
                     </>
                   )}
-                  {looseJpy && (
+                  {looseJpy != null && looseJpy > 0 && (
                     <>
                       <div className="flex items-baseline gap-2">
                         <span className="text-xs text-indigo-400 w-[90px] shrink-0">素体 相場</span>

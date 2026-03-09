@@ -9,6 +9,7 @@ import {
     SINGLE_CHART_OPTIONS,
 } from '@/lib/snkrdunk-api'
 import { cleanChartData } from '@/lib/snkrdunk-chart'
+import { ALLOWED_GRADES } from '@/components/card-detail/constants'
 
 const supabase = createServiceClient()
 
@@ -108,9 +109,7 @@ export async function POST(req: Request) {
 
         if (productType === 'single') {
             // シングルカード: A, B, PSA10, PSA9 を取得（「すべての状態」は平均値のため除外）
-            const conditionsToFetch = requestedConditions || [
-                'A', 'B', 'PSA10', 'PSA9',
-            ]
+            const conditionsToFetch = requestedConditions || [...ALLOWED_GRADES].filter(g => !/^\d+個$/.test(g))
 
             for (const condLabel of conditionsToFetch) {
                 const optionId = SINGLE_CHART_OPTIONS[condLabel]

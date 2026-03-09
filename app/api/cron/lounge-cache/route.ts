@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
-
-const supabase = createServiceClient()
 import { fetchAllLoungeCards } from '@/lib/toreca-lounge'
 
 export const maxDuration = 120
@@ -20,6 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     const start = Date.now()
+    const supabase = createServiceClient()
 
     try {
         // ① 全ページスクレイピング
@@ -78,6 +77,7 @@ export async function GET(request: NextRequest) {
         const { data: existingKeys } = await supabase
             .from('lounge_known_keys')
             .select('card_key')
+            .limit(10000)
 
         const knownKeySet = new Set((existingKeys || []).map(k => k.card_key))
         const newCards = uniqueCards.filter(c => !knownKeySet.has(c.key))
@@ -95,9 +95,12 @@ export async function GET(request: NextRequest) {
                     grade: card.grade || '',
                 }))
 
-                await supabase
+                const { error: knownKeyError } = await supabase
                     .from('lounge_known_keys')
                     .upsert(batch, { onConflict: 'card_key' })
+                if (knownKeyError) {
+                    console.error(`[lounge-cache] lounge_known_keys upsert error:`, knownKeyError.message)
+                }
             }
         }
 
@@ -128,16 +131,21 @@ export async function GET(request: NextRequest) {
             errors: errorCount,
             elapsed: `${elapsed}s`,
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
-        await supabase.from('cron_logs').insert({
-            job_name: 'lounge_cache_refresh',
-            status: 'error',
-            details: { error: error.message, elapsed: `${elapsed}s` },
-        })
+        try {
+            await supabase.from('cron_logs').insert({
+                job_name: 'lounge_cache_refresh',
+                status: 'error',
+                details: { error: message, elapsed: `${elapsed}s` },
+            })
+        } catch { /* ignore logging failure */ }
 
-        await markCronJobRun('lounge-cache', 'error', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        try {
+            await markCronJobRun('lounge-cache', 'error', message)
+        } catch { /* ignore */ }
+        return NextResponse.json({ error: message }, { status: 500 })
     }
 }

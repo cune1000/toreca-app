@@ -109,9 +109,9 @@ export default function PriceChartTab({
   useEffect(() => { saveSetting('visibleGrades', visibleGrades) }, [visibleGrades, saveSetting])
   useEffect(() => { saveSetting('visiblePurchase', visiblePurchase) }, [visiblePurchase, saveSetting])
 
-  const hasOverseasData = chartData.some(d => d.overseas_loose != null || d.overseas_graded != null)
-  const hasJustTcgData = chartData.some(d => d.justtcg_nm_jpy)
-  const hasDailyTradeData = chartData.some(d => d.daily_trade_avg)
+  const hasOverseasData = chartData.some(d => (d.overseas_loose != null && d.overseas_loose > 0) || (d.overseas_graded != null && d.overseas_graded > 0))
+  const hasJustTcgData = chartData.some(d => d.justtcg_nm_jpy != null)
+  const hasDailyTradeData = chartData.some(d => d.daily_trade_avg != null)
 
   // スニダン判定（グレード別で表示するのでサイト別からは除外）
   const nonSnkrdunkSites = siteList.filter(s => !isSnkrdunkSiteName(s.name || ''))
@@ -415,7 +415,7 @@ export default function PriceChartTab({
                 })}
 
 
-              {/* 海外素体線（独立Y軸で変動を可視化） */}
+              {/* eBay素体線（独立Y軸で変動を可視化） */}
               {showOverseasLoose && hasOverseasData && (
                 <Line
                   yAxisId="overseas"
@@ -430,7 +430,7 @@ export default function PriceChartTab({
                 />
               )}
 
-              {/* 海外PSA10線（独立Y軸で変動を可視化） */}
+              {/* eBayPSA10線（独立Y軸で変動を可視化） */}
               {showOverseasGraded && hasOverseasData && (
                 <Line
                   yAxisId="overseas"

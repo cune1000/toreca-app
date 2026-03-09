@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Image as ImageIcon } from 'lucide-react'
 
 interface LoungeResult {
     productId: string
@@ -162,7 +163,9 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                                 {detail?.imageUrl ? (
                                     <img src={detail.imageUrl} alt="" className="w-10 h-14 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
                                 ) : (
-                                    <div className="w-10 h-14 bg-orange-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">🃏</div>
+                                    <div className="w-10 h-14 bg-orange-100/80 rounded-lg flex items-center justify-center text-lg flex-shrink-0">
+                                        <ImageIcon className="w-6 h-6 text-orange-500 stroke-1" />
+                                    </div>
                                 )}
                                 {/* カード情報 */}
                                 <div className="flex-1 min-w-0">
@@ -278,7 +281,9 @@ export default function LoungeLink({ cardId, cardName, shopName = 'トレカラ�
                                         {item.imageUrl ? (
                                             <img src={item.imageUrl} alt="" className="w-14 h-20 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
                                         ) : (
-                                            <div className="w-14 h-20 bg-gray-100 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">🃏</div>
+                                            <div className="w-14 h-20 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                <ImageIcon className="w-8 h-8 text-gray-400 stroke-1" />
+                                            </div>
                                         )}
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>

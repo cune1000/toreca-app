@@ -159,11 +159,3 @@ export function cleanChartData(
     return result
 }
 
-/**
- * 条件ラベルの正規化
- * APIの salesChartOption.localizedName → DB保存用のキー
- */
-export function normalizeConditionLabel(localizedName: string): string {
-    // そのまま使う（"A", "B", "PSA10", "1個" 等）
-    return localizedName.trim()
-}

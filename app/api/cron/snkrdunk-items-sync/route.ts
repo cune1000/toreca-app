@@ -6,8 +6,6 @@ import { parseExternalName } from '@/app/linking/lib/matching'
 
 export const maxDuration = 300
 
-const supabase = createServiceClient()
-
 /** 1回のcron実行でフェッチするデフォルトの最大ページ数 */
 const DEFAULT_MAX_PAGES_PER_RUN = 5
 /** 1ページあたりの取得件数 */
@@ -46,6 +44,7 @@ export async function GET(req: Request) {
     const categoryIds = catIdParam ? [parseInt(catIdParam)] : CATEGORY_IDS
 
     console.log(`[snkrdunk-items-sync] Starting ${isFullSync ? 'Full' : 'Light'} sync (start=${startPage}, max=${maxPages}, categories=${categoryIds.join(',')})...`)
+    const supabase = createServiceClient()
     const startTime = Date.now()
     const now = new Date().toISOString()
 
@@ -131,9 +130,10 @@ export async function GET(req: Request) {
     await markCronJobRun('snkrdunk-items-sync', 'success')
 
     return NextResponse.json(summary)
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[snkrdunk-items-sync] Cron job error:', error)
-    await markCronJobRun('snkrdunk-items-sync', 'error', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    await markCronJobRun('snkrdunk-items-sync', 'error', message).catch(() => {})
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }

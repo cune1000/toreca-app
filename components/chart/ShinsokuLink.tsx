@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Image as ImageIcon } from 'lucide-react'
 
 interface ShinsokuResult {
     item_id: string
@@ -156,7 +157,9 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                                 {detail?.image_url ? (
                                     <img src={detail.image_url} alt="" className="w-10 h-14 object-cover rounded-lg flex-shrink-0 bg-gray-100" />
                                 ) : (
-                                    <div className="w-10 h-14 bg-green-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">🃏</div>
+                                    <div className="w-10 h-14 bg-green-100/80 rounded-lg flex items-center justify-center text-lg flex-shrink-0">
+                                        <ImageIcon className="w-6 h-6 text-green-500 stroke-1" />
+                                    </div>
                                 )}
                                 {/* カード情報 */}
                                 <div className="flex-1 min-w-0">

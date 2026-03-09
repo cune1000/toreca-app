@@ -74,11 +74,11 @@ export function normalizeGrade(gradeText: string): string | null {
     if (cleaned.includes('ARS9')) return 'ARS9'
     if (cleaned.includes('ARS8')) return 'ARS8以下'
 
-    // 一般グレード（A, B, C, D）
-    if (cleaned.includes('A') || cleaned === 'A') return 'A'
-    if (cleaned.includes('B') || cleaned === 'B') return 'B'
-    if (cleaned.includes('C') || cleaned === 'C') return 'C'
-    if (cleaned.includes('D') || cleaned === 'D') return 'D'
+    // 一般グレード（A, B, C, D）— 先頭一文字 or 完全一致（SEALED/DAMAGED等の誤マッチ防止）
+    if (/^A([^A-Z]|$)/.test(cleaned)) return 'A'
+    if (/^B([^A-Z]|$)/.test(cleaned)) return 'B'
+    if (/^C([^A-Z]|$)/.test(cleaned)) return 'C'
+    if (/^D([^A-Z]|$)/.test(cleaned)) return 'D'
 
     // BOX/パック用: 数量パターン (1個, 2個, 3個, など)
     const quantityMatch = gradeText.match(/(\d+)個/)

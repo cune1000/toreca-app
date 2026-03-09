@@ -6,7 +6,6 @@
  */
 
 const SNKRDUNK_BASE = 'https://snkrdunk.com'
-const ZENROWS_API_KEY = process.env.ZENROWS_API_KEY
 
 // ============================================================================
 // Types
@@ -65,10 +64,11 @@ async function snkrdunkFetch(url: string): Promise<Response> {
 
     try {
         let res: Response
+        const zenrowsApiKey = process.env.ZENROWS_API_KEY
 
-        if (ZENROWS_API_KEY) {
+        if (zenrowsApiKey) {
             // ZenRows プロキシ経由でヘッダーも転送
-            const zenrowsUrl = `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(url)}&custom_headers=true`
+            const zenrowsUrl = `https://api.zenrows.com/v1/?apikey=${zenrowsApiKey}&url=${encodeURIComponent(url)}&custom_headers=true`
             console.log(`[SnkrdunkAPI] Fetching via ZenRows: ${url}`)
             res = await fetch(zenrowsUrl, { headers, signal: controller.signal, cache: 'no-store' })
         } else {

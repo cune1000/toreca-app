@@ -32,10 +32,10 @@ function CustomTooltip({ active, payload }: any) {
                     <p className="font-bold" style={{ color: p.color }}>
                         {p.name}: {p.dataKey === 'justtcg_nm_usd' ? `$${(p.value || 0).toFixed(2)}` : formatPrice(p.value || 0)}
                     </p>
-                    {p.dataKey === 'loose_price_jpy' && d?.loose_price_usd > 0 && (
+                    {p.dataKey === 'loose_price_jpy' && d?.loose_price_usd != null && d.loose_price_usd > 0 && (
                         <p className="text-gray-400 text-[10px]">({formatUsd(d.loose_price_usd)})</p>
                     )}
-                    {p.dataKey === 'graded_price_jpy' && d?.graded_price_usd > 0 && (
+                    {p.dataKey === 'graded_price_jpy' && d?.graded_price_usd != null && d.graded_price_usd > 0 && (
                         <p className="text-gray-400 text-[10px]">({formatUsd(d.graded_price_usd)})</p>
                     )}
                     {p.dataKey === 'justtcg_nm_usd' && (
@@ -67,7 +67,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
         [chartData]
     )
 
-    const hasJtcgData = formattedData.some((d: any) => d.justtcg_nm_usd > 0)
+    const hasJtcgData = formattedData.some((d: any) => d.justtcg_nm_usd != null && d.justtcg_nm_usd > 0)
     const tickInterval = Math.max(1, Math.floor(formattedData.length / 6))
 
     return (
@@ -203,7 +203,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                     stroke="#3b82f6"
                                     strokeWidth={1.5}
                                     fill="url(#gradJtcg)"
-                                    name="JT NM"
+                                    name="TCGPlayer"
                                     dot={false}
                                     activeDot={{ r: 4, fill: '#3b82f6' }}
                                     yAxisId="usd"

@@ -9,12 +9,13 @@ import {
   getBoxChartOptions,
   SINGLE_CHART_OPTIONS,
 } from '@/lib/snkrdunk-api'
+import { ALLOWED_GRADES } from '@/components/card-detail/constants'
 import { cleanChartData } from '@/lib/snkrdunk-chart'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 300
 
 const BATCH_SIZE = 10
-const supabase = createServiceClient()
 
 /**
  * スニダンチャートデータ定期更新Cron
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
+    const supabase = createServiceClient()
     const now = new Date()
     const batchLimit = limitParam ? Math.min(parseInt(limitParam) || BATCH_SIZE, 500) : BATCH_SIZE
 
@@ -83,19 +85,21 @@ export async function GET(req: Request) {
         let condCount = 0
 
         if (productType === 'single') {
-          for (const condLabel of ['A', 'B', 'PSA10', 'PSA9']) {
+          const singleGrades = [...ALLOWED_GRADES].filter(g => !/^\d+個$/.test(g))
+          for (const condLabel of singleGrades) {
             const optionId = SINGLE_CHART_OPTIONS[condLabel]
             if (optionId === undefined) continue
             try {
               const chartData = await getSalesChartUsed(apparelId, optionId, 'all')
               if (!chartData.points || chartData.points.length === 0) continue
               const cleaned = cleanChartData(chartData.points)
-              const inserted = await upsertChartData(cardId, apparelId, productType, condLabel, cleaned, fetchedAt)
+              const inserted = await upsertChartData(supabase, cardId, apparelId, productType, condLabel, cleaned, fetchedAt)
               totalInserted += inserted
               condCount++
               await sleep(300)
-            } catch (e: any) {
-              console.error(`[snkrdunk-chart-sync] ${cardId} ${condLabel}:`, e.message)
+            } catch (e: unknown) {
+              const eMsg = e instanceof Error ? e.message : String(e)
+              console.error(`[snkrdunk-chart-sync] ${cardId} ${condLabel}:`, eMsg)
             }
           }
         } else {
@@ -106,12 +110,13 @@ export async function GET(req: Request) {
               const chartData = await getSalesChart(apparelId, oneBox.id, 'all')
               if (chartData.points && chartData.points.length > 0) {
                 const cleaned = cleanChartData(chartData.points)
-                totalInserted = await upsertChartData(cardId, apparelId, productType, '1個', cleaned, fetchedAt)
+                totalInserted = await upsertChartData(supabase, cardId, apparelId, productType, '1個', cleaned, fetchedAt)
                 condCount = 1
               }
             }
-          } catch (e: any) {
-            console.error(`[snkrdunk-chart-sync] BOX ${cardId}:`, e.message)
+          } catch (e: unknown) {
+            const eMsg = e instanceof Error ? e.message : String(e)
+            console.error(`[snkrdunk-chart-sync] BOX ${cardId}:`, eMsg)
           }
         }
 
@@ -119,9 +124,10 @@ export async function GET(req: Request) {
 
         // カード間のレート制限
         await sleep(500)
-      } catch (e: any) {
-        console.error(`[snkrdunk-chart-sync] ${cardId}:`, e.message)
-        results.push({ cardId, status: 'error', error: e.message })
+      } catch (e: unknown) {
+        const eMsg = e instanceof Error ? e.message : String(e)
+        console.error(`[snkrdunk-chart-sync] ${cardId}:`, eMsg)
+        results.push({ cardId, status: 'error', error: eMsg })
       }
     }
 
@@ -131,14 +137,16 @@ export async function GET(req: Request) {
       processed: results.length,
       results,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[snkrdunk-chart-sync] Error:', error)
-    await markCronJobRun('snkrdunk-chart-sync', 'error', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    await markCronJobRun('snkrdunk-chart-sync', 'error', message).catch(() => {})
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
 async function upsertChartData(
+  supabase: SupabaseClient,
   cardId: string,
   apparelId: number,
   productType: string,

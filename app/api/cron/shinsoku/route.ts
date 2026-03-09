@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
-const supabase = createServiceClient()
-
 export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
@@ -19,6 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const start = Date.now()
+    const supabase = createServiceClient()
 
     try {
         // ① シンソクのshop_idを取得
@@ -36,6 +35,7 @@ export async function GET(request: NextRequest) {
             .from('card_purchase_links')
             .select('id, card_id, external_key, label, condition, card:card_id(name)')
             .eq('shop_id', shop.id)
+            .limit(10000)
 
         if (linksError) throw linksError
 
@@ -60,11 +60,33 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // ④ 各紐付けの価格を計算してINSERT（毎回記録）
+        // ④ 各紐付けの最新価格を取得（差分チェック用）
+        const linkIds = links.map(l => l.id)
+        const latestPriceMap = new Map<string, number>()
+        for (let i = 0; i < linkIds.length; i += 100) {
+            const batch = linkIds.slice(i, i + 100)
+            const { data: latestPrices } = await supabase
+                .from('purchase_prices')
+                .select('link_id, price')
+                .in('link_id', batch)
+                .order('created_at', { ascending: false })
+                .limit(10000)
+            if (latestPrices) {
+                for (const p of latestPrices) {
+                    // 各link_idの最新（最初に見つかった）価格のみ保持
+                    if (!latestPriceMap.has(p.link_id)) {
+                        latestPriceMap.set(p.link_id, p.price)
+                    }
+                }
+            }
+        }
+
+        // ⑤ 各紐付けの価格を計算して差分があればINSERT
         let updatedCount = 0
         let skippedCount = 0
+        let unchangedCount = 0
         const errors: string[] = []
-        const inserts: any[] = []
+        const inserts: { card_id: string; shop_id: string; price: number; condition: string; link_id: string }[] = []
 
         for (const link of links) {
             try {
@@ -100,7 +122,13 @@ export async function GET(request: NextRequest) {
                     continue
                 }
 
-                // 毎回INSERTリストに追加（価格変動の有無に関係なく）
+                // 前回と同じ価格ならスキップ（データ肥大化防止）
+                const lastPrice = latestPriceMap.get(link.id)
+                if (lastPrice === priceYen) {
+                    unchangedCount++
+                    continue
+                }
+
                 inserts.push({
                     card_id: link.card_id,
                     shop_id: shop.id,
@@ -109,9 +137,10 @@ export async function GET(request: NextRequest) {
                     link_id: link.id,
                 })
                 updatedCount++
-            } catch (err: any) {
-                const cardName = (link as any).card?.name || link.card_id
-                errors.push(`${cardName}(${link.label}): ${err.message}`)
+            } catch (err: unknown) {
+                const errMsg = err instanceof Error ? err.message : String(err)
+                const cardName = (link as { card?: { name?: string } }).card?.name || link.card_id
+                errors.push(`${cardName}(${link.label}): ${errMsg}`)
             }
         }
 
@@ -135,16 +164,18 @@ export async function GET(request: NextRequest) {
             items_found: itemMap.size,
             items_missing: externalKeys.length - itemMap.size,
             updated: updatedCount,
+            unchanged: unchangedCount,
             skipped: skippedCount,
             elapsed: `${elapsed}s`,
             errors: errors.length > 0 ? errors : undefined,
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-        await markCronJobRun('shinsoku', 'error', error.message)
+        await markCronJobRun('shinsoku', 'error', message).catch(() => {})
 
         return NextResponse.json({
-            error: error.message,
+            error: message,
             elapsed: `${elapsed}s`,
         }, { status: 500 })
     }

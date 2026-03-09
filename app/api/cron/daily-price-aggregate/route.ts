@@ -55,7 +55,19 @@ export async function GET(req: Request) {
         const dayStart = `${targetDate}T00:00:00+09:00`
         const dayEnd = `${targetDate}T23:59:59+09:00`
 
-        const results: any[] = []
+        interface PriceIndexRecord {
+            date: string
+            category: string
+            sub_category: string
+            rarity: string
+            grade: string
+            price_type: 'sale' | 'purchase'
+            avg_price: number
+            median_price: number
+            card_count: number
+            trade_count: number
+        }
+        const results: PriceIndexRecord[] = []
 
         // =====================================================================
         // マスターデータ取得
@@ -63,29 +75,33 @@ export async function GET(req: Request) {
         const { data: allCategories } = await supabase
             .from('category_large')
             .select('id, name')
+            .limit(10000)
         const { data: allMediumCategories } = await supabase
             .from('category_medium')
             .select('id, name, large_id')
+            .limit(10000)
         const { data: allRarities } = await supabase
             .from('rarities')
             .select('id, name')
+            .limit(10000)
 
         const categoryMap: Record<string, string> = {}
         const categoryMediumMap: Record<string, { name: string; largeId: string }> = {}
         const rarityMap: Record<string, string> = {}
 
-        allCategories?.forEach((c: any) => categoryMap[c.id] = c.name)
-        allMediumCategories?.forEach((c: any) => categoryMediumMap[c.id] = { name: c.name, largeId: c.large_id })
-        allRarities?.forEach((r: any) => rarityMap[r.id] = r.name)
+        allCategories?.forEach((c) => categoryMap[c.id] = c.name)
+        allMediumCategories?.forEach((c) => categoryMediumMap[c.id] = { name: c.name, largeId: c.large_id })
+        allRarities?.forEach((r) => rarityMap[r.id] = r.name)
 
         // カードIDからカテゴリ中を逆引きするマップ
         // cards テーブルから category_medium_id を取得
         const { data: cardMediumData } = await supabase
             .from('cards')
             .select('id, category_large_id, category_medium_id, rarity_id')
+            .limit(10000)
 
         const cardInfoMap: Record<string, { catLargeId: string; catMediumId: string | null; rarityId: string | null }> = {}
-        cardMediumData?.forEach((c: any) => {
+        cardMediumData?.forEach((c) => {
             cardInfoMap[c.id] = {
                 catLargeId: c.category_large_id,
                 catMediumId: c.category_medium_id,
@@ -263,7 +279,15 @@ export async function GET(req: Request) {
             ...Object.keys(purchaseByCard),
         ])
 
-        const chartRecords: any[] = []
+        interface ChartCardRecord {
+            card_id: string
+            date: string
+            sale_avg: number | null
+            purchase_avg: number | null
+            sale_count: number
+            purchase_count: number
+        }
+        const chartRecords: ChartCardRecord[] = []
         for (const cardId of allCardIds) {
             const salePrices = saleByCard[cardId]?.prices || []
             const purchasePrices2 = purchaseByCard[cardId]?.prices || []
@@ -313,12 +337,13 @@ export async function GET(req: Request) {
             results: results.slice(0, 30)
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
         console.error('[Price Index] Error:', error)
-        await markCronJobRun('daily-price-aggregate', 'error', error.message)
+        await markCronJobRun('daily-price-aggregate', 'error', message).catch(() => {})
         return NextResponse.json({
             success: false,
-            error: error.message
+            error: message
         }, { status: 500 })
     }
 }

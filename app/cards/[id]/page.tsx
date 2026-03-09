@@ -168,14 +168,18 @@ export default function CardDetailPage({ params }: Props) {
   }
 
   const handleCardUpdated = async () => {
-    const { data } = await supabase
-      .from('cards')
-      .select('*, category_large:category_large_id(id, name, icon), rarities:rarity_id(id, name)')
-      .eq('id', id)
-      .single()
-    if (data) {
-      setCard(data)
-      setCardImageUrl(data.image_url || null)
+    try {
+      const { data } = await supabase
+        .from('cards')
+        .select('*, category_large:category_large_id(id, name, icon), rarities:rarity_id(id, name)')
+        .eq('id', id)
+        .single()
+      if (data) {
+        setCard(data)
+        setCardImageUrl(data.image_url || null)
+      }
+    } catch (err) {
+      console.error('Failed to refresh card data:', err)
     }
   }
 
@@ -327,7 +331,7 @@ export default function CardDetailPage({ params }: Props) {
         const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
         const ts = dayNoon.getTime()
         const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(dayNoon) }
-        if (jh.price_usd) existing.justtcg_nm_jpy = Math.round(jh.price_usd * exchangeRate)
+        if (jh.price_usd != null && jh.price_usd > 0) existing.justtcg_nm_jpy = Math.round(jh.price_usd * exchangeRate)
         dataMap.set(ts, existing)
       }
     }
@@ -337,7 +341,7 @@ export default function CardDetailPage({ params }: Props) {
       const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
       const tradeByDay: Record<number, number[]> = {}
       for (const s of snkrdunkSales) {
-        const d = formatDate(s.sold_at); if (!d || !s.price || s.price <= 0) continue
+        const d = formatDate(s.sold_at); if (!d || s.price == null || s.price <= 0) continue
         if (cutoff && d < cutoff) continue
         const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
         const ts = dayNoon.getTime()
@@ -435,14 +439,14 @@ const purchaseConditions = useMemo(() => {
     // PSA10: 海外graded vs 国内買取PSA10
     const gradedJpy = overseasLatest.graded_price_jpy
     const purchasePSA10 = latestPurchaseByLabel['psa10']
-    if (gradedJpy && purchasePSA10 && purchasePSA10.price > 0) {
+    if (gradedJpy != null && gradedJpy > 0 && purchasePSA10 && purchasePSA10.price > 0) {
       const profit = gradedJpy - purchasePSA10.price
       diffs.push({ label: 'psa10', displayLabel: 'PSA10→海外', diffJpy: profit, diffPercent: Math.round((profit / purchasePSA10.price) * 1000) / 10 })
     }
     // 素体: 海外loose vs 国内買取素体
     const looseJpy = overseasLatest.loose_price_jpy
     const purchaseNormal = latestPurchaseByLabel['normal']
-    if (looseJpy && purchaseNormal && purchaseNormal.price > 0) {
+    if (looseJpy != null && looseJpy > 0 && purchaseNormal && purchaseNormal.price > 0) {
       const profit = looseJpy - purchaseNormal.price
       diffs.push({ label: 'normal', displayLabel: '素体→海外', diffJpy: profit, diffPercent: Math.round((profit / purchaseNormal.price) * 1000) / 10 })
     }

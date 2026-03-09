@@ -37,6 +37,36 @@ export async function GET(req: Request) {
 
     const supabase = createServiceClient()
 
+    // 同日の既存レコードがあればスキップ（force実行時の重複防止）
+    const today = new Date().toISOString().substring(0, 10)
+    const { data: existing } = await supabase
+      .from(TABLES.EXCHANGE_RATES)
+      .select('id')
+      .eq('base_currency', 'USD')
+      .eq('target_currency', 'JPY')
+      .gte('recorded_at', `${today}T00:00:00`)
+      .lte('recorded_at', `${today}T23:59:59`)
+      .limit(1)
+
+    if (existing && existing.length > 0) {
+      // 既存レコードを更新
+      const { data, error } = await supabase
+        .from(TABLES.EXCHANGE_RATES)
+        .update({ rate })
+        .eq('id', existing[0].id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('[Exchange Rate Sync] Update error:', error)
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+      }
+
+      console.log(`[Exchange Rate Sync] Updated existing: ${rate}`)
+      await markCronJobRun('exchange-rate-sync', 'success')
+      return NextResponse.json({ success: true, rate, data, updated: true })
+    }
+
     const { data, error } = await supabase
       .from(TABLES.EXCHANGE_RATES)
       .insert({
@@ -63,11 +93,12 @@ export async function GET(req: Request) {
       rate,
       data,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[Exchange Rate Sync] Error:', error)
-    await markCronJobRun('exchange-rate-sync', 'error', error.message)
+    await markCronJobRun('exchange-rate-sync', 'error', message).catch(() => {})
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: message },
       { status: 500 }
     )
   }

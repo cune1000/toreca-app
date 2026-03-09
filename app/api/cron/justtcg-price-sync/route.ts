@@ -59,7 +59,7 @@ export async function GET(req: Request) {
       .gte('recorded_at', `${today}T00:00:00`)
       .limit(10000)
       .lte('recorded_at', `${today}T23:59:59`)
-    const syncedSet = new Set((alreadySynced || []).map((r: any) => r.card_id))
+    const syncedSet = new Set((alreadySynced || []).map((r) => r.card_id))
 
     // 3. 未更新カードをセットIDでグルーピング
     const unsyncedSetGroups = new Map<string, { cardId: string; justtcgId: string }[]>()
@@ -107,7 +107,7 @@ export async function GET(req: Request) {
         const game = setId.endsWith('one-piece-card-game') ? 'one-piece-card-game' : 'pokemon-japan'
 
         // ページネーション対応: 全カード取得
-        let apiCards: any[] = []
+        let apiCards: Array<{ id: string; variants?: Array<{ condition?: string; language?: string; price?: number }> }> = []
         let offset = 0
         const PAGE_SIZE = 100
         while (true) {
@@ -118,12 +118,12 @@ export async function GET(req: Request) {
           await new Promise(resolve => setTimeout(resolve, DELAY_MS))
         }
 
-        const apiCardMap = new Map<string, any>()
+        const apiCardMap = new Map<string, typeof apiCards[0]>()
         for (const ac of apiCards) {
           apiCardMap.set(ac.id, ac)
         }
 
-        const historyRows: any[] = []
+        const historyRows: { card_id: string; price_usd: number; recorded_at: string }[] = []
         const cardUpdates: { id: string; price: number }[] = []
 
         for (const { cardId, justtcgId } of group) {
@@ -133,11 +133,11 @@ export async function GET(req: Request) {
           // 優先順: NM Japanese > NM Any > Sealed Japanese > Sealed Any > 最初のprice付きvariant
           const variants = apiCard.variants || []
           const bestVariant =
-            variants.find((v: any) => v.condition === 'Near Mint' && v.language === 'Japanese') ||
-            variants.find((v: any) => v.condition === 'Near Mint') ||
-            variants.find((v: any) => v.condition === 'Sealed' && v.language === 'Japanese') ||
-            variants.find((v: any) => v.condition === 'Sealed') ||
-            variants.find((v: any) => typeof v.price === 'number' && v.price > 0)
+            variants.find((v) => v.condition === 'Near Mint' && v.language === 'Japanese') ||
+            variants.find((v) => v.condition === 'Near Mint') ||
+            variants.find((v) => v.condition === 'Sealed' && v.language === 'Japanese') ||
+            variants.find((v) => v.condition === 'Sealed') ||
+            variants.find((v) => typeof v.price === 'number' && v.price > 0)
 
           const price = bestVariant?.price
           if (typeof price !== 'number' || price <= 0) continue
@@ -148,15 +148,16 @@ export async function GET(req: Request) {
 
         // バッチINSERT（同日の既存レコードがあればスキップ）
         if (historyRows.length > 0) {
-          const cardIds = historyRows.map((r: any) => r.card_id)
+          const cardIds = historyRows.map((r) => r.card_id)
           const { data: existing } = await supabase
             .from('justtcg_price_history')
             .select('card_id')
             .in('card_id', cardIds)
             .gte('recorded_at', `${today}T00:00:00`)
             .lte('recorded_at', `${today}T23:59:59`)
-          const existingSet = new Set((existing || []).map((e: any) => e.card_id))
-          const newRows = historyRows.filter((r: any) => !existingSet.has(r.card_id))
+            .limit(10000)
+          const existingSet = new Set((existing || []).map((e) => e.card_id))
+          const newRows = historyRows.filter((r) => !existingSet.has(r.card_id))
 
           if (newRows.length > 0) {
             for (let i = 0; i < newRows.length; i += 50) {
@@ -182,8 +183,9 @@ export async function GET(req: Request) {
         totalUpdated += cardUpdates.length
         setsProcessed++
         console.log(`[justtcg-price-sync] ${setId}: ${cardUpdates.length}/${group.length} updated`)
-      } catch (err: any) {
-        console.error(`[justtcg-price-sync] Set ${setId} error:`, err.message)
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        console.error(`[justtcg-price-sync] Set ${setId} error:`, errMsg)
         totalErrors++
         setsProcessed++
       }
@@ -219,9 +221,10 @@ export async function GET(req: Request) {
     console.log(`[justtcg-price-sync] Complete:`, summary)
     await markCronJobRun('justtcg-price-sync', 'success')
     return NextResponse.json(summary)
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[justtcg-price-sync] Cron error:', error)
-    await markCronJobRun('justtcg-price-sync', 'error', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    await markCronJobRun('justtcg-price-sync', 'error', message).catch(() => {})
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }

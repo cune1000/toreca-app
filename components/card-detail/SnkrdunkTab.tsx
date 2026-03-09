@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
 import {
@@ -98,6 +98,7 @@ export default function SnkrdunkTab({
       }
     } catch (e: any) {
       console.error('Failed to fetch chart data:', e)
+      setChartError(e.message || 'チャートデータの取得に失敗しました')
     } finally {
       setChartLoading(false)
     }
@@ -147,7 +148,7 @@ export default function SnkrdunkTab({
   }
 
   // Recharts用データを構築
-  const rechartsData = (() => {
+  const rechartsData = useMemo(() => {
     const dataMap = new Map<number, any>()
     for (const cond of visibleConditions) {
       const points = chartData[cond] || []
@@ -159,7 +160,7 @@ export default function SnkrdunkTab({
       }
     }
     return Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp)
-  })()
+  }, [chartData, visibleConditions])
 
   return (
     <div className="space-y-5">

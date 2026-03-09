@@ -27,7 +27,7 @@ export function createServiceClient(): SupabaseClient {
   }
   return createClient(
     supabaseUrl || 'https://dummy.supabase.co',
-    serviceKey || 'dummy', {
+    serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 }
@@ -36,65 +36,8 @@ export function createServiceClient(): SupabaseClient {
 // Helper Functions
 // =============================================================================
 
-/** エラーハンドリング付きクエリ実行 */
-export async function query<T>(
-  queryFn: () => Promise<{ data: T | null; error: any }>
-): Promise<{ data: T | null; error: string | null }> {
-  try {
-    const { data, error } = await queryFn()
-    if (error) {
-      console.error('Supabase query error:', error)
-      return { data: null, error: error.message }
-    }
-    return { data, error: null }
-  } catch (err: any) {
-    console.error('Supabase query exception:', err)
-    return { data: null, error: err.message || 'Unknown error' }
-  }
-}
-
-/** バッチ挿入（大量データ用） */
-export async function batchInsert<T extends Record<string, any>>(
-  table: string,
-  records: T[],
-  batchSize: number = 100
-): Promise<{ success: number; failed: number; errors: string[] }> {
-  const result = { success: 0, failed: 0, errors: [] as string[] }
-
-  for (let i = 0; i < records.length; i += batchSize) {
-    const batch = records.slice(i, i + batchSize)
-    const { error } = await supabase.from(table).insert(batch)
-
-    if (error) {
-      result.failed += batch.length
-      result.errors.push(`Batch ${i / batchSize + 1}: ${error.message}`)
-    } else {
-      result.success += batch.length
-    }
-  }
-
-  return result
-}
-
-/** Upsert（存在すれば更新、なければ挿入） */
-export async function upsertRecord<T extends Record<string, any>>(
-  table: string,
-  record: T,
-  conflictColumns: string | string[]
-): Promise<{ data: T | null; error: string | null }> {
-  const columns = Array.isArray(conflictColumns) ? conflictColumns.join(',') : conflictColumns
-
-  const { data, error } = await supabase
-    .from(table)
-    .upsert(record, { onConflict: columns })
-    .select()
-    .single()
-
-  if (error) {
-    return { data: null, error: error.message }
-  }
-  return { data: data as T, error: null }
-}
+// NOTE: query(), batchInsert(), upsertRecord() ヘルパーは未使用のため削除済み (2026-03-09)
+// 必要になった場合は git history から復元可能
 
 // =============================================================================
 // Table Names (typo防止)

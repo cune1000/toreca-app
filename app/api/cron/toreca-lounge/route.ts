@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
-
-const supabase = createServiceClient()
 import { fetchAllLoungeCards } from '@/lib/toreca-lounge'
 
 export const maxDuration = 60
@@ -20,6 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     const start = Date.now()
+    const supabase = createServiceClient()
 
     try {
         // ① トレカラウンジのshop_idを取得
@@ -37,6 +36,7 @@ export async function GET(request: NextRequest) {
             .from('card_purchase_links')
             .select('id, card_id, external_key, label, condition, card:card_id(name)')
             .eq('shop_id', shop.id)
+            .limit(10000)
 
         if (linksError) throw linksError
 
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
         let updatedCount = 0
         let skippedCount = 0
         const errors: string[] = []
-        const inserts: any[] = []
+        const inserts: { card_id: string; shop_id: string; price: number; condition: string; link_id: string }[] = []
 
         for (const link of links) {
             try {
@@ -71,9 +71,10 @@ export async function GET(request: NextRequest) {
                     link_id: link.id,
                 })
                 updatedCount++
-            } catch (err: any) {
-                const cardName = (link as any).card?.name || link.card_id
-                errors.push(`${cardName}(${link.label}): ${err.message}`)
+            } catch (err: unknown) {
+                const errMsg = err instanceof Error ? err.message : String(err)
+                const cardName = (link as { card?: { name?: string } }).card?.name || link.card_id
+                errors.push(`${cardName}(${link.label}): ${errMsg}`)
             }
         }
 
@@ -100,12 +101,13 @@ export async function GET(request: NextRequest) {
             elapsed: `${elapsed}s`,
             errors: errors.length > 0 ? errors : undefined,
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
         const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-        await markCronJobRun('toreca-lounge', 'error', error.message)
+        await markCronJobRun('toreca-lounge', 'error', message).catch(() => {})
 
         return NextResponse.json({
-            error: error.message,
+            error: message,
             elapsed: `${elapsed}s`,
         }, { status: 500 })
     }

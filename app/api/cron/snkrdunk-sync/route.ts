@@ -9,6 +9,7 @@ import {
   getBoxSizes,
 } from '@/lib/snkrdunk-api'
 import { normalizeGrade, parseRelativeTime, extractGradePrices } from '@/lib/scraping/helpers'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 300
 
@@ -16,8 +17,6 @@ const BATCH_SIZE = 15
 const SYNC_INTERVAL_MINUTES = 120        // 通常: 2時間
 const ERROR_BASE_RETRY_MINUTES = 60      // エラー初回: 1時間
 const ERROR_MAX_RETRY_MINUTES = 360      // エラー最大: 6時間
-
-const supabase = createServiceClient()
 
 // 2つの sold_at が同一取引かどうかを判定（10分以内の差を同一とみなす）
 function isSameTransaction(existingSoldAt: string, newSoldAt: string): boolean {
@@ -44,7 +43,7 @@ function calculateErrorRetryMinutes(errorCount: number): number {
 /**
  * スニダン統合同期Cron
  * 売買履歴 + 販売中最安値を1カード1回の処理で取得
- * バッチ処理: 1回あたり最大5カード
+ * バッチ処理: 1回あたり最大15カード
  */
 export async function GET(req: Request) {
   try {
@@ -59,6 +58,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ skipped: true, reason: gate.reason })
     }
 
+    const supabase = createServiceClient()
     const now = new Date()
     const batchStart = Date.now()
 
@@ -90,10 +90,11 @@ export async function GET(req: Request) {
       let syncError: string | null = null
 
       try {
-        syncResult = await syncCard(saleUrl, now)
-      } catch (error: any) {
-        console.error(`[snkrdunk-sync] Failed: ${saleUrl.card?.name}:`, error.message)
-        syncError = error.message
+        syncResult = await syncCard(supabase, saleUrl, now)
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error)
+        console.error(`[snkrdunk-sync] Failed: ${saleUrl.card?.name}:`, errMsg)
+        syncError = errMsg
       }
 
       // card_sale_urls 共通UPDATE
@@ -104,7 +105,7 @@ export async function GET(req: Request) {
         : calculateErrorRetryMinutes(errorCount)
       const nextScrapeAt = new Date(now.getTime() + nextMinutes * 60 * 1000)
 
-      const updatePayload: Record<string, any> = {
+      const updatePayload: Record<string, string | number | null> = {
         last_scraped_at: now.toISOString(),
         last_scrape_status: isSuccess ? 'success' : 'error',
         last_scrape_error: syncError,
@@ -158,10 +159,11 @@ export async function GET(req: Request) {
       durationMs: totalMs,
       results,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[snkrdunk-sync] Cron job error:', error)
-    await markCronJobRun('snkrdunk-sync', 'error', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    await markCronJobRun('snkrdunk-sync', 'error', message).catch(() => {})
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
@@ -177,9 +179,10 @@ interface SyncResult {
 
 /**
  * 1カード分の統合同期処理
- * ① 商品情報（キャッシュ済みならスキップ） → ② 売買履歴 → ③ 出品一覧
+ * 1. 商品情報（キャッシュ済みならスキップ） 2. 売買履歴 3. 出品一覧
  */
-async function syncCard(saleUrl: any, now: Date): Promise<SyncResult> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function syncCard(supabase: SupabaseClient, saleUrl: any, now: Date): Promise<SyncResult> {
   const cardId = saleUrl.card_id
   const siteId = saleUrl.site_id
 
@@ -189,7 +192,7 @@ async function syncCard(saleUrl: any, now: Date): Promise<SyncResult> {
     throw new Error(`Invalid URL: ${saleUrl.product_url}`)
   }
 
-  // ① product_type判定: DB保存済みなら getProductInfo をスキップ
+  // product_type判定: DB保存済みなら getProductInfo をスキップ
   let productType: string
   if (saleUrl.product_type) {
     productType = saleUrl.product_type
@@ -199,14 +202,14 @@ async function syncCard(saleUrl: any, now: Date): Promise<SyncResult> {
     console.log(`[snkrdunk-sync] ${productInfo.localizedName} (type=${productType}) [初回判定]`)
   }
 
-  // ② 売買履歴取得（最新20件）
+  // 売買履歴取得（最新20件）
   const { salesInserted, salesSkipped } = await syncSalesHistory(
-    cardId, apparelId, productType, now
+    supabase, cardId, apparelId, productType, now
   )
 
-  // ③ 出品一覧（グレード別最安値）取得
+  // 出品一覧（グレード別最安値）取得
   const { overallMin, totalListings, gradePricesCount } = await syncListingPrices(
-    cardId, siteId, apparelId, productType
+    supabase, cardId, siteId, apparelId, productType
   )
 
   return {
@@ -224,6 +227,7 @@ async function syncCard(saleUrl: any, now: Date): Promise<SyncResult> {
  * 売買履歴の同期: snkrdunk_sales_history に新規レコードをバッチINSERT
  */
 async function syncSalesHistory(
+  supabase: SupabaseClient,
   cardId: string,
   apparelId: number,
   productType: string,
@@ -232,7 +236,7 @@ async function syncSalesHistory(
   const { history } = await getSalesHistory(apparelId, 1, 20)
 
   const processedData = history
-    .map((item: any) => {
+    .map((item: { date: string; size?: string; condition?: string; price?: number; imageUrl?: string; label?: string }) => {
       const soldAt = parseRelativeTime(item.date, now)
       if (!soldAt) return null
 
@@ -249,20 +253,20 @@ async function syncSalesHistory(
         price: item.price,
         sold_at: soldAt.toISOString(),
         product_type: productType,
-        user_icon_number: extractIconNumber(item.imageUrl),
+        user_icon_number: extractIconNumber(item.imageUrl || ''),
         size: item.size || null,
         condition: item.condition || null,
         label: item.label || null,
       }
     })
-    .filter(Boolean)
+    .filter(Boolean) as NonNullable<ReturnType<typeof Array.prototype.map>[number]>[]
 
   if (processedData.length === 0) {
     return { salesInserted: 0, salesSkipped: 0 }
   }
 
   // 既存データ取得（sold_at範囲を絞って効率化）
-  const soldAtDates = processedData.map((d: any) => new Date(d.sold_at).getTime())
+  const soldAtDates = processedData.map((d) => new Date((d as { sold_at: string }).sold_at).getTime())
   const oldestSoldAt = new Date(Math.min(...soldAtDates) - 11 * 60 * 1000)
 
   const { data: existingData } = await supabase
@@ -271,8 +275,10 @@ async function syncSalesHistory(
     .eq('card_id', cardId)
     .gte('sold_at', oldestSoldAt.toISOString())
     .order('sold_at', { ascending: false })
+    .limit(1000)
 
   // JS側で重複チェック → 新規レコードのみ抽出
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newSales = processedData.filter((sale: any) => {
     if (sale.user_icon_number) {
       return !existingData?.some(existing =>
@@ -326,10 +332,20 @@ async function syncSalesHistory(
   return { salesInserted: 0, salesSkipped: processedData.length }
 }
 
+interface SalePriceRow {
+  card_id: string
+  site_id: string
+  price: number
+  grade: string | null
+  stock: number | null
+  top_prices?: number[] | null
+}
+
 /**
  * 出品一覧の同期: sale_prices にグレード別最安値をバッチINSERT
  */
 async function syncListingPrices(
+  supabase: SupabaseClient,
   cardId: string,
   siteId: string,
   apparelId: number,
@@ -360,7 +376,7 @@ async function syncListingPrices(
   }
 
   // sale_prices にバッチINSERT
-  const salePriceRows: any[] = []
+  const salePriceRows: SalePriceRow[] = []
 
   if (overallMin !== null && productType === 'single') {
     salePriceRows.push({
@@ -400,7 +416,7 @@ async function syncListingPrices(
       if (!existingMap.has(key)) existingMap.set(key, { price: ep.price, stock: ep.stock })
     }
 
-    const newRows = salePriceRows.filter((row: any) => {
+    const newRows = salePriceRows.filter((row) => {
       const key = row.grade || '__null__'
       const existing = existingMap.get(key)
       if (!existing) return true  // 新規グレード
@@ -411,7 +427,9 @@ async function syncListingPrices(
       const { error } = await supabase.from('sale_prices').insert(newRows)
       if (error) {
         if (error.message?.includes('top_prices') || error.code === '42703') {
-          const rowsWithoutTopPrices = newRows.map(({ top_prices, ...rest }: any) => rest)
+          // top_pricesカラムが存在しない場合のフォールバック
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const rowsWithoutTopPrices = newRows.map(({ top_prices, ...rest }) => rest)
           const { error: retryErr } = await supabase.from('sale_prices').insert(rowsWithoutTopPrices)
           if (retryErr) {
             console.error(`[snkrdunk-sync] sale_prices batch insert error (fallback):`, retryErr.message)

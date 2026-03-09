@@ -76,18 +76,18 @@ export default function DashboardContent() {
   const fetchData = async () => {
     setLoading(true)
 
-    // 並列で全データ取得（lib/api使用）
+    // 並列で全データ取得（個別catchで1つの失敗が全体を壊さない）
     const [statsData, categoriesData, changesData, cronStatsData] = await Promise.all([
-      getDashboardStats(),
-      getLargeCategories(),
-      getPriceChanges(24, 50),
-      getCronStats(24)
+      getDashboardStats().catch(e => { console.error('Stats fetch error:', e); return null }),
+      getLargeCategories().catch(e => { console.error('Categories fetch error:', e); return [] }),
+      getPriceChanges(24, 50).catch(e => { console.error('Price changes fetch error:', e); return [] }),
+      getCronStats(24).catch(e => { console.error('Cron stats fetch error:', e); return { success: 0, errors: 0, changes: 0 } as CronStats })
     ])
 
-    setStats(statsData)
-    setCategories(categoriesData)
-    setPriceChanges(changesData)
-    setCronStats(cronStatsData)
+    if (statsData) setStats(statsData)
+    if (categoriesData) setCategories(categoriesData)
+    if (changesData) setPriceChanges(changesData)
+    if (cronStatsData) setCronStats(cronStatsData)
 
     // 価格インデックス取得
     await fetchPriceIndex(indexDays)

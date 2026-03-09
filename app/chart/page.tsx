@@ -6,6 +6,8 @@ import CategoryTabs from '@/components/chart/CategoryTabs'
 import RankingRow from '@/components/chart/RankingRow'
 import RankingSettings from '@/components/chart/RankingSettings'
 import AdBanner from '@/components/chart/AdBanner'
+import { ChartThemeProvider } from '@/components/chart/ChartThemeContext'
+import ThemeSwitcher from '@/components/chart/ThemeSwitcher'
 import { getRanking } from '@/lib/chart/queries'
 import { ALL_RANKINGS, DEFAULT_VISIBLE_RANKINGS, RANKING_STORAGE_KEY } from '@/lib/chart/constants'
 import { ChartCard, RankingDef } from '@/lib/chart/types'
@@ -68,44 +70,47 @@ export default function ChartTopPage() {
         .filter((r): r is RankingDef => !!r)
 
     return (
-        <ChartLayoutComponent onOpenSettings={() => setShowSettings(true)}>
-            {/* カテゴリタブ */}
-            <div className="px-4 py-4">
-                <CategoryTabs selected={category} onChange={setCategory} />
-            </div>
-
-            {/* ローディング */}
-            {loading && (
-                <div className="px-4 py-12 text-center">
-                    <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-red-400 rounded-full animate-spin" />
-                    <p className="text-sm text-gray-400 mt-3">ランキングを取得中...</p>
+        <ChartThemeProvider>
+            <ThemeSwitcher />
+            <ChartLayoutComponent onOpenSettings={() => setShowSettings(true)}>
+                {/* カテゴリタブ */}
+                <div className="px-4 py-4">
+                    <CategoryTabs selected={category} onChange={setCategory} />
                 </div>
-            )}
 
-            {/* ランキング一覧 */}
-            {!loading && (
-                <div className="py-2">
-                    {activeRankings.map((ranking, i) => (
-                        <div key={ranking.id}>
-                            <RankingRow
-                                ranking={ranking}
-                                cards={rankingData[ranking.id] || []}
-                            />
-                            {/* 2番目と4番目のランキングの後に広告 */}
-                            {(i === 1 || i === 3) && <AdBanner />}
-                        </div>
-                    ))}
-                </div>
-            )}
+                {/* ローディング */}
+                {loading && (
+                    <div className="px-4 py-12 text-center">
+                        <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-red-400 rounded-full animate-spin" />
+                        <p className="text-sm text-gray-400 mt-3">ランキングを取得中...</p>
+                    </div>
+                )}
 
-            {/* 設定モーダル */}
-            {showSettings && (
-                <RankingSettings
-                    visible={visibleRankings}
-                    onSave={setVisibleRankings}
-                    onClose={() => setShowSettings(false)}
-                />
-            )}
-        </ChartLayoutComponent>
+                {/* ランキング一覧 */}
+                {!loading && (
+                    <div className="py-2">
+                        {activeRankings.map((ranking, i) => (
+                            <div key={ranking.id}>
+                                <RankingRow
+                                    ranking={ranking}
+                                    cards={rankingData[ranking.id] || []}
+                                />
+                                {/* 2番目と4番目のランキングの後に広告 */}
+                                {(i === 1 || i === 3) && <AdBanner />}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* 設定モーダル */}
+                {showSettings && (
+                    <RankingSettings
+                        visible={visibleRankings}
+                        onSave={setVisibleRankings}
+                        onClose={() => setShowSettings(false)}
+                    />
+                )}
+            </ChartLayoutComponent>
+        </ChartThemeProvider>
     )
 }

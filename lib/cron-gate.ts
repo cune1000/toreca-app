@@ -116,7 +116,7 @@ export async function markCronJobRun(
 ): Promise<void> {
   const supabase = createServiceClient()
 
-  await supabase
+  const { error: updateError } = await supabase
     .from('cron_schedules')
     .update({
       last_run_at: new Date().toISOString(),
@@ -125,4 +125,8 @@ export async function markCronJobRun(
       updated_at: new Date().toISOString(),
     })
     .eq('job_name', jobName)
+
+  if (updateError) {
+    console.error(`[cron-gate] Failed to mark job "${jobName}" as ${status}:`, updateError.message)
+  }
 }

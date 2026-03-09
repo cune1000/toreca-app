@@ -75,8 +75,9 @@ export async function GET(req: Request) {
       .select('card_id')
       .gte('recorded_at', `${today}T00:00:00`)
       .lte('recorded_at', `${today}T23:59:59`)
+      .limit(10000)
 
-    const syncedSet = new Set((alreadySynced || []).map((r: any) => r.card_id))
+    const syncedSet = new Set((alreadySynced || []).map((r) => r.card_id))
     const unsyncedCards = allCards.filter(c => !syncedSet.has(c.id))
 
     if (unsyncedCards.length === 0) {
@@ -128,9 +129,10 @@ export async function GET(req: Request) {
         } else {
           success++
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         failed++
-        console.error(`[Overseas Price Sync] API error ${card.id}:`, err.message)
+        const errMsg = err instanceof Error ? err.message : String(err)
+        console.error(`[Overseas Price Sync] API error ${card.id}:`, errMsg)
       }
 
       await new Promise(resolve => setTimeout(resolve, 1100))
@@ -160,9 +162,10 @@ export async function GET(req: Request) {
       chained: timedOut && remaining > 0,
       total: allCards.length,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[Overseas Price Sync] Error:', error)
-    await markCronJobRun('overseas-price-sync', 'error', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    await markCronJobRun('overseas-price-sync', 'error', message).catch(() => {})
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
