@@ -56,6 +56,14 @@ function modifiedZScore(value: number, med: number, madValue: number): number {
  * @param threshold - Modified Z-Score の閾値。デフォルト3.5
  * @param interpolationWindow - 補完に使う前後日数。デフォルト5
  */
+/**
+ * ミリ秒タイムスタンプ → JST基準の日付キー (YYYY-MM-DD)
+ */
+function toJstDateKey(ts: number): string {
+    const jst = new Date(ts + 9 * 60 * 60 * 1000)
+    return jst.toISOString().slice(0, 10)
+}
+
 export function cleanChartData(
     points: [number, number][],
     windowSize: number = 7,
@@ -64,26 +72,24 @@ export function cleanChartData(
 ): CleanedChartPoint[] {
     if (points.length === 0) return []
 
-    // Step 1: 同一日のデータを中央値に集約（APIチャートは既に日次集計されているが念のため）
+    // Step 1: 同一日のデータを中央値に集約（JST基準で日付判定）
     const dayMap = new Map<string, number[]>()
     for (const [ts, price] of points) {
-        const dayKey = new Date(ts).toISOString().slice(0, 10)
+        const dayKey = toJstDateKey(ts)
         if (!dayMap.has(dayKey)) dayMap.set(dayKey, [])
         dayMap.get(dayKey)!.push(price)
     }
 
     // 日次データに変換（同一日は中央値）
+    // 日付はJST正午のタイムスタンプに統一
     const dailyPoints: ChartPoint[] = []
-    // タイムスタンプも保持するため、元のpointsから日付→最初のタイムスタンプを取得
-    const dayTimestamps = new Map<string, number>()
-    for (const [ts] of points) {
-        const dayKey = new Date(ts).toISOString().slice(0, 10)
-        if (!dayTimestamps.has(dayKey)) dayTimestamps.set(dayKey, ts)
-    }
 
     for (const [dayKey, prices] of dayMap) {
+        // dayKey "YYYY-MM-DD" → JST正午のミリ秒タイムスタンプ
+        const [y, m, d] = dayKey.split('-').map(Number)
+        const jstNoonMs = Date.UTC(y, m - 1, d, 3, 0, 0) // JST 12:00 = UTC 03:00
         dailyPoints.push({
-            date: dayTimestamps.get(dayKey)!,
+            date: jstNoonMs,
             price: Math.round(median(prices)),
         })
     }
