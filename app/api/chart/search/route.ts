@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
             image_url,
             card_number,
             pricecharting_id,
-            rarity:rarity_id (name),
+            rarity,
             category:category_large_id (name)
         `)
         .ilike('name', `%${q.replace(/[%_\\]/g, '\\$&')}%`)
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
             name: card.name,
             image_url: card.image_url,
             category: card.category?.name || '',
-            rarity: card.rarity?.name || '',
+            rarity: card.rarity || '',
             card_number: card.card_number || '',
             loose_price_jpy: price?.loose_price_jpy || 0,
             loose_price_usd: price?.loose_price_usd || 0,

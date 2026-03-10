@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getLargeCategories, getRarities } from '@/lib/api/categories'
+import { getLargeCategories } from '@/lib/api/categories'
 import { addCard } from '@/lib/api/cards'
 import { Plus, X, RefreshCw, Image } from 'lucide-react'
 
@@ -12,16 +12,10 @@ interface Category {
   icon?: string
 }
 
-interface Rarity {
-  id: string
-  name: string
-}
-
 interface FormData {
   name: string
   card_number: string
   category_large_id: string
-  rarity_id: string
   rarity: string
   expansion: string
   image_url: string
@@ -36,7 +30,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
-  const [rarities, setRarities] = useState<Rarity[]>([])
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [expansionSuggestions, setExpansionSuggestions] = useState<string[]>([])
   const [raritySuggestions, setRaritySuggestions] = useState<string[]>([])
@@ -51,7 +44,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
     name: '',
     card_number: '',
     category_large_id: '',
-    rarity_id: '',
     rarity: '',
     expansion: '',
     image_url: ''
@@ -95,19 +87,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
     }
     fetchSuggestions()
   }, [])
-
-  // 大カテゴリが変わったらレアリティを取得
-  useEffect(() => {
-    async function fetchRarities() {
-      if (!form.category_large_id) {
-        setRarities([])
-        return
-      }
-      const rarityData = await getRarities(form.category_large_id)
-      setRarities(rarityData)
-    }
-    fetchRarities()
-  }, [form.category_large_id])
 
   // 画像リサイズ（Vercel 4.5MB制限対策）
   const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
@@ -195,7 +174,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
       name: form.name,
       card_number: form.card_number || undefined,
       category_large_id: form.category_large_id || undefined,
-      rarity_id: form.rarity_id || undefined,
       rarity: form.rarity || undefined,
       expansion: form.expansion || undefined,
       image_url: form.image_url || undefined
@@ -366,7 +344,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
             </label>
             <select
               value={form.category_large_id}
-              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, rarity_id: '' })}
+              onChange={(e) => setForm({ ...form, category_large_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
@@ -375,30 +353,6 @@ export default function CardForm({ onClose, onSaved }: Props) {
               ))}
             </select>
           </div>
-
-          {/* レアリティ（ボタン選択）- カテゴリに紐づくもの */}
-          {rarities.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                レアリティ（カテゴリ別）
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {rarities.map((rarity) => (
-                  <button
-                    key={rarity.id}
-                    type="button"
-                    onClick={() => setForm({ ...form, rarity_id: rarity.id })}
-                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${form.rarity_id === rarity.id
-                      ? 'bg-purple-100 border-purple-300 text-purple-700'
-                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                      }`}
-                  >
-                    {rarity.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* ボタン */}
           <div className="flex justify-end gap-3 pt-4">

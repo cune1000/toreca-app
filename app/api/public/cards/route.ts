@@ -35,8 +35,7 @@ export async function GET(req: Request) {
             .from('cards')
             .select(`
                 id, name, card_number, image_url, expansion, set_code,
-                category_large:category_large_id(id, name),
-                rarities:rarity_id(id, name)
+                category_large:category_large_id(id, name)
             `, { count: 'exact' })
 
         // 検索（ひらがな/カタカナ対応）
@@ -59,14 +58,7 @@ export async function GET(req: Request) {
 
         // レアリティフィルタ
         if (rarity) {
-            const { data: rarityData } = await supabase
-                .from('rarities')
-                .select('id')
-                .ilike('name', `%${rarity.replace(/[%_\\]/g, '\\$&')}%`)
-
-            if (rarityData && rarityData.length > 0) {
-                query = query.in('rarity_id', rarityData.map(r => r.id))
-            }
+            query = query.ilike('rarity', `%${rarity.replace(/[%_\\]/g, '\\$&')}%`)
         }
 
         const { data, count, error } = await query

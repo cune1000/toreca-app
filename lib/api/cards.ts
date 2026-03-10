@@ -18,15 +18,14 @@ import type { CardCandidate } from '../utils/cardMatch'
 export async function getCards(options?: {
   search?: string
   categoryLargeId?: string
-  rarityId?: string
+  rarity?: string
   limit?: number
 }): Promise<CardWithRelations[]> {
   let query = supabase
     .from(TABLES.CARDS)
     .select(`
       *,
-      category_large:category_large_id(name, icon),
-      rarities:rarity_id(name)
+      category_large:category_large_id(name, icon)
     `)
     .order('created_at', { ascending: false })
 
@@ -38,8 +37,8 @@ export async function getCards(options?: {
     query = query.eq('category_large_id', options.categoryLargeId)
   }
 
-  if (options?.rarityId) {
-    query = query.eq('rarity_id', options.rarityId)
+  if (options?.rarity) {
+    query = query.eq('rarity', options.rarity)
   }
 
   if (options?.limit) {
@@ -61,18 +60,17 @@ export async function getCardsPaginated(
   params: PaginationParams & {
     search?: string
     categoryLargeId?: string
-    rarityId?: string
+    rarity?: string
   }
 ): Promise<PaginatedResponse<CardWithRelations>> {
-  const { page = 1, limit = 20, search, categoryLargeId, rarityId } = params
+  const { page = 1, limit = 20, search, categoryLargeId, rarity } = params
   const offset = (page - 1) * limit
 
   let query = supabase
     .from(TABLES.CARDS)
     .select(`
       *,
-      category_large:category_large_id(name, icon),
-      rarities:rarity_id(name)
+      category_large:category_large_id(name, icon)
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -85,8 +83,8 @@ export async function getCardsPaginated(
     query = query.eq('category_large_id', categoryLargeId)
   }
 
-  if (rarityId) {
-    query = query.eq('rarity_id', rarityId)
+  if (rarity) {
+    query = query.eq('rarity', rarity)
   }
 
   const { data, error, count } = await query
@@ -113,8 +111,7 @@ export async function getCard(id: string): Promise<CardWithRelations | null> {
     .from(TABLES.CARDS)
     .select(`
       *,
-      category_large:category_large_id(name, icon),
-      rarities:rarity_id(name)
+      category_large:category_large_id(name, icon)
     `)
     .eq('id', id)
     .single()

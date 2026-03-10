@@ -31,36 +31,28 @@ export async function GET(request: NextRequest) {
         // 既存の cards テーブルから検索
         const { data, error } = await supabase
             .from('cards')
-            .select('id, name, image_url, category_large_id, rarity_id')
+            .select('id, name, image_url, category_large_id, rarity')
             .ilike('name', `%${escaped}%`)
             .range(offset, offset + limit - 1)
 
         if (error) throw error
 
-        // カテゴリとレアリティの名前を取得
+        // カテゴリ名を取得
         const catIds = [...new Set((data || []).map(c => c.category_large_id).filter(Boolean))]
-        const rarIds = [...new Set((data || []).map(c => c.rarity_id).filter(Boolean))]
 
-        const [catRes, rarRes] = await Promise.all([
-            catIds.length > 0
-                ? supabase.from('category_large').select('id, name').in('id', catIds)
-                : { data: [] },
-            rarIds.length > 0
-                ? supabase.from('rarities').select('id, name').in('id', rarIds)
-                : { data: [] },
-        ])
+        const catRes = catIds.length > 0
+            ? await supabase.from('category_large').select('id, name').in('id', catIds)
+            : { data: [] }
 
         const catMap: Record<string, string> = {}
-        const rarMap: Record<string, string> = {}
             ; (catRes.data || []).forEach((c: any) => catMap[c.id] = c.name)
-            ; (rarRes.data || []).forEach((r: any) => rarMap[r.id] = r.name)
 
         const results = (data || []).map(card => ({
             api_card_id: card.id,
             name: card.name,
             image_url: card.image_url,
             category: catMap[card.category_large_id] || null,
-            rarity: rarMap[card.rarity_id] || null,
+            rarity: card.rarity || null,
         }))
 
         return NextResponse.json({ success: true, data: results, total: count || 0, limit, offset })

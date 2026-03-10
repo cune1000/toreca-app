@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
         if (removeCard.name) mergeFields.name = removeCard.name
         if (!keepCard.name_en && removeCard.name_en) mergeFields.name_en = removeCard.name_en
         if (!keepCard.rarity && removeCard.rarity) mergeFields.rarity = removeCard.rarity
-        if (!keepCard.rarity_id && removeCard.rarity_id) mergeFields.rarity_id = removeCard.rarity_id
+        if (!keepCard.rarity && removeCard.rarity) mergeFields.rarity = removeCard.rarity
         if (!keepCard.set_code && removeCard.set_code) mergeFields.set_code = removeCard.set_code
         if (!keepCard.set_name_en && removeCard.set_name_en) mergeFields.set_name_en = removeCard.set_name_en
         if (!keepCard.release_year && removeCard.release_year) mergeFields.release_year = removeCard.release_year

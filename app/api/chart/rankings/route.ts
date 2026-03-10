@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
                     image_url,
                     card_number,
                     pricecharting_id,
-                    rarity:rarity_id (name),
+                    rarity,
                     category:category_large_id (name)
                 )
             `)
@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
             name: data.card?.name || '',
             image_url: data.card?.image_url || '',
             category: data.card?.category?.name || '',
-            rarity: data.card?.rarity?.name || '',
+            rarity: data.card?.rarity || '',
             card_number: data.card?.card_number || '',
             loose_price_jpy: config.priceType === 'loose' ? data.latestPrice : 0,
             loose_price_usd: config.priceType === 'loose' ? data.latestPriceUsd : 0,
@@ -212,7 +212,7 @@ async function handlePurchaseRanking(
                     name,
                     image_url,
                     card_number,
-                    rarity:rarity_id (name),
+                    rarity,
                     category:category_large_id (name)
                 )
             `)
@@ -292,7 +292,7 @@ async function handlePurchaseRanking(
             name: data.card?.name || '',
             image_url: data.card?.image_url || '',
             category: data.card?.category?.name || '',
-            rarity: data.card?.rarity?.name || '',
+            rarity: data.card?.rarity || '',
             card_number: data.card?.card_number || '',
             loose_price_jpy: 0,
             loose_price_usd: 0,

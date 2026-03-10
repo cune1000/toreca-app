@@ -20,7 +20,7 @@ export async function GET(
             release_date,
             pricecharting_id,
             pricecharting_url,
-            rarity:rarity_id (name)
+            rarity
         `)
         .eq('id', id)
         .single()

@@ -80,27 +80,21 @@ export async function GET(req: Request) {
             .from('category_medium')
             .select('id, name, large_id')
             .limit(10000)
-        const { data: allRarities } = await supabase
-            .from('rarities')
-            .select('id, name')
-            .limit(10000)
+        // rarities テーブルは不要（cards.rarity テキストカラムを直接使用）
 
         const categoryMap: Record<string, string> = {}
         const categoryMediumMap: Record<string, { name: string; largeId: string }> = {}
-        const rarityMap: Record<string, string> = {}
-
         allCategories?.forEach((c) => categoryMap[c.id] = c.name)
         allMediumCategories?.forEach((c) => categoryMediumMap[c.id] = { name: c.name, largeId: c.large_id })
-        allRarities?.forEach((r) => rarityMap[r.id] = r.name)
 
         // カードIDからカテゴリ中を逆引きするマップ（ページネーション）
-        let cardMediumData: { id: string; category_large_id: string; category_medium_id: string | null; rarity_id: string | null }[] = []
+        let cardMediumData: { id: string; category_large_id: string; category_medium_id: string | null; rarity: string | null }[] = []
         let cardPageOffset = 0
         const CARD_PAGE = 1000
         while (true) {
             const { data: cardPage } = await supabase
                 .from('cards')
-                .select('id, category_large_id, category_medium_id, rarity_id')
+                .select('id, category_large_id, category_medium_id, rarity')
                 .range(cardPageOffset, cardPageOffset + CARD_PAGE - 1)
             if (!cardPage || cardPage.length === 0) break
             cardMediumData = cardMediumData.concat(cardPage)
@@ -108,12 +102,12 @@ export async function GET(req: Request) {
             cardPageOffset += CARD_PAGE
         }
 
-        const cardInfoMap: Record<string, { catLargeId: string; catMediumId: string | null; rarityId: string | null }> = {}
+        const cardInfoMap: Record<string, { catLargeId: string; catMediumId: string | null; rarity: string | null }> = {}
         cardMediumData.forEach((c) => {
             cardInfoMap[c.id] = {
                 catLargeId: c.category_large_id,
                 catMediumId: c.category_medium_id,
-                rarityId: c.rarity_id
+                rarity: c.rarity
             }
         })
 
@@ -149,7 +143,7 @@ export async function GET(req: Request) {
                 const subCatName = cardInfo.catMediumId
                     ? (categoryMediumMap[cardInfo.catMediumId]?.name || 'ALL')
                     : 'ALL'
-                const rarName = cardInfo.rarityId ? (rarityMap[cardInfo.rarityId] || 'UNKNOWN') : 'UNKNOWN'
+                const rarName = cardInfo.rarity || 'UNKNOWN'
                 const grade = sale.grade
 
                 // BOXは rarity='BOX' として統一
@@ -216,7 +210,7 @@ export async function GET(req: Request) {
                 const subCatName = cardInfo.catMediumId
                     ? (categoryMediumMap[cardInfo.catMediumId]?.name || 'ALL')
                     : 'ALL'
-                const rarName = cardInfo.rarityId ? (rarityMap[cardInfo.rarityId] || 'UNKNOWN') : 'UNKNOWN'
+                const rarName = cardInfo.rarity || 'UNKNOWN'
                 const key = `${catName}|${subCatName}|${rarName}`
 
                 if (!groups[key]) groups[key] = { prices: [], cardIds: new Set() }

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { getRarityShortName } from '@/lib/rarity-mapping'
 import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
 
 export const dynamic = 'force-dynamic'
@@ -220,20 +219,6 @@ export async function POST(request: NextRequest) {
     const safeReleaseDate = typeof release_date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(release_date)
       ? release_date.slice(0, 10) : null
 
-    // rarity_id 自動ルックアップ（英語名→日本語略称→raritiesテーブル）
-    let rarityId: string | null = null
-    const rarityStr = str(rarity, 50)
-    if (rarityStr && category?.id) {
-      const jaRarity = getRarityShortName(rarityStr) || rarityStr
-      const { data: rarityRow } = await supabase
-        .from('rarities')
-        .select('id')
-        .eq('large_id', category.id)
-        .eq('name', jaRarity)
-        .maybeSingle()
-      rarityId = rarityRow?.id || null
-    }
-
     // justtcg_id が既に登録済み → 既存カードを最新データで上書きUPDATE
     // nullで既存値を消さないよう、値がある場合のみセット
     if (existing) {
@@ -250,7 +235,6 @@ export async function POST(request: NextRequest) {
       if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
       if (url(pricecharting_url)) updateFields.pricecharting_url = url(pricecharting_url)
       if (category?.id) updateFields.category_large_id = category.id
-      if (rarityId) updateFields.rarity_id = rarityId
       if (url(image_url)) updateFields.image_url = url(image_url)
       if (str(regulation, 10)) updateFields.regulation = str(regulation, 10)
       if (safeNmPrice !== null) updateFields.justtcg_nm_price_usd = safeNmPrice
@@ -333,7 +317,6 @@ export async function POST(request: NextRequest) {
       if (str(pricecharting_name, 200)) updateFields.pricecharting_name = str(pricecharting_name, 200)
       if (url(pricecharting_url)) updateFields.pricecharting_url = url(pricecharting_url)
       if (category?.id) updateFields.category_large_id = category.id
-      if (rarityId) updateFields.rarity_id = rarityId
       if (url(image_url)) updateFields.image_url = url(image_url)
       if (str(regulation, 10)) updateFields.regulation = str(regulation, 10)
       if (safeNmPrice !== null) updateFields.justtcg_nm_price_usd = safeNmPrice
@@ -364,7 +347,6 @@ export async function POST(request: NextRequest) {
         name_en: str(name_en, 200),
         card_number: cardNumber,
         rarity: str(rarity, 50),
-        rarity_id: rarityId,
         set_code: str(set_code, 100),
         set_name_en: str(set_name_en, 200),
         release_year: safeReleaseYear,
@@ -397,7 +379,6 @@ export async function POST(request: NextRequest) {
           if (str(name_en, 200)) fallbackFields.name_en = str(name_en, 200)
           if (cardNumber) fallbackFields.card_number = cardNumber
           if (str(rarity, 50)) fallbackFields.rarity = str(rarity, 50)
-          if (rarityId) fallbackFields.rarity_id = rarityId
           if (str(set_code, 100)) fallbackFields.set_code = str(set_code, 100)
           if (safeReleaseDate) fallbackFields.release_date = safeReleaseDate
           if (str(expansion, 200)) fallbackFields.expansion = str(expansion, 200)

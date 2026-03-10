@@ -63,7 +63,7 @@ export default function CardDetailPage({ params }: Props) {
       try {
         const { data } = await supabase
           .from('cards')
-          .select('*, category_large:category_large_id(id, name, icon), rarities:rarity_id(id, name)')
+          .select('*, category_large:category_large_id(id, name, icon)')
           .eq('id', id)
           .single()
         if (data) {
@@ -171,7 +171,7 @@ export default function CardDetailPage({ params }: Props) {
     try {
       const { data } = await supabase
         .from('cards')
-        .select('*, category_large:category_large_id(id, name, icon), rarities:rarity_id(id, name)')
+        .select('*, category_large:category_large_id(id, name, icon)')
         .eq('id', id)
         .single()
       if (data) {

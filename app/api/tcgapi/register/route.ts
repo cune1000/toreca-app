@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { getRarityShortName } from '@/lib/rarity-mapping'
 import { searchProducts } from '@/lib/pricecharting-api'
 
 export const dynamic = 'force-dynamic'
@@ -138,20 +137,6 @@ export async function POST(request: NextRequest) {
       ? release_date.slice(0, 10) : null
     const safeReleaseYear = safeReleaseDate ? parseInt(safeReleaseDate.slice(0, 4), 10) : null
 
-    // rarity_id 自動ルックアップ（英語名→日本語略称→raritiesテーブル）
-    let rarityId: string | null = null
-    const rarityStr = str(rarity, 50)
-    if (rarityStr && category?.id) {
-      const jaRarity = getRarityShortName(rarityStr) || rarityStr
-      const { data: rarityRow } = await supabase
-        .from('rarities')
-        .select('id')
-        .eq('large_id', category.id)
-        .eq('name', jaRarity)
-        .maybeSingle()
-      rarityId = rarityRow?.id || null
-    }
-
     // PriceCharting 自動マッチング（name_en + card_number で検索）
     let pcId: string | null = null
     let pcUrl: string | null = null
@@ -194,7 +179,6 @@ export async function POST(request: NextRequest) {
       if (safeReleaseDate) updateFields.release_date = safeReleaseDate
       if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
       if (category?.id) updateFields.category_large_id = category.id
-      if (rarityId) updateFields.rarity_id = rarityId
       if (urlVal(image_url)) updateFields.image_url = urlVal(image_url)
       if (pcId) updateFields.pricecharting_id = pcId
 
@@ -255,7 +239,6 @@ export async function POST(request: NextRequest) {
       if (safeReleaseDate) updateFields.release_date = safeReleaseDate
       if (str(expansion, 200)) updateFields.expansion = str(expansion, 200)
       if (category?.id) updateFields.category_large_id = category.id
-      if (rarityId) updateFields.rarity_id = rarityId
       if (urlVal(image_url)) updateFields.image_url = urlVal(image_url)
       if (pcId) updateFields.pricecharting_id = pcId
 
@@ -284,7 +267,6 @@ export async function POST(request: NextRequest) {
         name_en: str(name_en, 200),
         card_number: cardNumber,
         rarity: str(rarity, 50),
-        rarity_id: rarityId,
         set_name_en: str(set_name_en, 200),
         release_year: safeReleaseYear,
         release_date: safeReleaseDate,
@@ -311,7 +293,6 @@ export async function POST(request: NextRequest) {
           if (str(name_en, 200)) fallbackFields.name_en = str(name_en, 200)
           if (cardNumber) fallbackFields.card_number = cardNumber
           if (str(rarity, 50)) fallbackFields.rarity = str(rarity, 50)
-          if (rarityId) fallbackFields.rarity_id = rarityId
           if (safeReleaseDate) fallbackFields.release_date = safeReleaseDate
           if (str(expansion, 200)) fallbackFields.expansion = str(expansion, 200)
           if (category?.id) fallbackFields.category_large_id = category.id

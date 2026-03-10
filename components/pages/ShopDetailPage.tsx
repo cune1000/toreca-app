@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
-import type { Shop, CategoryLarge, Rarity } from '@/lib/types'
+import type { Shop, CategoryLarge } from '@/lib/types'
 
 interface Props {
     shop: Shop
@@ -64,7 +64,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
 
     // カテゴリデータ
     const [categories, setCategories] = useState<CategoryLarge[]>([])
-    const [rarities, setRarities] = useState<Rarity[]>([])
+    const [rarityTexts, setRarityTexts] = useState<string[]>([])
 
     useEffect(() => {
         loadData()
@@ -75,10 +75,14 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
     const loadCategories = async () => {
         const [catRes, rarRes] = await Promise.all([
             supabase.from('category_large').select('id, name, icon').order('sort_order'),
-            supabase.from('rarities').select('id, name, large_id').order('sort_order'),
+            supabase.from('cards').select('rarity').not('rarity', 'is', null),
         ])
         setCategories(catRes.data || [])
-        setRarities(rarRes.data || [])
+        if (rarRes.data) {
+            const unique = [...new Set(rarRes.data.map(d => d.rarity).filter(Boolean))] as string[]
+            unique.sort()
+            setRarityTexts(unique)
+        }
     }
 
     // フィルタ変更時 → 1ページ目に戻る
@@ -104,9 +108,9 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                 cardQuery = cardQuery.eq('category_large_id', purchaseFilterLarge)
             }
             if (purchaseFilterRarity === UNSET) {
-                cardQuery = cardQuery.is('rarity_id', null)
+                cardQuery = cardQuery.is('rarity', null)
             } else if (purchaseFilterRarity) {
-                cardQuery = cardQuery.eq('rarity_id', purchaseFilterRarity)
+                cardQuery = cardQuery.eq('rarity', purchaseFilterRarity)
             }
             if (purchaseSearchQuery.length >= 2) {
                 cardQuery = cardQuery.or(buildKanaSearchFilter(purchaseSearchQuery, ['name', 'card_number']))
@@ -213,10 +217,8 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
         return result
     }, [tweets, tweetFilter, searchQuery])
 
-    // フィルタ用レアリティ（カテゴリで絞り込み）
-    const filteredRarities = purchaseFilterLarge && purchaseFilterLarge !== UNSET
-        ? rarities.filter(r => (r as any).large_id === purchaseFilterLarge)
-        : rarities
+    // フィルタ用レアリティ
+    const filteredRarities = rarityTexts
 
     const purchaseTotalPages = Math.ceil(purchaseTotalCount / PURCHASES_PER_PAGE)
 
@@ -525,7 +527,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                                     <option value="">全レアリティ</option>
                                     <option value={UNSET}>⚠️ 未設定</option>
                                     {filteredRarities.map(r => (
-                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                        <option key={r} value={r}>{r}</option>
                                     ))}
                                 </select>
                             </div>

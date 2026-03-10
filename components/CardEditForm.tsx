@@ -10,7 +10,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   const [deleting, setDeleting] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [categories, setCategories] = useState([])
-  const [rarities, setRarities] = useState([])
   const [imagePreview, setImagePreview] = useState(card?.image_url || null)
   const [expansionSuggestions, setExpansionSuggestions] = useState<string[]>([])
   const [raritySuggestions, setRaritySuggestions] = useState<string[]>([])
@@ -33,7 +32,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     pricecharting_name: card?.pricecharting_name || '',
     card_number: card?.card_number || '',
     category_large_id: card?.category_large_id || '',
-    rarity_id: card?.rarity_id || '',
     rarity: getRarityString(card?.rarity),
     expansion: card?.expansion || '',
     set_code: card?.set_code || '',
@@ -81,24 +79,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     }
     fetchSuggestions()
   }, [])
-
-  // 大カテゴリが変わったらレアリティを取得
-  useEffect(() => {
-    async function fetchRarities() {
-      if (!form.category_large_id) {
-        setRarities([])
-        return
-      }
-
-      const { data: rarityData } = await supabase
-        .from('rarities')
-        .select('*')
-        .eq('large_id', form.category_large_id)
-        .order('sort_order')
-      setRarities(rarityData || [])
-    }
-    fetchRarities()
-  }, [form.category_large_id])
 
   // 画像リサイズ（Vercel 4.5MB制限対策）
   const resizeImage = (base64: string, maxSize: number = 1200): Promise<string> => {
@@ -203,7 +183,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
         pricecharting_name: form.pricecharting_name || null,
         card_number: form.card_number || null,
         category_large_id: form.category_large_id || null,
-        rarity_id: form.rarity_id || null,
         rarity: form.rarity || null,
         expansion: form.expansion || null,
         set_code: form.set_code || null,
@@ -433,7 +412,7 @@ export default function CardEditForm({ card, onClose, onSaved }) {
             </label>
             <select
               value={form.category_large_id}
-              onChange={(e) => setForm({ ...form, category_large_id: e.target.value, rarity_id: '' })}
+              onChange={(e) => setForm({ ...form, category_large_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
@@ -442,30 +421,6 @@ export default function CardEditForm({ card, onClose, onSaved }) {
               ))}
             </select>
           </div>
-
-          {/* レアリティ（ボタン選択）- カテゴリに紐づくもの */}
-          {rarities.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                レアリティ（カテゴリ別）
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {rarities.map((rarity: any) => (
-                  <button
-                    key={rarity.id}
-                    type="button"
-                    onClick={() => setForm({ ...form, rarity_id: rarity.id })}
-                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${form.rarity_id === rarity.id
-                      ? 'bg-purple-100 border-purple-300 text-purple-700'
-                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                      }`}
-                  >
-                    {rarity.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* ボタン */}
           <div className="flex justify-between pt-4">

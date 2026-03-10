@@ -82,8 +82,7 @@ export function findSimilarCards(
     name: string
     card_number?: string
     image_url?: string
-    rarities?: any
-    rarity_id?: any
+    rarity?: string
     [key: string]: any
   }>,
   options: {
@@ -106,7 +105,7 @@ export function findSimilarCards(
         name: card.name,
         card_number: card.card_number,
         image_url: card.image_url,
-        rarity: (card.rarities as any)?.name,
+        rarity: card.rarity,
         similarity,
         isExactMatch: similarity >= 95
       }
