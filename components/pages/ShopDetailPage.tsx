@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { getRarityDisplayName } from '@/lib/rarity-mapping'
 import {
     ArrowLeft, Store, Radio, Power, RefreshCw, Twitter,
     ExternalLink,
@@ -527,7 +528,7 @@ export default function ShopDetailPage({ shop, onBack, onOpenTwitterFeed }: Prop
                                     <option value="">全レアリティ</option>
                                     <option value={UNSET}>⚠️ 未設定</option>
                                     {filteredRarities.map(r => (
-                                        <option key={r} value={r}>{r}</option>
+                                        <option key={r} value={r}>{getRarityDisplayName(r)}</option>
                                     ))}
                                 </select>
                             </div>

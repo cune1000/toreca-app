@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { RARITY_EN_TO_JA } from '@/lib/rarity-mapping'
 import { getLargeCategories } from '@/lib/api/categories'
 import { addCard } from '@/lib/api/cards'
 import { Plus, X, RefreshCw, Image } from 'lucide-react'
@@ -79,10 +80,12 @@ export default function CardForm({ onClose, onSaved }: Props) {
         .select('rarity')
         .not('rarity', 'is', null)
         .order('rarity')
+        .limit(10000)
 
       if (rarityData) {
-        const uniqueRarities = [...new Set(rarityData.map(d => d.rarity).filter(Boolean))]
-        setRaritySuggestions(uniqueRarities as string[])
+        const converted = rarityData.map(d => d.rarity).filter(Boolean).map(r => RARITY_EN_TO_JA[r as string] || r as string)
+        const uniqueRarities = [...new Set(converted)].sort()
+        setRaritySuggestions(uniqueRarities)
       }
     }
     fetchSuggestions()
@@ -320,7 +323,7 @@ export default function CardForm({ onClose, onSaved }: Props) {
             />
             {showRarityDropdown && filteredRarities.length > 0 && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
-                {filteredRarities.slice(0, 10).map((r, i) => (
+                {filteredRarities.map((r, i) => (
                   <button
                     key={i}
                     type="button"
