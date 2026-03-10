@@ -245,6 +245,7 @@ export default function CardDetailPage({ params }: Props) {
                             cardName={card.name}
                             cardNumber={card.card_number}
                             rarity={card.rarity}
+                            displayPrice={card.loose_price_jpy}
                         />
                         <AffiliateButtons links={affiliateLinks} />
                     </div>

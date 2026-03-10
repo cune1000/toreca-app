@@ -5,9 +5,10 @@ import { Settings, X } from 'lucide-react'
 
 export interface MercariSettings {
     sort: 'default' | 'created_time' | 'score' | 'price_asc' | 'price_desc'
-    condition: string  // '' | '1' | '2' | '1,2' | '3'
+    conditions: string[]  // ['1', '2', '3'] etc. 複数選択
     priceMin: string
     priceMax: string
+    priceAutoRange: boolean  // 相場連動ON/OFF
     category: '' | '1289' | '82'
     status: '' | 'on_sale' | 'sold_out|trading'
     excludeKeyword: string
@@ -16,9 +17,10 @@ export interface MercariSettings {
 
 const DEFAULT_SETTINGS: MercariSettings = {
     sort: 'created_time',
-    condition: '',
+    conditions: [],
     priceMin: '',
     priceMax: '',
+    priceAutoRange: false,
     category: '1289',
     status: 'on_sale',
     excludeKeyword: 'PSA BGS',
@@ -27,11 +29,28 @@ const DEFAULT_SETTINGS: MercariSettings = {
 
 const STORAGE_KEY = 'mercari-search-settings'
 
+const CONDITION_OPTIONS = [
+    { value: '1', label: '新品/未使用' },
+    { value: '2', label: '未使用に近い' },
+    { value: '3', label: '傷汚れなし' },
+    { value: '4', label: 'やや傷汚れあり' },
+    { value: '5', label: '傷汚れあり' },
+]
+
 function loadSettings(): MercariSettings {
     if (typeof window === 'undefined') return DEFAULT_SETTINGS
     try {
         const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) }
+        if (saved) {
+            const parsed = JSON.parse(saved)
+            // 旧format(condition: string)からの移行
+            if (parsed.condition !== undefined && !parsed.conditions) {
+                const old = parsed.condition as string
+                parsed.conditions = old ? old.split(',') : []
+                delete parsed.condition
+            }
+            return { ...DEFAULT_SETTINGS, ...parsed }
+        }
     } catch { }
     return DEFAULT_SETTINGS
 }
@@ -42,7 +61,7 @@ function saveSettings(s: MercariSettings) {
     } catch { }
 }
 
-export function buildMercariUrl(keyword: string, settings: MercariSettings): string {
+export function buildMercariUrl(keyword: string, settings: MercariSettings, displayPrice?: number): string {
     const params = new URLSearchParams()
     params.set('keyword', keyword)
 
@@ -57,15 +76,19 @@ export function buildMercariUrl(keyword: string, settings: MercariSettings): str
         params.set('order', 'desc')
     }
 
-    if (settings.condition) {
-        params.set('item_condition_id', settings.condition)
+    if (settings.conditions.length > 0) {
+        params.set('item_condition_id', settings.conditions.join(','))
     }
-    if (settings.priceMin) {
-        params.set('price_min', settings.priceMin)
+
+    // 価格帯: 相場連動の場合はdisplayPriceから計算
+    if (settings.priceAutoRange && displayPrice && displayPrice > 0) {
+        params.set('price_min', String(Math.floor(displayPrice * 0.7)))
+        params.set('price_max', String(Math.ceil(displayPrice * 1.3)))
+    } else {
+        if (settings.priceMin) params.set('price_min', settings.priceMin)
+        if (settings.priceMax) params.set('price_max', settings.priceMax)
     }
-    if (settings.priceMax) {
-        params.set('price_max', settings.priceMax)
-    }
+
     if (settings.category) {
         params.set('category_id', settings.category)
     }
@@ -86,9 +109,10 @@ interface Props {
     cardName: string
     cardNumber?: string
     rarity?: string
+    displayPrice?: number  // 素体価格(JPY) 相場連動用
 }
 
-export default function MercariSearchButton({ cardName, cardNumber, rarity }: Props) {
+export default function MercariSearchButton({ cardName, cardNumber, rarity, displayPrice }: Props) {
     const [settings, setSettings] = useState<MercariSettings>(DEFAULT_SETTINGS)
     const [showModal, setShowModal] = useState(false)
     const [draft, setDraft] = useState<MercariSettings>(DEFAULT_SETTINGS)
@@ -105,7 +129,7 @@ export default function MercariSearchButton({ cardName, cardNumber, rarity }: Pr
         return parts.join(' ')
     }, [cardName, cardNumber])
 
-    const url = useMemo(() => buildMercariUrl(keyword, settings), [keyword, settings])
+    const url = useMemo(() => buildMercariUrl(keyword, settings, displayPrice), [keyword, settings, displayPrice])
 
     const openModal = () => {
         setDraft({ ...settings })
@@ -125,6 +149,20 @@ export default function MercariSearchButton({ cardName, cardNumber, rarity }: Pr
     const updateDraft = (key: keyof MercariSettings, value: any) => {
         setDraft(prev => ({ ...prev, [key]: value }))
     }
+
+    const toggleCondition = (value: string) => {
+        setDraft(prev => {
+            const current = prev.conditions
+            const next = current.includes(value)
+                ? current.filter(v => v !== value)
+                : [...current, value]
+            return { ...prev, conditions: next }
+        })
+    }
+
+    // 相場連動時の計算値
+    const autoMin = displayPrice ? Math.floor(displayPrice * 0.7) : 0
+    const autoMax = displayPrice ? Math.ceil(displayPrice * 1.3) : 0
 
     return (
         <>
@@ -186,41 +224,74 @@ export default function MercariSearchButton({ cardName, cardNumber, rarity }: Pr
                                 />
                             </SettingSection>
 
-                            {/* 商品の状態 */}
-                            <SettingSection label="商品の状態">
-                                <SelectButtons
-                                    value={draft.condition}
-                                    onChange={(v) => updateDraft('condition', v)}
-                                    options={[
-                                        { value: '', label: '指定なし' },
-                                        { value: '1', label: '新品/未使用' },
-                                        { value: '2', label: '未使用に近い' },
-                                        { value: '1,2', label: '新品+未使用に近い' },
-                                        { value: '3', label: '傷汚れなし' },
-                                    ]}
-                                />
+                            {/* 商品の状態（複数選択） */}
+                            <SettingSection label="商品の状態（複数選択可）">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {CONDITION_OPTIONS.map(opt => (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => toggleCondition(opt.value)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                                                ${draft.conditions.includes(opt.value)
+                                                    ? 'bg-red-500 text-white shadow-sm'
+                                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                                }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                    {draft.conditions.length > 0 && (
+                                        <button
+                                            onClick={() => updateDraft('conditions', [])}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-400 hover:bg-gray-200"
+                                        >
+                                            クリア
+                                        </button>
+                                    )}
+                                </div>
                             </SettingSection>
 
                             {/* 価格帯 */}
                             <SettingSection label="価格帯">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="下限"
-                                        value={draft.priceMin}
-                                        onChange={(e) => updateDraft('priceMin', e.target.value)}
-                                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
-                                    />
-                                    <span className="text-gray-400 text-sm">〜</span>
-                                    <input
-                                        type="number"
-                                        placeholder="上限"
-                                        value={draft.priceMax}
-                                        onChange={(e) => updateDraft('priceMax', e.target.value)}
-                                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
-                                    />
-                                    <span className="text-gray-400 text-xs">円</span>
-                                </div>
+                                {/* 相場連動トグル */}
+                                <label
+                                    className="flex items-center gap-2 cursor-pointer mb-3"
+                                    onClick={() => updateDraft('priceAutoRange', !draft.priceAutoRange)}
+                                >
+                                    <div className={`w-10 h-6 rounded-full transition-colors relative ${draft.priceAutoRange ? 'bg-red-500' : 'bg-gray-200'}`}>
+                                        <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${draft.priceAutoRange ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                    </div>
+                                    <span className="text-sm text-gray-600">相場から自動設定</span>
+                                    {draft.priceAutoRange && displayPrice ? (
+                                        <span className="text-[11px] text-red-500 font-medium">
+                                            (¥{autoMin.toLocaleString()} 〜 ¥{autoMax.toLocaleString()})
+                                        </span>
+                                    ) : draft.priceAutoRange && !displayPrice ? (
+                                        <span className="text-[11px] text-gray-400">(相場データなし)</span>
+                                    ) : null}
+                                </label>
+
+                                {/* 手動入力（相場連動OFF時のみ） */}
+                                {!draft.priceAutoRange && (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            placeholder="下限"
+                                            value={draft.priceMin}
+                                            onChange={(e) => updateDraft('priceMin', e.target.value)}
+                                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                                        />
+                                        <span className="text-gray-400 text-sm">〜</span>
+                                        <input
+                                            type="number"
+                                            placeholder="上限"
+                                            value={draft.priceMax}
+                                            onChange={(e) => updateDraft('priceMax', e.target.value)}
+                                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                                        />
+                                        <span className="text-gray-400 text-xs">円</span>
+                                    </div>
+                                )}
                             </SettingSection>
 
                             {/* カテゴリ */}
@@ -262,11 +333,11 @@ export default function MercariSearchButton({ cardName, cardNumber, rarity }: Pr
 
                             {/* 匿名配送 */}
                             <SettingSection label="配送方法">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <div
-                                        className={`w-10 h-6 rounded-full transition-colors relative ${draft.anonymousShipping ? 'bg-red-500' : 'bg-gray-200'}`}
-                                        onClick={() => updateDraft('anonymousShipping', !draft.anonymousShipping)}
-                                    >
+                                <label
+                                    className="flex items-center gap-2 cursor-pointer"
+                                    onClick={() => updateDraft('anonymousShipping', !draft.anonymousShipping)}
+                                >
+                                    <div className={`w-10 h-6 rounded-full transition-colors relative ${draft.anonymousShipping ? 'bg-red-500' : 'bg-gray-200'}`}>
                                         <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${draft.anonymousShipping ? 'translate-x-4' : 'translate-x-0.5'}`} />
                                     </div>
                                     <span className="text-sm text-gray-600">匿名配送のみ</span>
@@ -277,7 +348,7 @@ export default function MercariSearchButton({ cardName, cardNumber, rarity }: Pr
                             <div className="bg-gray-50 rounded-lg p-3">
                                 <p className="text-[10px] text-gray-400 mb-1">検索URLプレビュー</p>
                                 <p className="text-[11px] text-gray-500 break-all leading-relaxed">
-                                    {buildMercariUrl(keyword, draft)}
+                                    {buildMercariUrl(keyword, draft, displayPrice)}
                                 </p>
                             </div>
                         </div>
