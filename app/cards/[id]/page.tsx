@@ -336,27 +336,6 @@ export default function CardDetailPage({ params }: Props) {
       }
     }
 
-    // 売買日次平均を追加
-    if (snkrdunkSales.length > 0) {
-      const cutoff = selectedPeriod ? new Date(Date.now() - selectedPeriod * 86400000) : null
-      const tradeByDay: Record<number, number[]> = {}
-      for (const s of snkrdunkSales) {
-        const d = formatDate(s.sold_at); if (!d || s.price == null || s.price <= 0) continue
-        if (cutoff && d < cutoff) continue
-        const dayNoon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)
-        const ts = dayNoon.getTime()
-        if (!tradeByDay[ts]) tradeByDay[ts] = []
-        tradeByDay[ts].push(s.price)
-      }
-      for (const [tsStr, prices] of Object.entries(tradeByDay)) {
-        const ts = Number(tsStr)
-        const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
-        const existing = dataMap.get(ts) || { timestamp: ts, date: makeDateLabel(new Date(ts)) }
-        existing.daily_trade_avg = avg
-        dataMap.set(ts, existing)
-      }
-    }
-
     // 日次データ（overseas, justTCG, snkrdunk等）と分単位データ（sale_prices等）を
     // 分離してサンプリングし、日次データが分単位データに押し出されないようにする
     const sorted = Array.from(dataMap.values()).sort((a, b) => a.timestamp - b.timestamp)

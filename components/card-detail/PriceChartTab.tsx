@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { RefreshCw } from 'lucide-react'
 import {
   SITE_COLORS, PURCHASE_CONDITION_COLORS, SALE_GRADE_COLORS,
-  OVERSEAS_LINE_COLORS, JUSTTCG_LINE_COLORS, DAILY_AVG_COLORS,
+  OVERSEAS_LINE_COLORS, JUSTTCG_LINE_COLORS,
   PERIOD_OPTIONS,
 } from './constants'
 import { isSnkrdunkSiteName } from '@/lib/snkrdunk-api'
@@ -95,7 +95,6 @@ export default function PriceChartTab({
 
   const [showOverseasLoose, setShowOverseasLoose] = useState(() => loadSetting('showOverseasLoose', true))
   const [showOverseasGraded, setShowOverseasGraded] = useState(() => loadSetting('showOverseasGraded', true))
-  const [showDailyTrade, setShowDailyTrade] = useState(() => loadSetting('showDailyTrade', true))
   const [showJustTcgNm, setShowJustTcgNm] = useState(() => loadSetting('showJustTcgNm', true))
   const [overseasUpdating, setOverseasUpdating] = useState(false)
   const [visibleGrades, setVisibleGrades] = useState<Record<string, { price: boolean; stock: boolean }>>(() => loadSetting('visibleGrades', {}))
@@ -104,14 +103,12 @@ export default function PriceChartTab({
   // トグル変更時に保存
   useEffect(() => { saveSetting('showOverseasLoose', showOverseasLoose) }, [showOverseasLoose, saveSetting])
   useEffect(() => { saveSetting('showOverseasGraded', showOverseasGraded) }, [showOverseasGraded, saveSetting])
-  useEffect(() => { saveSetting('showDailyTrade', showDailyTrade) }, [showDailyTrade, saveSetting])
   useEffect(() => { saveSetting('showJustTcgNm', showJustTcgNm) }, [showJustTcgNm, saveSetting])
   useEffect(() => { saveSetting('visibleGrades', visibleGrades) }, [visibleGrades, saveSetting])
   useEffect(() => { saveSetting('visiblePurchase', visiblePurchase) }, [visiblePurchase, saveSetting])
 
   const hasOverseasData = chartData.some(d => (d.overseas_loose != null && d.overseas_loose > 0) || (d.overseas_graded != null && d.overseas_graded > 0))
   const hasJustTcgData = chartData.some(d => d.justtcg_nm_jpy != null)
-  const hasDailyTradeData = chartData.some(d => d.daily_trade_avg != null)
 
   // スニダン判定（グレード別で表示するのでサイト別からは除外）
   const nonSnkrdunkSites = siteList.filter(s => !isSnkrdunkSiteName(s.name || ''))
@@ -246,7 +243,7 @@ export default function PriceChartTab({
         )}
 
         {/* 海外・その他 */}
-        {(card.pricecharting_id || hasJustTcgData || hasDailyTradeData) && (
+        {(card.pricecharting_id || hasJustTcgData) && (
           <div>
             <p className="text-xs text-slate-400 font-medium mb-1.5">海外・その他</p>
             <div className="flex flex-wrap gap-2 items-center">
@@ -278,13 +275,6 @@ export default function PriceChartTab({
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: JUSTTCG_LINE_COLORS.nm.color }}></span>
                   <span className="cursor-pointer select-none" onClick={() => setShowJustTcgNm(!showJustTcgNm)}>{JUSTTCG_LINE_COLORS.nm.label}</span>
                   <input type="checkbox" checked={showJustTcgNm} onChange={() => setShowJustTcgNm(!showJustTcgNm)} className="w-3.5 h-3.5 accent-cyan-500 cursor-pointer" />
-                </div>
-              )}
-              {hasDailyTradeData && (
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${showDailyTrade ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DAILY_AVG_COLORS.trade.color }}></span>
-                  <span className="cursor-pointer select-none" onClick={() => setShowDailyTrade(!showDailyTrade)}>{DAILY_AVG_COLORS.trade.label}</span>
-                  <input type="checkbox" checked={showDailyTrade} onChange={() => setShowDailyTrade(!showDailyTrade)} className="w-3.5 h-3.5 accent-orange-500 cursor-pointer" />
                 </div>
               )}
             </div>
@@ -460,20 +450,6 @@ export default function PriceChartTab({
                 />
               )}
 
-              {/* 売買日次平均線 */}
-              {showDailyTrade && hasDailyTradeData && (
-                <Line
-                  yAxisId="price"
-                  type="monotone"
-                  dataKey="daily_trade_avg"
-                  stroke={DAILY_AVG_COLORS.trade.color}
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  name={DAILY_AVG_COLORS.trade.label}
-                  dot={false}
-                  connectNulls
-                />
-              )}
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-2 text-xs text-slate-400">

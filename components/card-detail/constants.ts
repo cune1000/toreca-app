@@ -99,11 +99,6 @@ export const JUSTTCG_LINE_COLORS: Record<string, { color: string; label: string 
   nm: { color: '#06b6d4', label: 'TCGPlayer' },       // cyan
 }
 
-// 日次平均カラー
-export const DAILY_AVG_COLORS: Record<string, { color: string; label: string }> = {
-  trade: { color: '#f97316', label: '売買平均' },     // orange
-}
-
 // 期間フィルタオプション
 export const PERIOD_OPTIONS = [
   { label: '本日', days: 1 },
