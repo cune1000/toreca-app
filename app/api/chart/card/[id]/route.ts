@@ -139,7 +139,7 @@ export async function GET(
         id: (card as any).id,
         name: (card as any).name,
         image_url: (card as any).image_url,
-        rarity: (card as any).rarity?.name || '',
+        rarity: (card as any).rarity || '',
         card_number: (card as any).card_number || '',
         expansion: (card as any).expansion || '',
         release_date: (card as any).release_date || '',

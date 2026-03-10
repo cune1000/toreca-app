@@ -78,7 +78,7 @@ export async function GET(req: Request) {
             expansion: card.expansion,
             set_code: card.set_code || null,
             category: card.category_large?.name || null,
-            rarity: card.rarities?.name || null,
+            rarity: card.rarity || null,
         }))
 
         return apiSuccess({

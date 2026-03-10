@@ -11,9 +11,7 @@ export const dynamic = 'force-dynamic'
  *   cardIds: string[],
  *   updates: {
  *     category_large_id?: string | null,
- *     category_medium_id?: string | null,
- *     category_small_id?: string | null,
- *     rarity_id?: string | null
+ *     rarity?: string | null
  *   }
  * }
  */
