@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
 import { getRarityDisplayName } from '@/lib/rarity-mapping'
 import { getSeriesFromSetCode } from '@/lib/justtcg-set-names'
-import type { CardWithRelations, CategoryLarge, Rarity } from '@/lib/types'
+import type { CardWithRelations, CategoryLarge } from '@/lib/types'
 
 // =============================================================================
 // Types
@@ -88,7 +88,7 @@ export default function CardsPage({
   const [refreshKey, setRefreshKey] = useState(0)
 
   const [categories, setCategories] = useState<CategoryLarge[]>([])
-  const [rarities, setRarities] = useState<Rarity[]>([])
+  const [rarityTexts, setRarityTexts] = useState<string[]>([])
   const [cardStatuses, setCardStatuses] = useState<Record<string, any>>({})
   const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null)
   const [pageJumpInput, setPageJumpInput] = useState('')
@@ -98,7 +98,6 @@ export default function CardsPage({
   const [batchUpdates, setBatchUpdates] = useState<Record<string, string | null>>({})
   const [batchLoading, setBatchLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [batchRarities, setBatchRarities] = useState<Rarity[]>([])
 
   const [cardSaleUrls, setCardSaleUrls] = useState<Record<string, any[]>>({})
   const [cardPurchaseLinks, setCardPurchaseLinks] = useState<Record<string, string[]>>({})
@@ -157,11 +156,15 @@ export default function CardsPage({
         .order('sort_order')
       setCategories(catData || [])
 
-      const { data: rarData } = await supabase
-        .from('rarities')
-        .select('id, name, large_id')
-        .order('sort_order')
-      setRarities(rarData || [])
+      const { data: rarTextData } = await supabase
+        .from('cards')
+        .select('rarity')
+        .not('rarity', 'is', null)
+      if (rarTextData) {
+        const uniqueRarities = [...new Set(rarTextData.map(d => d.rarity).filter(Boolean))] as string[]
+        uniqueRarities.sort()
+        setRarityTexts(uniqueRarities)
+      }
 
       const { data: expData } = await supabase
         .from('cards')
@@ -250,7 +253,7 @@ export default function CardsPage({
 
       let query = supabase
         .from('cards')
-        .select(`*, category_large:category_large_id(name, icon), rarities:rarity_id(name)`, { count: 'exact' })
+        .select(`*, category_large:category_large_id(name, icon)`, { count: 'exact' })
 
       // 検索条件（1文字から有効）
       if (searchQuery.length >= 1) {
@@ -277,9 +280,9 @@ export default function CardsPage({
       }
 
       if (filterRarity === UNSET) {
-        query = query.is('rarity_id', null)
+        query = query.is('rarity', null)
       } else if (filterRarity) {
-        query = query.eq('rarity_id', filterRarity)
+        query = query.eq('rarity', filterRarity)
       }
 
       if (filterExpansion === UNSET) {
@@ -373,22 +376,11 @@ export default function CardsPage({
 
   const openBatchModal = () => {
     setBatchUpdates({})
-    setBatchRarities([])
     setShowBatchModal(true)
   }
 
   const handleBatchLargeChange = async (value: string) => {
-    setBatchRarities([])
     setBatchUpdates({ category_large_id: value || null })
-
-    if (value) {
-      const { data: rarData } = await supabase
-        .from('rarities')
-        .select('id, name, large_id')
-        .eq('large_id', value)
-        .order('sort_order')
-      setBatchRarities(rarData || [])
-    }
   }
 
   const executeBatchUpdate = async () => {
@@ -435,9 +427,8 @@ export default function CardsPage({
       const cat = categories.find(c => c.id === batchUpdates.category_large_id)
       labels.push(`ゲーム: ${cat?.name || '（クリア）'}`)
     }
-    if (batchUpdates.rarity_id !== undefined) {
-      const r = batchRarities.find(r => r.id === batchUpdates.rarity_id)
-      labels.push(`レアリティ: ${r?.name || '（クリア）'}`)
+    if (batchUpdates.rarity !== undefined) {
+      labels.push(`レアリティ: ${batchUpdates.rarity ? getRarityDisplayName(batchUpdates.rarity) : '（クリア）'}`)
     }
     return labels
   }
@@ -457,10 +448,6 @@ export default function CardsPage({
     if (diffHours < 24) return `${diffHours}h前`
     return `${Math.floor(diffHours / 24)}日前`
   }
-
-  const filteredRarities = filterCategoryLarge && filterCategoryLarge !== UNSET
-    ? rarities.filter(r => r.large_id === filterCategoryLarge)
-    : rarities
 
   const filteredSetCodes = filterSeries
     ? setCodes.filter(code => codeToSeries[code] === filterSeries)
@@ -670,8 +657,8 @@ export default function CardsPage({
             >
               <option value="">全レアリティ</option>
               <option value={UNSET}>未設定</option>
-              {filteredRarities.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
+              {rarityTexts.map(r => (
+                <option key={r} value={r}>{getRarityDisplayName(r)}</option>
               ))}
             </select>
 
@@ -769,12 +756,8 @@ export default function CardsPage({
                         </div>
                       </td>
                       <td className="px-3 py-1.5" onClick={() => window.open(`/cards/${card.id}`, '_blank')}>
-                        {card.rarities?.name ? (
+                        {card.rarity ? (
                           <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-medium">
-                            {card.rarities.name}
-                          </span>
-                        ) : card.rarity ? (
-                          <span className="px-1.5 py-0.5 bg-purple-50 text-purple-500 rounded text-[10px] font-medium">
                             {getRarityDisplayName(card.rarity)}
                           </span>
                         ) : (
@@ -931,21 +914,19 @@ export default function CardsPage({
                 </select>
               </div>
 
-              {batchRarities.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">レアリティ</label>
-                  <select
-                    value={batchUpdates.rarity_id || ''}
-                    onChange={(e) => setBatchUpdates(prev => ({ ...prev, rarity_id: e.target.value || null }))}
-                    className="w-full border rounded-lg px-3 py-2"
-                  >
-                    <option value="">（変更しない）</option>
-                    {batchRarities.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">レアリティ</label>
+                <select
+                  value={batchUpdates.rarity ?? ''}
+                  onChange={(e) => setBatchUpdates(prev => ({ ...prev, rarity: e.target.value || null }))}
+                  className="w-full border rounded-lg px-3 py-2"
+                >
+                  <option value="">（変更しない）</option>
+                  {rarityTexts.map(r => (
+                    <option key={r} value={r}>{getRarityDisplayName(r)}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="flex gap-3 mt-6">
