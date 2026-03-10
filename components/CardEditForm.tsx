@@ -51,44 +51,23 @@ export default function CardEditForm({ card, onClose, onSaved }) {
     fetchCategories()
   }, [])
 
-  // 過去の収録弾・レアリティを取得（サジェスト用）
-  // Supabaseのmax_rows=1000制限を回避するためページネーションで全行取得
+  // 収録弾サジェスト取得、レアリティはマッピングから静的生成
   useEffect(() => {
-    async function fetchAllRows(column: 'expansion' | 'rarity'): Promise<string[]> {
-      const PAGE_SIZE = 1000
-      const allValues: string[] = []
-      let offset = 0
-      while (true) {
-        const { data } = await supabase
-          .from('cards')
-          .select(column)
-          .not(column, 'is', null)
-          .order(column)
-          .range(offset, offset + PAGE_SIZE - 1)
-        if (!data || data.length === 0) break
-        for (const row of data) {
-          const val = row[column]
-          if (val) allValues.push(val as string)
-        }
-        if (data.length < PAGE_SIZE) break
-        offset += PAGE_SIZE
+    // レアリティ: RARITY_EN_TO_JA の values から重複排除
+    const uniqueRarities = [...new Set(Object.values(RARITY_EN_TO_JA))].sort()
+    setRaritySuggestions(uniqueRarities)
+
+    async function fetchExpansions() {
+      const { data } = await supabase
+        .from('cards')
+        .select('expansion')
+        .not('expansion', 'is', null)
+        .order('expansion')
+      if (data) {
+        setExpansionSuggestions([...new Set(data.map(d => d.expansion).filter(Boolean))] as string[])
       }
-      return allValues
     }
-
-    async function fetchSuggestions() {
-      // 収録弾のユニーク値を取得
-      const expansionValues = await fetchAllRows('expansion')
-      const uniqueExpansions = [...new Set(expansionValues)]
-      setExpansionSuggestions(uniqueExpansions)
-
-      // レアリティのユニーク値を取得（テキスト入力用）
-      const rarityValues = await fetchAllRows('rarity')
-      const converted = rarityValues.map(r => RARITY_EN_TO_JA[r] || r)
-      const uniqueRarities = [...new Set(converted)].sort()
-      setRaritySuggestions(uniqueRarities)
-    }
-    fetchSuggestions()
+    fetchExpansions()
   }, [])
 
   // 画像リサイズ（Vercel 4.5MB制限対策）
