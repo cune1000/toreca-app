@@ -56,13 +56,6 @@ export function getAffiliateLinks(cardName: string, rarity?: string, avgPrice?: 
 
     return [
         {
-            name: 'メルカリで探す',
-            url: getMercariUrl(cardName, rarity, avgPrice),
-            icon: '🛒',
-            color: 'bg-red-500 hover:bg-red-600',
-            sub: min && max ? `¥${min.toLocaleString()}〜¥${max.toLocaleString()}` : undefined,
-        },
-        {
             name: '駿河屋で探す',
             url: getSurugayaUrl(cardName),
             icon: '🏪',
