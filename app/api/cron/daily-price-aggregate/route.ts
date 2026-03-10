@@ -137,11 +137,7 @@ export async function GET(req: Request) {
             if (salesPage.length < CARD_PAGE) break
             salesOffset += CARD_PAGE
         }
-        const salesError = null // エラーはループ内で処理済み
-
-        if (salesError) {
-            console.error('Sales query error:', salesError)
-        } else if (salesData && salesData.length > 0) {
+        if (salesData.length > 0) {
             // グルーピング: category × sub_category × rarity × grade
             const groups: Record<string, { prices: number[]; cardIds: Set<string> }> = {}
 
@@ -209,11 +205,7 @@ export async function GET(req: Request) {
             if (purchasePage.length < CARD_PAGE) break
             purchaseOffset += CARD_PAGE
         }
-        const purchaseError = null // エラーはループ内で処理済み
-
-        if (purchaseError) {
-            console.error('Purchase query error:', purchaseError)
-        } else if (purchaseData && purchaseData.length > 0) {
+        if (purchaseData.length > 0) {
             const groups: Record<string, { prices: number[]; cardIds: Set<string> }> = {}
 
             for (const p of purchaseData) {

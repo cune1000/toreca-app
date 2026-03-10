@@ -73,14 +73,27 @@ export async function GET(request: NextRequest) {
 
         // ④ 今回の同期で更新されなかった古いキャッシュを削除
         //    （スクレイピング元から消えた商品をキャッシュに残さない）
-        const { error: cleanupError, count: cleanupCount } = await supabase
+        //    ただし部分スクレイプ時（大幅減少）はキャッシュ削除をスキップ
+        let cleanupCount: number | null = 0
+        const { count: staleCount } = await supabase
             .from('lounge_cards_cache')
-            .delete({ count: 'exact' })
+            .select('*', { count: 'exact', head: true })
             .lt('updated_at', syncTimestamp)
-        if (cleanupError) {
-            console.error('[lounge-cache] Cleanup error:', cleanupError.message)
-        } else if (cleanupCount && cleanupCount > 0) {
-            console.log(`[lounge-cache] Cleaned up ${cleanupCount} stale cache entries`)
+        const totalCacheEstimate = insertedCount + (staleCount || 0)
+        if (staleCount && staleCount > 0 && totalCacheEstimate > 0 && insertedCount / totalCacheEstimate >= 0.5) {
+            // 今回のスクレイプが前回の50%以上なら正常 → 古いキャッシュを削除
+            const { error: cleanupError, count: deleted } = await supabase
+                .from('lounge_cards_cache')
+                .delete({ count: 'exact' })
+                .lt('updated_at', syncTimestamp)
+            cleanupCount = deleted
+            if (cleanupError) {
+                console.error('[lounge-cache] Cleanup error:', cleanupError.message)
+            } else if (deleted && deleted > 0) {
+                console.log(`[lounge-cache] Cleaned up ${deleted} stale cache entries`)
+            }
+        } else if (staleCount && staleCount > 0) {
+            console.warn(`[lounge-cache] Skipped cleanup: scraped ${insertedCount} but ${staleCount} stale (possible partial scrape)`)
         }
 
         // ⑤ lounge_known_keys に新規キーを登録（新商品検知用）

@@ -70,9 +70,17 @@ export async function GET(
     ])
 
     const latest = latestPrices?.[0]
-    const yesterday = latestPrices?.find((_, i) => i > 0)
-    const weekAgo = latestPrices?.find((_, i) => i >= 7)
-    const monthAgo = latestPrices?.find((_, i) => i >= 30)
+    // 日付ベースで変動率計算（インデックスベースだと欠損日でずれる）
+    const now = new Date()
+    const dayAgoStr = new Date(now.getTime() - 86400000).toISOString().split('T')[0]
+    const weekAgoStr = new Date(now.getTime() - 7 * 86400000).toISOString().split('T')[0]
+    const monthAgoStr = new Date(now.getTime() - 30 * 86400000).toISOString().split('T')[0]
+    const findClosest = (target: string) =>
+        latestPrices?.filter(r => (r.recorded_at || '').split('T')[0] <= target)
+            .sort((a, b) => (b.recorded_at || '').localeCompare(a.recorded_at || ''))[0]
+    const yesterday = findClosest(dayAgoStr)
+    const weekAgo = findClosest(weekAgoStr)
+    const monthAgo = findClosest(monthAgoStr)
 
     const calcChange = (oldPrice?: number | null, newPrice?: number | null) => {
         if (!oldPrice || !newPrice || oldPrice === 0) return 0
@@ -137,10 +145,10 @@ export async function GET(
         release_date: (card as any).release_date || '',
         pricecharting_id: (card as any).pricecharting_id || null,
         pricecharting_url: (card as any).pricecharting_url || null,
-        loose_price_jpy: latest?.loose_price_jpy || 0,
-        loose_price_usd: latest?.loose_price_usd || 0,
-        graded_price_jpy: latest?.graded_price_jpy || 0,
-        graded_price_usd: latest?.graded_price_usd || 0,
+        loose_price_jpy: latest?.loose_price_jpy ?? 0,
+        loose_price_usd: latest?.loose_price_usd ?? 0,
+        graded_price_jpy: latest?.graded_price_jpy ?? 0,
+        graded_price_usd: latest?.graded_price_usd ?? 0,
         price_change_24h: calcChange(yesterday?.loose_price_jpy, latest?.loose_price_jpy),
         price_change_7d: calcChange(weekAgo?.loose_price_jpy, latest?.loose_price_jpy),
         price_change_30d: calcChange(monthAgo?.loose_price_jpy, latest?.loose_price_jpy),

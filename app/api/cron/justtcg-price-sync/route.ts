@@ -37,7 +37,8 @@ export async function GET(req: Request) {
     const supabase = createServiceClient()
     const startTime = Date.now()
     const now = new Date().toISOString()
-    const today = now.substring(0, 10)
+    // JST日付で「今日」を判定（VercelサーバーはUTC）
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10)
 
     // 1. justtcg_id が設定済みのカードを全取得（ページネーション）
     let cards: { id: string; justtcg_id: string }[] = []

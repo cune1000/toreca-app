@@ -237,11 +237,11 @@ export async function POST(req: Request) {
                 const oneBox = sizes.find(s => s.quantity === 1)
                 if (oneBox) {
                     overallMin = oneBox.minPrice
-                    gradePrices.push({ grade: 'BOX', price: oneBox.minPrice })
+                    gradePrices.push({ grade: '1個', price: oneBox.minPrice })
                 } else if (sizes.length > 0) {
                     const cheapest = sizes.reduce((a, b) => a.minPrice < b.minPrice ? a : b)
                     overallMin = cheapest.minPrice
-                    gradePrices.push({ grade: 'BOX', price: cheapest.minPrice })
+                    gradePrices.push({ grade: '1個', price: cheapest.minPrice })
                 }
             } catch (e: any) {
                 console.error(`[SnkrdunkAPI] Box sizes fetch error: ${e.message}`)

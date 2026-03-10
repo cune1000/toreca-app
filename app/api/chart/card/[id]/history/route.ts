@@ -54,10 +54,10 @@ export async function GET(
             dateMap.set(date, { date, loose_price_jpy: null, loose_price_usd: null, graded_price_jpy: null, graded_price_usd: null })
         }
         const entry = dateMap.get(date)!
-        if (row.loose_price_jpy) entry.loose_price_jpy = row.loose_price_jpy
-        if (row.loose_price_usd) entry.loose_price_usd = row.loose_price_usd
-        if (row.graded_price_jpy) entry.graded_price_jpy = row.graded_price_jpy
-        if (row.graded_price_usd) entry.graded_price_usd = row.graded_price_usd
+        if (row.loose_price_jpy != null) entry.loose_price_jpy = row.loose_price_jpy
+        if (row.loose_price_usd != null) entry.loose_price_usd = row.loose_price_usd
+        if (row.graded_price_jpy != null) entry.graded_price_jpy = row.graded_price_jpy
+        if (row.graded_price_usd != null) entry.graded_price_usd = row.graded_price_usd
     }
 
     for (const row of (jtcgData || [])) {

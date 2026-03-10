@@ -37,8 +37,8 @@ export async function GET(req: Request) {
 
     const supabase = createServiceClient()
 
-    // 同日の既存レコードがあればスキップ（force実行時の重複防止）
-    const today = new Date().toISOString().substring(0, 10)
+    // 同日の既存レコードがあればスキップ（JST日付で判定）
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10)
     const { data: existing } = await supabase
       .from(TABLES.EXCHANGE_RATES)
       .select('id')

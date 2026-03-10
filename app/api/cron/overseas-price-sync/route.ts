@@ -77,8 +77,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, processed: 0, message: 'No cards' })
     }
 
-    // 今日未更新のカードだけを処理（ページネーション）
-    const today = new Date().toISOString().substring(0, 10)
+    // 今日未更新のカードだけを処理（JST日付、ページネーション）
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10)
     let alreadySynced: { card_id: string }[] = []
     let syncOffset = 0
     while (true) {

@@ -74,10 +74,11 @@ export async function POST(req: NextRequest) {
 
     // --- Tier 4: カード名検索（フォールバック） ---
     if (candidates.length === 0 && parsed.cardName) {
+      const escapedName = parsed.cardName.replace(/[%_\\,()]/g, '\\$&')
       const { data } = await supabase
         .from('cards')
         .select(SELECT_FIELDS)
-        .or(`name_en.ilike.%${parsed.cardName}%,name.ilike.%${parsed.cardName}%`)
+        .or(`name_en.ilike.%${escapedName}%,name.ilike.%${escapedName}%`)
         .limit(30)
       if (data && data.length > 0) {
         candidates = data
