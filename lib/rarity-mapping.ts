@@ -31,6 +31,7 @@ export const RARITY_EN_TO_JA: Record<string, string> = {
   'Shiny Secret Rare': 'SSR',
   'Super Rare': 'SR',
   'Mega Ultra Rare': 'MUR',
+  'Mega Attack Rare': 'MAR',
   'None': '−',
 }
 
@@ -93,6 +94,7 @@ export function getRarityShortName(rarityEn: string): string | null {
     'Shiny Secret Rare': 'SSR',
     'Super Rare': 'SR',
     'Mega Ultra Rare': 'MUR',
+    'Mega Attack Rare': 'MAR',
   }
   return mapping[rarityEn] || null
 }

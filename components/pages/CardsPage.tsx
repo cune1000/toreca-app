@@ -156,22 +156,33 @@ export default function CardsPage({
         .order('sort_order')
       setCategories(catData || [])
 
-      const { data: rarTextData } = await supabase
-        .from('cards')
-        .select('rarity')
-        .not('rarity', 'is', null)
-      if (rarTextData) {
+      // Supabaseのmax_rows=1000制限を回避するためページネーションで全行取得
+      const fetchAllCards = async (columns: string): Promise<Record<string, any>[]> => {
+        const PAGE_SIZE = 1000
+        const allRows: Record<string, any>[] = []
+        let offset = 0
+        while (true) {
+          const { data } = await supabase
+            .from('cards')
+            .select(columns)
+            .range(offset, offset + PAGE_SIZE - 1)
+          if (!data || data.length === 0) break
+          allRows.push(...data)
+          if (data.length < PAGE_SIZE) break
+          offset += PAGE_SIZE
+        }
+        return allRows
+      }
+
+      const rarTextData = await fetchAllCards('rarity')
+      if (rarTextData.length > 0) {
         const uniqueRarities = [...new Set(rarTextData.map(d => d.rarity).filter(Boolean))] as string[]
         uniqueRarities.sort()
         setRarityTexts(uniqueRarities)
       }
 
-      const { data: expData } = await supabase
-        .from('cards')
-        .select('expansion, set_code')
-        .order('expansion')
-        .limit(10000)
-      if (expData) {
+      const expData = await fetchAllCards('expansion, set_code')
+      if (expData.length > 0) {
         const uniqueExps = [...new Set(expData.map(d => d.expansion).filter(Boolean))] as string[]
         setExpansions(uniqueExps)
         const uniqueCodes = [...new Set(expData.map(d => d.set_code).filter(Boolean))] as string[]

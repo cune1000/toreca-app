@@ -52,33 +52,41 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   }, [])
 
   // 過去の収録弾・レアリティを取得（サジェスト用）
+  // Supabaseのmax_rows=1000制限を回避するためページネーションで全行取得
   useEffect(() => {
+    async function fetchAllRows(column: 'expansion' | 'rarity'): Promise<string[]> {
+      const PAGE_SIZE = 1000
+      const allValues: string[] = []
+      let offset = 0
+      while (true) {
+        const { data } = await supabase
+          .from('cards')
+          .select(column)
+          .not(column, 'is', null)
+          .order(column)
+          .range(offset, offset + PAGE_SIZE - 1)
+        if (!data || data.length === 0) break
+        for (const row of data) {
+          const val = row[column]
+          if (val) allValues.push(val as string)
+        }
+        if (data.length < PAGE_SIZE) break
+        offset += PAGE_SIZE
+      }
+      return allValues
+    }
+
     async function fetchSuggestions() {
       // 収録弾のユニーク値を取得
-      const { data: expansionData } = await supabase
-        .from('cards')
-        .select('expansion')
-        .not('expansion', 'is', null)
-        .order('expansion')
-
-      if (expansionData) {
-        const uniqueExpansions = [...new Set(expansionData.map(d => d.expansion).filter(Boolean))]
-        setExpansionSuggestions(uniqueExpansions as string[])
-      }
+      const expansionValues = await fetchAllRows('expansion')
+      const uniqueExpansions = [...new Set(expansionValues)]
+      setExpansionSuggestions(uniqueExpansions)
 
       // レアリティのユニーク値を取得（テキスト入力用）
-      const { data: rarityData } = await supabase
-        .from('cards')
-        .select('rarity')
-        .not('rarity', 'is', null)
-        .order('rarity')
-        .limit(10000)
-
-      if (rarityData) {
-        const converted = rarityData.map(d => d.rarity).filter(Boolean).map(r => RARITY_EN_TO_JA[r as string] || r as string)
-        const uniqueRarities = [...new Set(converted)].sort()
-        setRaritySuggestions(uniqueRarities)
-      }
+      const rarityValues = await fetchAllRows('rarity')
+      const converted = rarityValues.map(r => RARITY_EN_TO_JA[r] || r)
+      const uniqueRarities = [...new Set(converted)].sort()
+      setRaritySuggestions(uniqueRarities)
     }
     fetchSuggestions()
   }, [])
