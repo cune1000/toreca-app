@@ -55,27 +55,44 @@ export async function GET(req: Request) {
       )
     }
 
-    // 全対象カードを取得
-    const { data: allCards, error: cardsError } = await supabase
-      .from(TABLES.CARDS)
-      .select('id, pricecharting_id')
-      .not('pricecharting_id', 'is', null)
-      .limit(10000)
+    // 全対象カードを取得（ページネーション）
+    let allCards: { id: string; pricecharting_id: string }[] = []
+    let cardOffset = 0
+    const PAGE = 1000
+    while (true) {
+      const { data: page, error: pageError } = await supabase
+        .from(TABLES.CARDS)
+        .select('id, pricecharting_id')
+        .not('pricecharting_id', 'is', null)
+        .range(cardOffset, cardOffset + PAGE - 1)
+      if (pageError) throw pageError
+      if (!page || page.length === 0) break
+      allCards = allCards.concat(page)
+      if (page.length < PAGE) break
+      cardOffset += PAGE
+    }
 
-    if (cardsError) throw cardsError
-    if (!allCards || allCards.length === 0) {
+    if (allCards.length === 0) {
       await markCronJobRun('overseas-price-sync', 'success')
       return NextResponse.json({ success: true, processed: 0, message: 'No cards' })
     }
 
-    // 今日未更新のカードだけを処理
+    // 今日未更新のカードだけを処理（ページネーション）
     const today = new Date().toISOString().substring(0, 10)
-    const { data: alreadySynced } = await supabase
-      .from(TABLES.OVERSEAS_PRICES)
-      .select('card_id')
-      .gte('recorded_at', `${today}T00:00:00`)
-      .lte('recorded_at', `${today}T23:59:59`)
-      .limit(10000)
+    let alreadySynced: { card_id: string }[] = []
+    let syncOffset = 0
+    while (true) {
+      const { data: syncPage } = await supabase
+        .from(TABLES.OVERSEAS_PRICES)
+        .select('card_id')
+        .gte('recorded_at', `${today}T00:00:00`)
+        .lte('recorded_at', `${today}T23:59:59`)
+        .range(syncOffset, syncOffset + PAGE - 1)
+      if (!syncPage || syncPage.length === 0) break
+      alreadySynced = alreadySynced.concat(syncPage)
+      if (syncPage.length < PAGE) break
+      syncOffset += PAGE
+    }
 
     const syncedSet = new Set((alreadySynced || []).map((r) => r.card_id))
     const unsyncedCards = allCards.filter(c => !syncedSet.has(c.id))

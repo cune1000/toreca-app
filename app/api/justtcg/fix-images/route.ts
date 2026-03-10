@@ -18,19 +18,27 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // tcgplayer_id があり、画像がpricecharting のカードを取得
-  const { data: cards, error } = await supabase
-    .from('cards')
-    .select('id, tcgplayer_id, image_url')
-    .not('tcgplayer_id', 'is', null)
-    .like('image_url', '%pricecharting%')
-    .limit(10000)
-
-  if (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  // tcgplayer_id があり、画像がpricecharting のカードを取得（ページネーション）
+  let cards: { id: string; tcgplayer_id: string; image_url: string }[] = []
+  let cardOffset = 0
+  const CARD_PAGE = 1000
+  while (true) {
+    const { data: page, error } = await supabase
+      .from('cards')
+      .select('id, tcgplayer_id, image_url')
+      .not('tcgplayer_id', 'is', null)
+      .like('image_url', '%pricecharting%')
+      .range(cardOffset, cardOffset + CARD_PAGE - 1)
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+    if (!page || page.length === 0) break
+    cards = cards.concat(page)
+    if (page.length < CARD_PAGE) break
+    cardOffset += CARD_PAGE
   }
 
-  if (!cards || cards.length === 0) {
+  if (cards.length === 0) {
     return NextResponse.json({ success: true, updated: 0, message: '対象カードなし' })
   }
 

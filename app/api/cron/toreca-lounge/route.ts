@@ -31,14 +31,22 @@ export async function GET(request: NextRequest) {
         const shop = shops?.[0]
         if (!shop) throw new Error('トレカラウンジがpurchase_shopsに未登録')
 
-        // ② card_purchase_linksから紐付け済みを取得
-        const { data: links, error: linksError } = await supabase
-            .from('card_purchase_links')
-            .select('id, card_id, external_key, label, condition, card:card_id(name)')
-            .eq('shop_id', shop.id)
-            .limit(10000)
-
-        if (linksError) throw linksError
+        // ② card_purchase_linksから紐付け済みを取得（ページネーション）
+        let links: { id: string; card_id: string; external_key: string; label: string; condition: string | null; card: { name?: string } | null }[] = []
+        let linkOffset = 0
+        const LINK_PAGE = 1000
+        while (true) {
+            const { data: linkPage, error: linksError } = await supabase
+                .from('card_purchase_links')
+                .select('id, card_id, external_key, label, condition, card:card_id(name)')
+                .eq('shop_id', shop.id)
+                .range(linkOffset, linkOffset + LINK_PAGE - 1)
+            if (linksError) throw linksError
+            if (!linkPage || linkPage.length === 0) break
+            links = links.concat(linkPage as typeof links)
+            if (linkPage.length < LINK_PAGE) break
+            linkOffset += LINK_PAGE
+        }
 
         if (!links || links.length === 0) {
             return NextResponse.json({ success: true, message: 'No linked cards', synced: 0 })
@@ -48,23 +56,27 @@ export async function GET(request: NextRequest) {
         const loungeCards = await fetchAllLoungeCards()
         const loungeMap = new Map(loungeCards.map(c => [c.key, c]))
 
-        // ④ 各紐付けの最新価格を取得（差分チェック用）
+        // ④ 各紐付けの最新価格を取得（差分チェック用・ページネーション）
         const linkIds = links.map(l => l.id)
         const latestPriceMap = new Map<string, number>()
         for (let i = 0; i < linkIds.length; i += 100) {
             const batch = linkIds.slice(i, i + 100)
-            const { data: latestPrices } = await supabase
-                .from('purchase_prices')
-                .select('link_id, price')
-                .in('link_id', batch)
-                .order('created_at', { ascending: false })
-                .limit(10000)
-            if (latestPrices) {
+            let priceOffset = 0
+            while (true) {
+                const { data: latestPrices } = await supabase
+                    .from('purchase_prices')
+                    .select('link_id, price')
+                    .in('link_id', batch)
+                    .order('created_at', { ascending: false })
+                    .range(priceOffset, priceOffset + 999)
+                if (!latestPrices || latestPrices.length === 0) break
                 for (const p of latestPrices) {
                     if (!latestPriceMap.has(p.link_id)) {
                         latestPriceMap.set(p.link_id, p.price)
                     }
                 }
+                if (latestPrices.length < 1000) break
+                priceOffset += 1000
             }
         }
 

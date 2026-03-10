@@ -93,15 +93,23 @@ export async function GET(req: Request) {
         allMediumCategories?.forEach((c) => categoryMediumMap[c.id] = { name: c.name, largeId: c.large_id })
         allRarities?.forEach((r) => rarityMap[r.id] = r.name)
 
-        // カードIDからカテゴリ中を逆引きするマップ
-        // cards テーブルから category_medium_id を取得
-        const { data: cardMediumData } = await supabase
-            .from('cards')
-            .select('id, category_large_id, category_medium_id, rarity_id')
-            .limit(10000)
+        // カードIDからカテゴリ中を逆引きするマップ（ページネーション）
+        let cardMediumData: { id: string; category_large_id: string; category_medium_id: string | null; rarity_id: string | null }[] = []
+        let cardPageOffset = 0
+        const CARD_PAGE = 1000
+        while (true) {
+            const { data: cardPage } = await supabase
+                .from('cards')
+                .select('id, category_large_id, category_medium_id, rarity_id')
+                .range(cardPageOffset, cardPageOffset + CARD_PAGE - 1)
+            if (!cardPage || cardPage.length === 0) break
+            cardMediumData = cardMediumData.concat(cardPage)
+            if (cardPage.length < CARD_PAGE) break
+            cardPageOffset += CARD_PAGE
+        }
 
         const cardInfoMap: Record<string, { catLargeId: string; catMediumId: string | null; rarityId: string | null }> = {}
-        cardMediumData?.forEach((c) => {
+        cardMediumData.forEach((c) => {
             cardInfoMap[c.id] = {
                 catLargeId: c.category_large_id,
                 catMediumId: c.category_medium_id,
@@ -112,14 +120,24 @@ export async function GET(req: Request) {
         // =====================================================================
         // 1. スニダン売買履歴を集計（sale）: PSA10, A, 1BOX
         // =====================================================================
-        const { data: salesData, error: salesError } = await supabase
-            .from('snkrdunk_sales_history')
-            .select('card_id, price, grade, sold_at')
-            .gte('sold_at', dayStart)
-            .lte('sold_at', dayEnd)
-            .in('grade', ['PSA10', 'A', '1BOX'])
-            .gt('price', 0)
-            .limit(10000)
+        let salesData: { card_id: string; price: number; grade: string; sold_at: string }[] = []
+        let salesOffset = 0
+        while (true) {
+            const { data: salesPage, error: salesPageError } = await supabase
+                .from('snkrdunk_sales_history')
+                .select('card_id, price, grade, sold_at')
+                .gte('sold_at', dayStart)
+                .lte('sold_at', dayEnd)
+                .in('grade', ['PSA10', 'A', '1BOX'])
+                .gt('price', 0)
+                .range(salesOffset, salesOffset + CARD_PAGE - 1)
+            if (salesPageError) { console.error('Sales query error:', salesPageError); break }
+            if (!salesPage || salesPage.length === 0) break
+            salesData = salesData.concat(salesPage)
+            if (salesPage.length < CARD_PAGE) break
+            salesOffset += CARD_PAGE
+        }
+        const salesError = null // エラーはループ内で処理済み
 
         if (salesError) {
             console.error('Sales query error:', salesError)
@@ -175,13 +193,23 @@ export async function GET(req: Request) {
         // =====================================================================
         // 2. 買取価格を集計（purchase）
         // =====================================================================
-        const { data: purchaseData, error: purchaseError } = await supabase
-            .from('purchase_prices')
-            .select('card_id, price, created_at')
-            .gte('created_at', dayStart)
-            .lte('created_at', dayEnd)
-            .gt('price', 0)
-            .limit(10000)
+        let purchaseData: { card_id: string; price: number; created_at: string }[] = []
+        let purchaseOffset = 0
+        while (true) {
+            const { data: purchasePage, error: purchasePageError } = await supabase
+                .from('purchase_prices')
+                .select('card_id, price, created_at')
+                .gte('created_at', dayStart)
+                .lte('created_at', dayEnd)
+                .gt('price', 0)
+                .range(purchaseOffset, purchaseOffset + CARD_PAGE - 1)
+            if (purchasePageError) { console.error('Purchase query error:', purchasePageError); break }
+            if (!purchasePage || purchasePage.length === 0) break
+            purchaseData = purchaseData.concat(purchasePage)
+            if (purchasePage.length < CARD_PAGE) break
+            purchaseOffset += CARD_PAGE
+        }
+        const purchaseError = null // エラーはループ内で処理済み
 
         if (purchaseError) {
             console.error('Purchase query error:', purchaseError)

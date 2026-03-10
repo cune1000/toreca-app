@@ -39,26 +39,43 @@ export async function GET(req: Request) {
     const now = new Date().toISOString()
     const today = now.substring(0, 10)
 
-    // 1. justtcg_id が設定済みのカードを全取得
-    const { data: cards, error: cardsError } = await supabase
-      .from('cards')
-      .select('id, justtcg_id')
-      .not('justtcg_id', 'is', null)
-      .limit(10000)
+    // 1. justtcg_id が設定済みのカードを全取得（ページネーション）
+    let cards: { id: string; justtcg_id: string }[] = []
+    let cardOffset = 0
+    const PAGE = 1000
+    while (true) {
+      const { data: page, error: pageError } = await supabase
+        .from('cards')
+        .select('id, justtcg_id')
+        .not('justtcg_id', 'is', null)
+        .range(cardOffset, cardOffset + PAGE - 1)
+      if (pageError) throw pageError
+      if (!page || page.length === 0) break
+      cards = cards.concat(page)
+      if (page.length < PAGE) break
+      cardOffset += PAGE
+    }
 
-    if (cardsError) throw cardsError
-    if (!cards || cards.length === 0) {
+    if (cards.length === 0) {
       await markCronJobRun('justtcg-price-sync', 'success')
       return NextResponse.json({ success: true, message: 'No cards with justtcg_id', processed: 0 })
     }
 
-    // 2. 今日既に更新済みのカードを特定
-    const { data: alreadySynced } = await supabase
-      .from('justtcg_price_history')
-      .select('card_id')
-      .gte('recorded_at', `${today}T00:00:00`)
-      .limit(10000)
-      .lte('recorded_at', `${today}T23:59:59`)
+    // 2. 今日既に更新済みのカードを特定（ページネーション）
+    let alreadySynced: { card_id: string }[] = []
+    let syncOffset = 0
+    while (true) {
+      const { data: syncPage } = await supabase
+        .from('justtcg_price_history')
+        .select('card_id')
+        .gte('recorded_at', `${today}T00:00:00`)
+        .lte('recorded_at', `${today}T23:59:59`)
+        .range(syncOffset, syncOffset + PAGE - 1)
+      if (!syncPage || syncPage.length === 0) break
+      alreadySynced = alreadySynced.concat(syncPage)
+      if (syncPage.length < PAGE) break
+      syncOffset += PAGE
+    }
     const syncedSet = new Set((alreadySynced || []).map((r) => r.card_id))
 
     // 3. 未更新カードをセットIDでグルーピング

@@ -84,11 +84,20 @@ export async function GET(request: NextRequest) {
         }
 
         // ⑤ lounge_known_keys に新規キーを登録（新商品検知用）
-        // 既存のcard_keyを取得
-        const { data: existingKeys } = await supabase
-            .from('lounge_known_keys')
-            .select('card_key')
-            .limit(10000)
+        // 既存のcard_keyを取得（ページネーション）
+        let existingKeys: { card_key: string }[] = []
+        let keyOffset = 0
+        const KEY_PAGE = 1000
+        while (true) {
+            const { data: keyPage } = await supabase
+                .from('lounge_known_keys')
+                .select('card_key')
+                .range(keyOffset, keyOffset + KEY_PAGE - 1)
+            if (!keyPage || keyPage.length === 0) break
+            existingKeys = existingKeys.concat(keyPage)
+            if (keyPage.length < KEY_PAGE) break
+            keyOffset += KEY_PAGE
+        }
 
         const knownKeySet = new Set((existingKeys || []).map(k => k.card_key))
         const newCards = uniqueCards.filter(c => !knownKeySet.has(c.key))

@@ -88,18 +88,24 @@ export async function getPriceChanges(hours: number = 24, limit: number = 10): P
 export async function getCronStats(hours: number = 24): Promise<CronStats> {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
 
-  const { data, error } = await supabase
-    .from('cron_logs')
-    .select('status, price_changed')
-    .gte('executed_at', cutoff)
-    .limit(10000)
-
-  if (error) {
-    console.error('Error fetching cron stats:', error)
-    return { success: 0, errors: 0, changes: 0 }
+  let logs: { status: string; price_changed: boolean }[] = []
+  let logOffset = 0
+  const LOG_PAGE = 1000
+  while (true) {
+    const { data: logPage, error } = await supabase
+      .from('cron_logs')
+      .select('status, price_changed')
+      .gte('executed_at', cutoff)
+      .range(logOffset, logOffset + LOG_PAGE - 1)
+    if (error) {
+      console.error('Error fetching cron stats:', error)
+      return { success: 0, errors: 0, changes: 0 }
+    }
+    if (!logPage || logPage.length === 0) break
+    logs = logs.concat(logPage)
+    if (logPage.length < LOG_PAGE) break
+    logOffset += LOG_PAGE
   }
-
-  const logs = data || []
   return {
     success: logs.filter(l => l.status === 'success').length,
     errors: logs.filter(l => l.status === 'error').length,

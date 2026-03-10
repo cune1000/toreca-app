@@ -38,38 +38,46 @@ export async function GET(req: NextRequest) {
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
 
-    // overseas_prices から最新30日分を取得
-    let query = supabase
-        .from('overseas_prices')
-        .select(`
-            card_id,
-            ${priceCol},
-            ${priceColUsd},
-            recorded_at,
-            cards!inner (
-                id,
-                name,
-                image_url,
-                card_number,
-                pricecharting_id,
-                rarity:rarity_id (name),
-                category:category_large_id (name)
-            )
-        `)
-        .gte('recorded_at', thirtyDaysAgo)
-        .not(priceCol, 'is', null)
-        .order('recorded_at', { ascending: false })
-        .limit(10000)
+    // overseas_prices から最新30日分を取得（ページネーション）
+    const PAGE = 1000
+    let priceData: any[] = []
+    let offset = 0
+    while (true) {
+        let query = supabase
+            .from('overseas_prices')
+            .select(`
+                card_id,
+                ${priceCol},
+                ${priceColUsd},
+                recorded_at,
+                cards!inner (
+                    id,
+                    name,
+                    image_url,
+                    card_number,
+                    pricecharting_id,
+                    rarity:rarity_id (name),
+                    category:category_large_id (name)
+                )
+            `)
+            .gte('recorded_at', thirtyDaysAgo)
+            .not(priceCol, 'is', null)
+            .order('recorded_at', { ascending: false })
+            .range(offset, offset + PAGE - 1)
 
-    if (categoryFilter) {
-        query = query.eq('cards.category.name', categoryFilter)
-    }
+        if (categoryFilter) {
+            query = query.eq('cards.category.name', categoryFilter)
+        }
 
-    const { data: priceData, error } = await query
-
-    if (error) {
-        console.error('Rankings API error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        const { data: page, error } = await query
+        if (error) {
+            console.error('Rankings API error:', error)
+            return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+        if (!page || page.length === 0) break
+        priceData = priceData.concat(page)
+        if (page.length < PAGE) break
+        offset += PAGE
     }
 
     if (!priceData?.length) {
@@ -189,34 +197,42 @@ async function handlePurchaseRanking(
 ) {
     const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
 
-    let query = supabase
-        .from('chart_daily_card_prices')
-        .select(`
-            card_id,
-            date,
-            purchase_avg,
-            cards!inner (
-                id,
-                name,
-                image_url,
-                card_number,
-                rarity:rarity_id (name),
-                category:category_large_id (name)
-            )
-        `)
-        .gte('date', monthAgo)
-        .not('purchase_avg', 'is', null)
-        .limit(10000)
+    const PAGE = 1000
+    let priceData: any[] = []
+    let offset = 0
+    while (true) {
+        let query = supabase
+            .from('chart_daily_card_prices')
+            .select(`
+                card_id,
+                date,
+                purchase_avg,
+                cards!inner (
+                    id,
+                    name,
+                    image_url,
+                    card_number,
+                    rarity:rarity_id (name),
+                    category:category_large_id (name)
+                )
+            `)
+            .gte('date', monthAgo)
+            .not('purchase_avg', 'is', null)
+            .range(offset, offset + PAGE - 1)
 
-    if (categoryFilter) {
-        query = query.eq('cards.category.name', categoryFilter)
-    }
+        if (categoryFilter) {
+            query = query.eq('cards.category.name', categoryFilter)
+        }
 
-    const { data: priceData, error } = await query
-
-    if (error) {
-        console.error('Purchase rankings API error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        const { data: page, error } = await query
+        if (error) {
+            console.error('Purchase rankings API error:', error)
+            return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+        if (!page || page.length === 0) break
+        priceData = priceData.concat(page)
+        if (page.length < PAGE) break
+        offset += PAGE
     }
 
     if (!priceData?.length) {

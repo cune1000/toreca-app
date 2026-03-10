@@ -30,13 +30,22 @@ export async function GET(req: NextRequest) {
     let linkedMap: Record<string, { cardId: string; cardName: string }> = {}
 
     if (shopId && (filter !== 'all' || sort === 'linked')) {
-      const { data: allLinks } = await supabase
-        .from('card_purchase_links')
-        .select('external_key, card_id, card:card_id(name)')
-        .eq('shop_id', shopId)
-        .limit(10000)
+      let allLinks: any[] = []
+      let linkOffset = 0
+      const LINK_PAGE = 1000
+      while (true) {
+        const { data: linkPage } = await supabase
+          .from('card_purchase_links')
+          .select('external_key, card_id, card:card_id(name)')
+          .eq('shop_id', shopId)
+          .range(linkOffset, linkOffset + LINK_PAGE - 1)
+        if (!linkPage || linkPage.length === 0) break
+        allLinks = allLinks.concat(linkPage)
+        if (linkPage.length < LINK_PAGE) break
+        linkOffset += LINK_PAGE
+      }
 
-      if (allLinks) {
+      if (allLinks.length > 0) {
         for (const link of allLinks) {
           linkedItemIds.add(link.external_key)
           linkedMap[link.external_key] = {

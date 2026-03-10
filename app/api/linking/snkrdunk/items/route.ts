@@ -26,14 +26,23 @@ export async function GET(req: NextRequest) {
     let linkedMap: Record<number, { cardId: string; cardName: string }> = {}
 
     if (filter !== 'all' || sort === 'linked') {
-      // フィルタ or ソートで紐づけ状態が必要 → 全linked apparel_id を取得
-      const { data: allLinks } = await supabase
-        .from('card_sale_urls')
-        .select('apparel_id, card_id, card:card_id(name)')
-        .not('apparel_id', 'is', null)
-        .limit(10000)
+      // フィルタ or ソートで紐づけ状態が必要 → 全linked apparel_id を取得（ページネーション）
+      let allLinks: any[] = []
+      let linkOffset = 0
+      const LINK_PAGE = 1000
+      while (true) {
+        const { data: linkPage } = await supabase
+          .from('card_sale_urls')
+          .select('apparel_id, card_id, card:card_id(name)')
+          .not('apparel_id', 'is', null)
+          .range(linkOffset, linkOffset + LINK_PAGE - 1)
+        if (!linkPage || linkPage.length === 0) break
+        allLinks = allLinks.concat(linkPage)
+        if (linkPage.length < LINK_PAGE) break
+        linkOffset += LINK_PAGE
+      }
 
-      if (allLinks) {
+      if (allLinks.length > 0) {
         for (const link of allLinks) {
           if (link.apparel_id) {
             linkedApparelIds.add(link.apparel_id)
