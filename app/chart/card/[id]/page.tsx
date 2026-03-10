@@ -7,6 +7,7 @@ import ChartLayoutComponent from '@/components/chart/ChartLayout'
 import PriceGraph from '@/components/chart/PriceGraph'
 import PurchasePriceTable from '@/components/chart/PurchasePriceTable'
 import AffiliateButtons from '@/components/chart/AffiliateButtons'
+import MercariSearchButton from '@/components/chart/MercariSearchButton'
 import PriceChangeIndicator from '@/components/chart/PriceChangeIndicator'
 import { getCardDetail, getPriceHistory } from '@/lib/chart/queries'
 import { getAffiliateLinks } from '@/lib/chart/affiliate'
@@ -240,6 +241,11 @@ export default function CardDetailPage({ params }: Props) {
                         <h3 className="text-sm font-bold text-gray-700 mb-3">
                             この商品を探す
                         </h3>
+                        <MercariSearchButton
+                            cardName={card.name}
+                            cardNumber={card.card_number}
+                            rarity={card.rarity}
+                        />
                         <AffiliateButtons links={affiliateLinks} />
                     </div>
 
