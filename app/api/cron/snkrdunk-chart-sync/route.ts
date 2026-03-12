@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
-import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
+import { withCronAuth } from '@/lib/cron-gate'
 import {
   extractApparelId,
   getProductInfo,
@@ -22,41 +21,27 @@ const BATCH_SIZE = 10
  * 紐づけ済みカードの価格推移チャートを日次で更新
  * 初回取得は紐づけ時にfire-and-forgetで実行済み → このcronは差分更新
  */
-export async function GET(req: Request) {
-  try {
-    const authHeader = req.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return new Response('Unauthorized', { status: 401 })
-    }
-
-    const params = new URL(req.url).searchParams
-    const force = params.get('force') === '1'
+export const GET = withCronAuth('snkrdunk-chart-sync', async (req, supabase) => {
+    const params = req.nextUrl.searchParams
     const limitParam = params.get('limit')
-    const gate = await shouldRunCronJob('snkrdunk-chart-sync', { force })
-    if (!gate.shouldRun) {
-      return NextResponse.json({ skipped: true, reason: gate.reason })
-    }
 
-    const supabase = createServiceClient()
     const now = new Date()
     const batchLimit = limitParam ? Math.min(parseInt(limitParam) || BATCH_SIZE, 500) : BATCH_SIZE
 
     // 紐づけ済みのスニダンURLを取得（最終チャート更新が古い順）
     const { data: saleUrls, error: fetchError } = await supabase
       .from('card_sale_urls')
-      .select('card_id, apparel_id, product_url, product_type')
+      .select('card_id, apparel_id, product_url')
       .like('product_url', '%snkrdunk.com%')
       .not('apparel_id', 'is', null)
       .order('last_scraped_at', { ascending: true, nullsFirst: true })
       .limit(batchLimit)
 
     if (fetchError) {
-      await markCronJobRun('snkrdunk-chart-sync', 'error', fetchError.message)
-      return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
+      throw new Error(fetchError.message)
     }
 
     if (!saleUrls || saleUrls.length === 0) {
-      await markCronJobRun('snkrdunk-chart-sync', 'success')
       return NextResponse.json({ success: true, processed: 0, message: 'No cards to update' })
     }
 
@@ -71,17 +56,13 @@ export async function GET(req: Request) {
       }
 
       try {
-        // product_type判定: DB保存済みなら getProductInfo をスキップ
+        // product_type判定
         let productType: string
-        if (url.product_type) {
-          productType = url.product_type
-        } else {
-          try {
-            const info = await getProductInfo(apparelId)
-            productType = info.isBox ? 'box' : 'single'
-          } catch {
-            productType = 'single'
-          }
+        try {
+          const info = await getProductInfo(apparelId)
+          productType = info.isBox ? 'box' : 'single'
+        } catch {
+          productType = 'single'
         }
 
         const fetchedAt = now.toISOString()
@@ -135,19 +116,12 @@ export async function GET(req: Request) {
       }
     }
 
-    await markCronJobRun('snkrdunk-chart-sync', 'success')
     return NextResponse.json({
       success: true,
       processed: results.length,
       results,
     })
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error('[snkrdunk-chart-sync] Error:', error)
-    await markCronJobRun('snkrdunk-chart-sync', 'error', message).catch(() => {})
-    return NextResponse.json({ success: false, error: message }, { status: 500 })
-  }
-}
+})
 
 async function upsertChartData(
   supabase: SupabaseClient,
