@@ -167,8 +167,8 @@ export async function GET(
             period: { days },
             data: dailyData,
         })
-    } catch (error: any) {
-        return apiError(error.message)
+    } catch (error: unknown) {
+        return apiError(error instanceof Error ? error.message : 'Unknown error')
     }
 }
 

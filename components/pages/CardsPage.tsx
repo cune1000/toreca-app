@@ -2,10 +2,15 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Database, Search, RefreshCw, Plus, Globe, CheckSquare, Square, Settings, X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, fetchAllPaginated } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
+import { escapeIlike, formatRelativeTime } from '@/lib/utils'
 import { getRarityDisplayName } from '@/lib/rarity-mapping'
 import { getSeriesFromSetCode } from '@/lib/justtcg-set-names'
+import { useSessionState } from '@/lib/hooks/useSessionState'
+import Pagination from '@/components/ui/Pagination'
+import ImageHoverZoom from '@/components/ui/ImageHoverZoom'
+import CardsBatchEditModal from '@/components/pages/CardsBatchEditModal'
 import type { CardWithRelations, CategoryLarge } from '@/lib/types'
 
 // =============================================================================
@@ -29,35 +34,24 @@ export default function CardsPage({
   onImportCards,
   onPriceChartingImport,
 }: Props) {
-  // sessionStorage永続化ヘルパー（保存のみ、復元は一括で行う）
-  const useSessionState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
-    const [value, setValue] = useState<T>(defaultValue)
-    useEffect(() => {
-      if (filtersHydrated) {
-        sessionStorage.setItem(`cards-filter-${key}`, JSON.stringify(value))
-      }
-    }, [key, value])
-    return [value, setValue]
-  }
-
   const [filtersHydrated, setFiltersHydrated] = useState(false)
 
   // State（sessionStorageに永続化）
-  const [searchQuery, setSearchQuery] = useSessionState('searchQuery', '')
-  const [filterCategoryLarge, setFilterCategoryLarge] = useSessionState('categoryLarge', '')
-  const [filterSeries, setFilterSeries] = useSessionState('series', '')
-  const [filterSetCode, setFilterSetCode] = useSessionState('setCode', '')
-  const [filterRarity, setFilterRarity] = useSessionState('rarity', '')
-  const [filterExpansion, setFilterExpansion] = useSessionState('expansion', '')
-  const [filterCardNumber, setFilterCardNumber] = useSessionState('cardNumber', '')
+  const [searchQuery, setSearchQuery] = useSessionState('searchQuery', '', filtersHydrated)
+  const [filterCategoryLarge, setFilterCategoryLarge] = useSessionState('categoryLarge', '', filtersHydrated)
+  const [filterSeries, setFilterSeries] = useSessionState('series', '', filtersHydrated)
+  const [filterSetCode, setFilterSetCode] = useSessionState('setCode', '', filtersHydrated)
+  const [filterRarity, setFilterRarity] = useSessionState('rarity', '', filtersHydrated)
+  const [filterExpansion, setFilterExpansion] = useSessionState('expansion', '', filtersHydrated)
+  const [filterCardNumber, setFilterCardNumber] = useSessionState('cardNumber', '', filtersHydrated)
   const [expansions, setExpansions] = useState<string[]>([])
   const [setCodes, setSetCodes] = useState<string[]>([])
   const [seriesList, setSeriesList] = useState<string[]>([])
   const [codeToSeries, setCodeToSeries] = useState<Record<string, string>>({})
   const [codeToExpansions, setCodeToExpansions] = useState<Record<string, Set<string>>>({})
-  const [currentPage, setCurrentPage] = useSessionState('page', 1)
-  const [sortField, setSortField] = useSessionState<string>('sortField', 'created_at')
-  const [sortAsc, setSortAsc] = useSessionState<boolean>('sortAsc', false)
+  const [currentPage, setCurrentPage] = useSessionState('page', 1, filtersHydrated)
+  const [sortField, setSortField] = useSessionState<string>('sortField', 'created_at', filtersHydrated)
+  const [sortAsc, setSortAsc] = useSessionState<boolean>('sortAsc', false, filtersHydrated)
 
   // マウント後にsessionStorageから全フィルタを一括復元
   useEffect(() => {
@@ -91,7 +85,6 @@ export default function CardsPage({
   const [rarityTexts, setRarityTexts] = useState<string[]>([])
   const [cardStatuses, setCardStatuses] = useState<Record<string, any>>({})
   const [hoveredImage, setHoveredImage] = useState<{ url: string; x: number; y: number } | null>(null)
-  const [pageJumpInput, setPageJumpInput] = useState('')
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBatchModal, setShowBatchModal] = useState(false)
@@ -144,8 +137,7 @@ export default function CardsPage({
         setCardPurchaseLinks(map)
       }
     }
-    fetchCardSaleUrls()
-    fetchPurchaseLinks()
+    Promise.all([fetchCardSaleUrls(), fetchPurchaseLinks()])
   }, [filteredCards, refreshKey])
 
   useEffect(() => {
@@ -157,35 +149,18 @@ export default function CardsPage({
       setCategories(catData || [])
 
       // Supabaseのmax_rows=1000制限を回避するためページネーションで全行取得
-      const fetchAllCards = async (columns: string): Promise<Record<string, any>[]> => {
-        const PAGE_SIZE = 1000
-        const allRows: Record<string, any>[] = []
-        let offset = 0
-        while (true) {
-          const { data } = await supabase
-            .from('cards')
-            .select(columns)
-            .range(offset, offset + PAGE_SIZE - 1)
-          if (!data || data.length === 0) break
-          allRows.push(...data)
-          if (data.length < PAGE_SIZE) break
-          offset += PAGE_SIZE
-        }
-        return allRows
-      }
-
-      const rarTextData = await fetchAllCards('rarity')
-      if (rarTextData.length > 0) {
-        const uniqueRarities = [...new Set(rarTextData.map(d => d.rarity).filter(Boolean))] as string[]
+      // rarity, expansion, set_code を1回のページネーションで取得
+      const allData = await fetchAllPaginated<Record<string, any>>(
+        () => supabase.from('cards').select('rarity, expansion, set_code')
+      )
+      if (allData.length > 0) {
+        const uniqueRarities = [...new Set(allData.map(d => d.rarity).filter(Boolean))] as string[]
         uniqueRarities.sort()
         setRarityTexts(uniqueRarities)
-      }
 
-      const expData = await fetchAllCards('expansion, set_code')
-      if (expData.length > 0) {
-        const uniqueExps = [...new Set(expData.map(d => d.expansion).filter(Boolean))] as string[]
+        const uniqueExps = [...new Set(allData.map(d => d.expansion).filter(Boolean))] as string[]
         setExpansions(uniqueExps)
-        const uniqueCodes = [...new Set(expData.map(d => d.set_code).filter(Boolean))] as string[]
+        const uniqueCodes = [...new Set(allData.map(d => d.set_code).filter(Boolean))] as string[]
         uniqueCodes.sort()
         setSetCodes(uniqueCodes)
 
@@ -199,7 +174,7 @@ export default function CardsPage({
             seriesSet.add(series)
           }
         }
-        for (const d of expData) {
+        for (const d of allData) {
           if (d.set_code && d.expansion) {
             if (!c2e[d.set_code]) c2e[d.set_code] = new Set()
             c2e[d.set_code].add(d.expansion)
@@ -325,7 +300,7 @@ export default function CardsPage({
           }
         }
       } else if (filterCardNumber) {
-        query = query.ilike('card_number', `%${filterCardNumber}%`)
+        query = query.ilike('card_number', `%${escapeIlike(filterCardNumber)}%`)
       }
 
       const from = (currentPage - 1) * ITEMS_PER_PAGE
@@ -390,10 +365,6 @@ export default function CardsPage({
     setShowBatchModal(true)
   }
 
-  const handleBatchLargeChange = async (value: string) => {
-    setBatchUpdates({ category_large_id: value || null })
-  }
-
   const executeBatchUpdate = async () => {
     const updates: Record<string, string | null> = {}
     for (const [key, value] of Object.entries(batchUpdates)) {
@@ -452,12 +423,7 @@ export default function CardsPage({
 
   const formatRelTime = (dateStr: string | null) => {
     if (!dateStr) return null
-    const diffMs = Date.now() - new Date(dateStr).getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    if (diffMins < 60) return `${diffMins}分前`
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours}h前`
-    return `${Math.floor(diffHours / 24)}日前`
+    return formatRelativeTime(dateStr)
   }
 
   const filteredSetCodes = filterSeries
@@ -800,200 +766,31 @@ export default function CardsPage({
         )}
 
         {/* ページネーション */}
-        {totalPages > 1 && (
-          <div className="px-4 py-3 border-t flex flex-wrap items-center justify-center gap-1.5">
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-              className="px-2 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
-            >
-              最初
-            </button>
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="px-2.5 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
-            >
-              ←
-            </button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let page = i + 1
-              if (totalPages > 5) {
-                if (currentPage > 3) page = currentPage - 2 + i
-                if (currentPage > totalPages - 2) page = totalPages - 4 + i
-              }
-              return (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-2.5 py-1 rounded text-xs ${currentPage === page ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
-                >
-                  {page}
-                </button>
-              )
-            })}
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="px-2.5 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
-            >
-              →
-            </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-              className="px-2 py-1 border rounded text-xs hover:bg-gray-50 disabled:opacity-30"
-            >
-              最後
-            </button>
-            <span className="text-[10px] text-gray-400 mx-1">|</span>
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min={1}
-                max={totalPages}
-                value={pageJumpInput}
-                onChange={e => setPageJumpInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const p = parseInt(pageJumpInput)
-                    if (!isNaN(p) && p >= 1 && p <= totalPages) {
-                      setCurrentPage(p)
-                      setPageJumpInput('')
-                    }
-                  }
-                }}
-                placeholder={`${currentPage}/${totalPages}`}
-                className="w-16 px-1.5 py-1 border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-              <button
-                onClick={() => {
-                  const p = parseInt(pageJumpInput)
-                  if (!isNaN(p) && p >= 1 && p <= totalPages) {
-                    setCurrentPage(p)
-                    setPageJumpInput('')
-                  }
-                }}
-                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-              >
-                Go
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
       </div>
 
       {/* 画像ホバーズーム */}
-      {hoveredImage && (
-        <div
-          className="fixed z-[100] pointer-events-none"
-          style={{
-            left: Math.min(hoveredImage.x, window.innerWidth - 320),
-            top: Math.max(8, Math.min(hoveredImage.y, window.innerHeight - 440)),
-          }}
-        >
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-2">
-            <img
-              src={hoveredImage.url}
-              alt=""
-              className="w-72 h-auto max-h-[420px] object-contain rounded-lg"
-            />
-          </div>
-        </div>
-      )}
+      <ImageHoverZoom hoveredImage={hoveredImage} />
 
       {/* 一括設定モーダル */}
       {showBatchModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBatchModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">
-              一括設定（{selectedIds.size}件）
-            </h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ゲーム</label>
-                <select
-                  value={batchUpdates.category_large_id || ''}
-                  onChange={(e) => handleBatchLargeChange(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
-                >
-                  <option value="">（変更しない）</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">レアリティ</label>
-                <select
-                  value={batchUpdates.rarity ?? ''}
-                  onChange={(e) => setBatchUpdates(prev => ({ ...prev, rarity: e.target.value || null }))}
-                  className="w-full border rounded-lg px-3 py-2"
-                >
-                  <option value="">（変更しない）</option>
-                  {rarityTexts.map(r => (
-                    <option key={r} value={r}>{getRarityDisplayName(r)}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowBatchModal(false)}
-                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={() => setShowConfirm(true)}
-                disabled={Object.keys(batchUpdates).length === 0}
-                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
-              >
-                変更を確認
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 確認ダイアログ */}
-      {showConfirm && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold mb-3 text-orange-600">
-              変更の確認
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              以下の変更を <strong>{selectedIds.size}件</strong> のカードに適用します：
-            </p>
-            <ul className="list-disc list-inside text-sm space-y-1 mb-4 bg-orange-50 p-3 rounded-lg">
-              {getBatchChangeLabel().map((label, i) => (
-                <li key={i} className="font-medium">{label}</li>
-              ))}
-            </ul>
-            <p className="text-xs text-red-500 mb-4">
-              ※ この操作は元に戻せません
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
-              >
-                戻る
-              </button>
-              <button
-                onClick={executeBatchUpdate}
-                disabled={batchLoading}
-                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
-              >
-                {batchLoading ? '更新中...' : '実行する'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CardsBatchEditModal
+          selectedCount={selectedIds.size}
+          categories={categories}
+          rarityTexts={rarityTexts}
+          batchUpdates={batchUpdates}
+          setBatchUpdates={setBatchUpdates}
+          batchLoading={batchLoading}
+          showConfirm={showConfirm}
+          setShowConfirm={setShowConfirm}
+          onClose={() => setShowBatchModal(false)}
+          onExecute={executeBatchUpdate}
+          getBatchChangeLabel={getBatchChangeLabel}
+        />
       )}
     </div>
   )

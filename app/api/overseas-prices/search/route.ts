@@ -41,10 +41,10 @@ export async function GET(request: NextRequest) {
       success: true,
       data: products,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PriceCharting search error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Search failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Search failed' },
       { status: 500 }
     )
   }

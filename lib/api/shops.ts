@@ -1,4 +1,4 @@
-import { supabase, TABLES } from '../supabase'
+import { supabase } from '../supabase'
 import type { Shop } from '../types'
 
 // =============================================================================
@@ -8,7 +8,7 @@ import type { Shop } from '../types'
 /** 買取店舗一覧を取得 */
 export async function getShops(): Promise<Shop[]> {
   const { data, error } = await supabase
-    .from(TABLES.PURCHASE_SHOPS)
+    .from('purchase_shops')
     .select('*')
     .order('name')
   
@@ -23,7 +23,7 @@ export async function getShops(): Promise<Shop[]> {
 /** 買取店舗を取得（ID指定） */
 export async function getShop(id: string): Promise<Shop | null> {
   const { data, error } = await supabase
-    .from(TABLES.PURCHASE_SHOPS)
+    .from('purchase_shops')
     .select('*')
     .eq('id', id)
     .single()
@@ -39,7 +39,7 @@ export async function getShop(id: string): Promise<Shop | null> {
 /** 買取店舗を追加 */
 export async function addShop(shop: Omit<Shop, 'id' | 'created_at'>): Promise<{ data: Shop | null; error: string | null }> {
   const { data, error } = await supabase
-    .from(TABLES.PURCHASE_SHOPS)
+    .from('purchase_shops')
     .insert([shop])
     .select()
     .single()
@@ -57,7 +57,7 @@ export async function updateShop(
   updates: Partial<Shop>
 ): Promise<{ data: Shop | null; error: string | null }> {
   const { data, error } = await supabase
-    .from(TABLES.PURCHASE_SHOPS)
+    .from('purchase_shops')
     .update(updates)
     .eq('id', id)
     .select()
@@ -73,7 +73,7 @@ export async function updateShop(
 /** 買取店舗を削除 */
 export async function deleteShop(id: string): Promise<{ error: string | null }> {
   const { error } = await supabase
-    .from(TABLES.PURCHASE_SHOPS)
+    .from('purchase_shops')
     .delete()
     .eq('id', id)
   

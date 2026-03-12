@@ -9,7 +9,7 @@ import {
   getLargeCategories,
 } from '@/lib/api/dashboard'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Database, Store, Globe, Clock, Search, RefreshCw, TrendingUp, AlertCircle, Sparkles } from 'lucide-react'
+import { Database, Store, Globe, Clock, Search, RefreshCw, TrendingUp, Sparkles } from 'lucide-react'
 
 interface Stats {
   cards: number
@@ -64,7 +64,6 @@ export default function DashboardContent() {
   const [loading, setLoading] = useState(true)
   const [priceIndexData, setPriceIndexData] = useState<any[]>([])
   const [indexDays, setIndexDays] = useState(7)
-  const [selectedCard, setSelectedCard] = useState<SearchResult | null>(null)
   const [newProducts, setNewProducts] = useState<any>({})
   const [newProductDays, setNewProductDays] = useState(7)
   const [newProductLoading, setNewProductLoading] = useState(false)
@@ -112,7 +111,7 @@ export default function DashboardContent() {
 
   useEffect(() => {
     if (!loading) fetchPriceIndex(indexDays)
-  }, [indexDays])
+  }, [indexDays, loading])
 
   const fetchNewProducts = async (days: number) => {
     setNewProductLoading(true)
@@ -130,7 +129,7 @@ export default function DashboardContent() {
 
   useEffect(() => {
     if (!loading) fetchNewProducts(newProductDays)
-  }, [newProductDays])
+  }, [newProductDays, loading])
 
   // リアルタイム検索
   useEffect(() => {

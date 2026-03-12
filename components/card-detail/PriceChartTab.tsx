@@ -10,12 +10,39 @@ import {
 } from './constants'
 import { isSnkrdunkSiteName } from '@/lib/snkrdunk-api'
 
+interface ChartCard {
+  id: string
+  name: string
+  pricecharting_id?: string | null
+}
+
+interface ChartDataPoint {
+  date: string
+  overseas_loose?: number | null
+  overseas_graded?: number | null
+  justtcg_nm_jpy?: number | null
+  [key: string]: string | number | null | undefined
+}
+
+interface SiteInfo {
+  id: string
+  name: string
+  icon?: string
+}
+
+interface TooltipEntry {
+  dataKey: string
+  value: number | null | undefined
+  name: string
+  color: string
+}
+
 interface PriceChartTabProps {
-  card: any
-  chartData: any[]
+  card: ChartCard
+  chartData: ChartDataPoint[]
   selectedPeriod: number | null
   onPeriodChange: (days: number | null) => void
-  siteList: any[]
+  siteList: SiteInfo[]
   visibleSites: Record<string, { price: boolean; stock: boolean }>
   onToggleSitePrice: (siteId: string) => void
   onToggleSiteStock: (siteId: string) => void
@@ -27,7 +54,7 @@ interface PriceChartTabProps {
 }
 
 // カスタムドット（ダイヤモンド型）
-const DiamondDot = (props: any) => {
+const DiamondDot = (props: { cx?: number; cy?: number; stroke?: string; fill?: string }) => {
   const { cx, cy, stroke, fill } = props
   if (cx === undefined || cy === undefined) return null
   const size = 4
@@ -42,12 +69,12 @@ const DiamondDot = (props: any) => {
 }
 
 // カスタムツールチップ
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipEntry[]; label?: string }) => {
   if (!active || !payload || !payload.length) return null
 
   const validEntries = payload
-    .filter((entry: any) => entry.value !== null && entry.value !== undefined)
-    .sort((a: any, b: any) => {
+    .filter((entry) => entry.value !== null && entry.value !== undefined)
+    .sort((a, b) => {
       const aIsStock = a.dataKey.startsWith('stock')
       const bIsStock = b.dataKey.startsWith('stock')
       if (aIsStock !== bIsStock) return aIsStock ? 1 : -1
@@ -59,7 +86,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl px-4 py-3 text-sm" style={{ minWidth: 180 }}>
       <p className="font-medium text-slate-300 mb-2 text-xs border-b border-slate-700 pb-1.5">{label}</p>
       <div className="space-y-1">
-        {validEntries.map((entry: any, index: number) => {
+        {validEntries.map((entry, index: number) => {
           const isStock = entry.dataKey.startsWith('stock')
           return (
             <div key={index} className="flex items-center justify-between gap-4">
@@ -85,11 +112,11 @@ export default function PriceChartTab({
   onRefreshOverseas,
 }: PriceChartTabProps) {
   // localStorage からトグル復元
-  const loadSetting = (key: string, fallback: any) => {
+  const loadSetting = <T,>(key: string, fallback: T): T => {
     if (typeof window === 'undefined') return fallback
     try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); return s[key] ?? fallback } catch { return fallback }
   }
-  const saveSetting = useCallback((key: string, value: any) => {
+  const saveSetting = useCallback((key: string, value: unknown) => {
     try { const s = JSON.parse(localStorage.getItem('toreca-chart-settings') || '{}'); s[key] = value; localStorage.setItem('toreca-chart-settings', JSON.stringify(s)) } catch {}
   }, [])
 
@@ -145,8 +172,8 @@ export default function PriceChartTab({
       } else {
         alert('更新失敗: ' + (json.error || '不明なエラー'))
       }
-    } catch (err: any) {
-      alert('エラー: ' + err.message)
+    } catch (err: unknown) {
+      alert('エラー: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setOverseasUpdating(false)
     }

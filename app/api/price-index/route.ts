@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { escapeIlike } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
             .order('date', { ascending: true })
 
         if (category) {
-            query = query.ilike('category', `%${category}%`)
+            query = query.ilike('category', `%${escapeIlike(category)}%`)
         }
         if (subCategory && subCategory !== 'ALL') {
             query = query.eq('sub_category', subCategory)
@@ -75,11 +76,11 @@ export async function GET(req: Request) {
             subCategories
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('API error:', error)
         return NextResponse.json({
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 })
     }
 }

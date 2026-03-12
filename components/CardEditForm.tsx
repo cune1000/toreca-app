@@ -20,12 +20,9 @@ export default function CardEditForm({ card, onClose, onSaved }) {
   const expansionInputRef = useRef<HTMLInputElement>(null)
   const rarityInputRef = useRef<HTMLInputElement>(null)
 
-  // rarityがオブジェクトの場合は文字列に変換
-  const getRarityString = (rarity: any): string => {
-    if (!rarity) return ''
-    if (typeof rarity === 'string') return rarity
-    if (typeof rarity === 'object' && rarity.name) return rarity.name
-    return ''
+  const getRarityString = (rarity: unknown): string => {
+    if (!rarity || typeof rarity !== 'string') return ''
+    return rarity
   }
 
   const [form, setForm] = useState({

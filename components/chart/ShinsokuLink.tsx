@@ -38,7 +38,7 @@ interface Props {
     onLinksChanged?: () => void
 }
 
-const LABELS = ['素体', 'PSA10', '未開封', '開封済み']
+import { CONDITION_LABELS } from '@/lib/chart/constants'
 
 export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソク（郵送買取）', links, onLinksChanged }: Props) {
     const [query, setQuery] = useState(cardName || '')
@@ -235,7 +235,7 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                         </div>
                         {manualId && (
                             <div className="flex gap-1.5 mt-2">
-                                {LABELS.map(label => (
+                                {CONDITION_LABELS.map(label => (
                                     <button
                                         key={label}
                                         onClick={() => addLink(manualId, label)}
@@ -279,7 +279,7 @@ export default function ShinsokuLink({ cardId, cardName, shopName = 'シンソ�
                                         </div>
                                         {/* ラベルボタン群 */}
                                         <div className="flex gap-1.5 mt-2">
-                                            {LABELS.map(label => {
+                                            {CONDITION_LABELS.map(label => {
                                                 const isThisLinked = linkedLabels.includes(label)
                                                 return (
                                                     <button

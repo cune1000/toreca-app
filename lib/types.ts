@@ -9,7 +9,6 @@ export interface Card {
   image_url?: string
   card_number?: string
   rarity?: string
-  rarity_id?: string
   expansion?: string
   illustrator?: string
   regulation?: string
@@ -36,7 +35,6 @@ export interface Card {
 /** カード（リレーション込み） */
 export interface CardWithRelations extends Card {
   category_large?: { name: string; icon?: string }
-  rarities?: { name: string }
 }
 
 /** 買取店舗 */
@@ -169,11 +167,11 @@ export interface PendingCard {
 // =============================================================================
 
 /** API共通レスポンス */
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string
-  meta?: Record<string, any>
+  meta?: Record<string, unknown>
 }
 
 /** ページネーション */
@@ -224,35 +222,3 @@ export interface CategoryDetail {
   sort_order?: number
 }
 
-export interface Rarity {
-  id: string
-  large_id: string
-  name: string
-  sort_order?: number
-}
-
-// =============================================================================
-// X自動監視システム関連
-// =============================================================================
-
-/** 取得済みツイート */
-export interface FetchedTweet {
-  id: string
-  tweet_id: string
-  shop_id: string
-  is_purchase_related: boolean
-  fetched_at: string
-  created_at: string
-}
-
-/** 店舗監視設定 */
-export interface ShopMonitorSetting {
-  shop_id: string
-  is_active: boolean
-  last_checked_at?: string
-  last_tweet_id?: string
-  created_at: string
-  updated_at: string
-  // リレーション
-  shop?: Shop
-}

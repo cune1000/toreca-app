@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
       path: filePath,
       url: urlData.publicUrl,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Upload error:', error)
     return NextResponse.json(
-      { error: error.message || 'アップロードに失敗しました' },
+      { error: error instanceof Error ? error.message : 'アップロードに失敗しました' },
       { status: 500 }
     )
   }

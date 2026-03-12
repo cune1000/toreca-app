@@ -38,8 +38,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             .reduce((sum: number, i: any) => sum + i.unit_cost * i.quantity, 0)
 
         return NextResponse.json({ success: true, data: folder })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
         const { id } = await params
         const body = await request.json()
-        const updates: any = { updated_at: new Date().toISOString() }
+        const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
         if (body.name !== undefined) updates.name = body.name.trim()
         if (body.description !== undefined) updates.description = body.description?.trim() || null
@@ -83,8 +83,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (error) throw error
 
         return NextResponse.json({ success: true, data })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -111,7 +111,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         if (error) throw error
 
         return NextResponse.json({ success: true })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }

@@ -31,11 +31,9 @@ export async function GET(req: Request) {
         .eq('card_id', cardId)
         .order('date', { ascending: true })
 
-    if (condition) {
-        query.eq('condition', condition)
-    }
+    const finalQuery = condition ? query.eq('condition', condition) : query
 
-    const { data, error } = await query.limit(10000)
+    const { data, error } = await finalQuery.limit(10000)
 
     if (error) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
@@ -128,8 +126,8 @@ export async function POST(req: Request) {
 
                     // レート制限対策
                     await sleep(300)
-                } catch (e: any) {
-                    console.error(`[snkrdunk-chart] Error fetching ${condLabel}:`, e.message)
+                } catch (e: unknown) {
+                    console.error(`[snkrdunk-chart] Error fetching ${condLabel}:`, e instanceof Error ? e.message : e)
                     results.push({ condition: condLabel, fetched: 0, inserted: 0, anomalies: 0 })
                 }
             }
@@ -158,8 +156,8 @@ export async function POST(req: Request) {
                     results.push({ condition: condLabel, ...r })
 
                     await sleep(300)
-                } catch (e: any) {
-                    console.error(`[snkrdunk-chart] Error fetching BOX ${condLabel}:`, e.message)
+                } catch (e: unknown) {
+                    console.error(`[snkrdunk-chart] Error fetching BOX ${condLabel}:`, e instanceof Error ? e.message : e)
                     results.push({ condition: condLabel, fetched: 0, inserted: 0, anomalies: 0 })
                 }
             }
@@ -178,9 +176,9 @@ export async function POST(req: Request) {
             totalAnomalies,
             results,
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[snkrdunk-chart] Error:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 

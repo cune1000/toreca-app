@@ -5,17 +5,15 @@
  */
 
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai'
-import { GEMINI_API_KEY } from '@/lib/config'
-
 /**
  * Gemini モデルを取得
  * @param modelName - モデル名（デフォルト: gemini-3-flash-preview）
  */
 export function getGeminiModel(modelName = 'gemini-3-flash-preview'): GenerativeModel {
-    if (!GEMINI_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
         throw new Error('GEMINI_API_KEY is not configured')
     }
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     return genAI.getGenerativeModel({ model: modelName })
 }
 

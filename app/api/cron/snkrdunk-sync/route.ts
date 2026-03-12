@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
-import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
+import { NextRequest, NextResponse } from 'next/server'
+import { withCronAuth } from '@/lib/cron-gate'
 import {
   extractApparelId,
   getProductInfo,
@@ -45,127 +44,105 @@ function calculateErrorRetryMinutes(errorCount: number): number {
  * 売買履歴 + 販売中最安値を1カード1回の処理で取得
  * バッチ処理: 1回あたり最大15カード
  */
-export async function GET(req: Request) {
-  try {
-    const authHeader = req.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return new Response('Unauthorized', { status: 401 })
-    }
+export const GET = withCronAuth('snkrdunk-sync', async (req: NextRequest, supabase) => {
+  const now = new Date()
+  const batchStart = Date.now()
 
-    const force = new URL(req.url).searchParams.get('force') === '1'
-    const gate = await shouldRunCronJob('snkrdunk-sync', { force })
-    if (!gate.shouldRun) {
-      return NextResponse.json({ skipped: true, reason: gate.reason })
-    }
+  const { data: saleUrls, error: fetchError } = await supabase
+    .from('card_sale_urls')
+    .select('*, site:site_id(id, name), card:card_id(id, name)')
+    .like('product_url', '%snkrdunk.com%')
+    .or('next_scrape_at.is.null,next_scrape_at.lte.' + now.toISOString())
+    .order('next_scrape_at', { ascending: true, nullsFirst: true })
+    .limit(BATCH_SIZE)
 
-    const supabase = createServiceClient()
-    const now = new Date()
-    const batchStart = Date.now()
-
-    const { data: saleUrls, error: fetchError } = await supabase
-      .from('card_sale_urls')
-      .select('*, site:site_id(id, name), card:card_id(id, name)')
-      .like('product_url', '%snkrdunk.com%')
-      .or('next_scrape_at.is.null,next_scrape_at.lte.' + now.toISOString())
-      .order('next_scrape_at', { ascending: true, nullsFirst: true })
-      .limit(BATCH_SIZE)
-
-    if (fetchError) {
-      console.error('[snkrdunk-sync] Failed to fetch sale URLs:', fetchError)
-      await markCronJobRun('snkrdunk-sync', 'error', fetchError.message)
-      return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
-    }
-
-    if (!saleUrls || saleUrls.length === 0) {
-      await markCronJobRun('snkrdunk-sync', 'success')
-      return NextResponse.json({ success: true, processed: 0, message: 'No URLs to sync' })
-    }
-
-    console.log(`[snkrdunk-sync] Starting batch: ${saleUrls.length} cards`)
-    const results = []
-
-    for (const saleUrl of saleUrls) {
-      const cardStart = Date.now()
-      let syncResult: SyncResult | null = null
-      let syncError: string | null = null
-
-      try {
-        syncResult = await syncCard(supabase, saleUrl, now)
-      } catch (error: unknown) {
-        const errMsg = error instanceof Error ? error.message : String(error)
-        console.error(`[snkrdunk-sync] Failed: ${saleUrl.card?.name}:`, errMsg)
-        syncError = errMsg
-      }
-
-      // card_sale_urls 共通UPDATE
-      const isSuccess = syncResult !== null
-      const errorCount = isSuccess ? 0 : ((saleUrl.error_count || 0) + 1)
-      const nextMinutes = isSuccess
-        ? SYNC_INTERVAL_MINUTES
-        : calculateErrorRetryMinutes(errorCount)
-      const nextScrapeAt = new Date(now.getTime() + nextMinutes * 60 * 1000)
-
-      const updatePayload: Record<string, string | number | null> = {
-        last_scraped_at: now.toISOString(),
-        last_scrape_status: isSuccess ? 'success' : 'error',
-        last_scrape_error: syncError,
-        next_scrape_at: nextScrapeAt.toISOString(),
-        error_count: errorCount,
-      }
-      if (isSuccess && syncResult) {
-        updatePayload.last_price = syncResult.overallMin
-        updatePayload.last_stock = syncResult.totalListings
-        updatePayload.last_checked_at = now.toISOString()
-        updatePayload.apparel_id = syncResult.apparelId
-        updatePayload.product_type = syncResult.productType
-      }
-
-      const { error: updateError } = await supabase
-        .from('card_sale_urls')
-        .update(updatePayload)
-        .eq('id', saleUrl.id)
-      if (updateError) {
-        console.error(`[snkrdunk-sync] card_sale_urls update failed:`, updateError.message)
-      }
-
-      const elapsed = Date.now() - cardStart
-      results.push(isSuccess
-        ? {
-          cardName: saleUrl.card?.name,
-          status: 'success',
-          salesInserted: syncResult!.salesInserted,
-          salesSkipped: syncResult!.salesSkipped,
-          overallMin: syncResult!.overallMin,
-          totalListings: syncResult!.totalListings,
-          gradePrices: syncResult!.gradePricesCount,
-          ms: elapsed,
-        }
-        : {
-          cardName: saleUrl.card?.name,
-          status: 'error',
-          error: syncError,
-          ms: elapsed,
-        }
-      )
-    }
-
-    const totalMs = Date.now() - batchStart
-    console.log(`[snkrdunk-sync] Batch complete: ${results.length} cards in ${totalMs}ms`)
-
-    await markCronJobRun('snkrdunk-sync', 'success')
-    return NextResponse.json({
-      success: true,
-      processed: results.length,
-      durationMs: totalMs,
-      results,
-    })
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error('[snkrdunk-sync] Cron job error:', error)
-    await markCronJobRun('snkrdunk-sync', 'error', message).catch(() => {})
-    return NextResponse.json({ success: false, error: message }, { status: 500 })
+  if (fetchError) {
+    console.error('[snkrdunk-sync] Failed to fetch sale URLs:', fetchError)
+    throw new Error(fetchError.message)
   }
-}
+
+  if (!saleUrls || saleUrls.length === 0) {
+    return NextResponse.json({ success: true, processed: 0, message: 'No URLs to sync' })
+  }
+
+  console.log(`[snkrdunk-sync] Starting batch: ${saleUrls.length} cards`)
+  const results = []
+
+  for (const saleUrl of saleUrls) {
+    const cardStart = Date.now()
+    let syncResult: SyncResult | null = null
+    let syncError: string | null = null
+
+    try {
+      syncResult = await syncCard(supabase, saleUrl, now)
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      console.error(`[snkrdunk-sync] Failed: ${saleUrl.card?.name}:`, errMsg)
+      syncError = errMsg
+    }
+
+    // card_sale_urls 共通UPDATE
+    const isSuccess = syncResult !== null
+    const errorCount = isSuccess ? 0 : ((saleUrl.error_count || 0) + 1)
+    const nextMinutes = isSuccess
+      ? SYNC_INTERVAL_MINUTES
+      : calculateErrorRetryMinutes(errorCount)
+    const nextScrapeAt = new Date(now.getTime() + nextMinutes * 60 * 1000)
+
+    const updatePayload: Record<string, string | number | null> = {
+      last_scraped_at: now.toISOString(),
+      last_scrape_status: isSuccess ? 'success' : 'error',
+      last_scrape_error: syncError,
+      next_scrape_at: nextScrapeAt.toISOString(),
+      error_count: errorCount,
+    }
+    if (isSuccess && syncResult) {
+      updatePayload.last_price = syncResult.overallMin
+      updatePayload.last_stock = syncResult.totalListings
+      updatePayload.last_checked_at = now.toISOString()
+      updatePayload.apparel_id = syncResult.apparelId
+      updatePayload.product_type = syncResult.productType
+    }
+
+    const { error: updateError } = await supabase
+      .from('card_sale_urls')
+      .update(updatePayload)
+      .eq('id', saleUrl.id)
+    if (updateError) {
+      console.error(`[snkrdunk-sync] card_sale_urls update failed:`, updateError.message)
+    }
+
+    const elapsed = Date.now() - cardStart
+    results.push(isSuccess
+      ? {
+        cardName: saleUrl.card?.name,
+        status: 'success',
+        salesInserted: syncResult!.salesInserted,
+        salesSkipped: syncResult!.salesSkipped,
+        overallMin: syncResult!.overallMin,
+        totalListings: syncResult!.totalListings,
+        gradePrices: syncResult!.gradePricesCount,
+        ms: elapsed,
+      }
+      : {
+        cardName: saleUrl.card?.name,
+        status: 'error',
+        error: syncError,
+        ms: elapsed,
+      }
+    )
+  }
+
+  const totalMs = Date.now() - batchStart
+  console.log(`[snkrdunk-sync] Batch complete: ${results.length} cards in ${totalMs}ms`)
+
+  return NextResponse.json({
+    success: true,
+    processed: results.length,
+    durationMs: totalMs,
+    results,
+  })
+})
 
 interface SyncResult {
   apparelId: number
@@ -202,15 +179,11 @@ async function syncCard(supabase: SupabaseClient, saleUrl: any, now: Date): Prom
     console.log(`[snkrdunk-sync] ${productInfo.localizedName} (type=${productType}) [初回判定]`)
   }
 
-  // 売買履歴取得（最新20件）
-  const { salesInserted, salesSkipped } = await syncSalesHistory(
-    supabase, cardId, apparelId, productType, now
-  )
-
-  // 出品一覧（グレード別最安値）取得
-  const { overallMin, totalListings, gradePricesCount } = await syncListingPrices(
-    supabase, cardId, siteId, apparelId, productType
-  )
+  // 売買履歴取得（最新20件）& 出品一覧（グレード別最安値）を並列取得
+  const [{ salesInserted, salesSkipped }, { overallMin, totalListings, gradePricesCount }] = await Promise.all([
+    syncSalesHistory(supabase, cardId, apparelId, productType, now),
+    syncListingPrices(supabase, cardId, siteId, apparelId, productType),
+  ])
 
   return {
     apparelId,

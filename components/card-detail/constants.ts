@@ -109,24 +109,5 @@ export const PERIOD_OPTIONS = [
   { label: '全期間', days: null as number | null },
 ]
 
-// 相対時間フォーマット
-export function formatRelativeTime(dateStr: string) {
-  const now = new Date()
-  const target = new Date(dateStr)
-  const diff = now.getTime() - target.getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (diff < 0) {
-    const futureMins = Math.abs(minutes)
-    if (futureMins < 60) return `${futureMins}分後`
-    const futureHours = Math.floor(futureMins / 60)
-    if (futureHours < 24) return `${futureHours}時間後`
-    return `${Math.floor(futureHours / 24)}日後`
-  }
-  if (minutes < 1) return 'たった今'
-  if (minutes < 60) return `${minutes}分前`
-  if (hours < 24) return `${hours}時間前`
-  return `${days}日前`
-}
+// Re-export from shared utility
+export { formatRelativeTime } from '@/lib/utils/format'

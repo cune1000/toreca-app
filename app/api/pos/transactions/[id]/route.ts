@@ -159,8 +159,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json({ success: false, error: '取引が見つかりません' }, { status: 404 })
         }
         return NextResponse.json({ success: true, data })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -183,7 +183,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         }
 
         // 更新値を組み立て
-        const updates: any = {}
+        const updates: { quantity?: number; unit_price?: number; expenses?: number; notes?: string; transaction_date?: string; total_price?: number } = {}
         if (quantity !== undefined) updates.quantity = quantity
         if (unit_price !== undefined) updates.unit_price = unit_price
         if (expenses !== undefined) updates.expenses = expenses
@@ -223,7 +223,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
         // LOT: 仕入れ取引のロット経費を同期
         if (tx.type === 'purchase' && tx.lot_id) {
-            const lotUpdates: any = {}
+            const lotUpdates: { expenses?: number; unit_expense?: number; unit_cost?: number; quantity?: number; remaining_qty?: number } = {}
             if (updates.expenses !== undefined) {
                 const newExpenses = updates.expenses
                 const lotQty = updates.quantity ?? tx.quantity
@@ -275,8 +275,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (histError) throw histError
 
         return NextResponse.json({ success: true })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -317,7 +317,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
             .single()
 
         // LOT: 仕入れ取引に紐づくロットを削除（ロットから参照されているチェックアウトがないか確認）
-        let deletedLot: any = null
+        let deletedLot: Record<string, unknown> | null = null
         if (tx.type === 'purchase' && tx.lot_id) {
             // ロットを参照しているアクティブなチェックアウトアイテムがある場合は削除不可
             const { data: lotCheckouts } = await supabase
@@ -417,7 +417,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         if (delHistError) throw delHistError
 
         return NextResponse.json({ success: true })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }

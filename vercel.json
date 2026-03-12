@@ -4,11 +4,7 @@
       "path": "/api/cron/snkrdunk-sync",
       "schedule": "*/5 * * * *"
     },
-    {
-      "path": "/api/twitter/monitor",
-      "schedule": "*/5 * * * *"
-    },
-    {
+{
       "path": "/api/cron/daily-price-aggregate",
       "schedule": "0 22 * * *"
     },

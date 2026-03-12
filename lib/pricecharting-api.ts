@@ -1,5 +1,5 @@
 import { PriceChartingProduct } from '@/lib/types'
-import { PRICECHARTING_TOKEN } from '@/lib/config'
+const PRICECHARTING_TOKEN = process.env.PRICECHARTING_TOKEN
 
 const BASE_URL = 'https://www.pricecharting.com/api'
 

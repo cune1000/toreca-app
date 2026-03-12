@@ -35,6 +35,7 @@ vi.mock('@/lib/supabase', () => ({
 ## 既存テストファイル
 
 - `app/api/cron/snkrdunk-sync/__tests__/route.test.ts` — 45テスト、全通過
+- `lib/scraping/__tests__/helpers.test.ts` — 46テスト、全通過（normalizeGrade）
 
 ## プロジェクト構造メモ
 

@@ -74,12 +74,12 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cardId }),
-    }).catch(e => console.error('[linking/snkrdunk/link] Chart fetch failed:', e.message))
+    }).catch(e => console.error('[linking/snkrdunk/link] Chart fetch failed:', e instanceof Error ? e.message : e))
 
     return NextResponse.json({ success: true, id: inserted?.[0]?.id })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[linking/snkrdunk/link] POST Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }
 
@@ -103,8 +103,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[linking/snkrdunk/link] DELETE Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }

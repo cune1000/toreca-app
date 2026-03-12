@@ -80,10 +80,10 @@ export async function GET(request: NextRequest) {
       }
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Image proxy error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to proxy image' },
+      { error: error instanceof Error ? error.message : 'Failed to proxy image' },
       { status: 500 }
     )
   }
@@ -158,10 +158,10 @@ export async function POST(request: NextRequest) {
       }
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Image proxy error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to proxy image' },
+      { error: error instanceof Error ? error.message : 'Failed to proxy image' },
       { status: 500 }
     )
   }

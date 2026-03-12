@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createServiceClient, fetchAllPaginated } from '@/lib/supabase'
 import { CATEGORY_SLUG_MAP } from '@/lib/chart/constants'
 
 export async function GET(req: NextRequest) {
+  try {
     const { searchParams } = req.nextUrl
     const type = searchParams.get('type') || 'loose_up_pct'
     const category = searchParams.get('category') || 'all'
@@ -39,10 +40,7 @@ export async function GET(req: NextRequest) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
 
     // overseas_prices から最新30日分を取得（ページネーション）
-    const PAGE = 1000
-    let priceData: any[] = []
-    let offset = 0
-    while (true) {
+    const priceData = await fetchAllPaginated<any>(() => {
         let query = supabase
             .from('overseas_prices')
             .select(`
@@ -63,22 +61,13 @@ export async function GET(req: NextRequest) {
             .gte('recorded_at', thirtyDaysAgo)
             .not(priceCol, 'is', null)
             .order('recorded_at', { ascending: false })
-            .range(offset, offset + PAGE - 1)
 
         if (categoryFilter) {
             query = query.eq('cards.category.name', categoryFilter)
         }
 
-        const { data: page, error } = await query
-        if (error) {
-            console.error('Rankings API error:', error)
-            return NextResponse.json({ error: error.message }, { status: 500 })
-        }
-        if (!page || page.length === 0) break
-        priceData = priceData.concat(page)
-        if (page.length < PAGE) break
-        offset += PAGE
-    }
+        return query
+    })
 
     if (!priceData?.length) {
         return NextResponse.json([])
@@ -183,6 +172,13 @@ export async function GET(req: NextRequest) {
             'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600',
         },
     })
+  } catch (error: unknown) {
+    console.error('Rankings API error:', error)
+    return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Internal server error' },
+        { status: 500 }
+    )
+  }
 }
 
 // ============================================================================
@@ -197,10 +193,7 @@ async function handlePurchaseRanking(
 ) {
     const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
 
-    const PAGE = 1000
-    let priceData: any[] = []
-    let offset = 0
-    while (true) {
+    const priceData = await fetchAllPaginated<any>(() => {
         let query = supabase
             .from('chart_daily_card_prices')
             .select(`
@@ -218,22 +211,13 @@ async function handlePurchaseRanking(
             `)
             .gte('date', monthAgo)
             .not('purchase_avg', 'is', null)
-            .range(offset, offset + PAGE - 1)
 
         if (categoryFilter) {
             query = query.eq('cards.category.name', categoryFilter)
         }
 
-        const { data: page, error } = await query
-        if (error) {
-            console.error('Purchase rankings API error:', error)
-            return NextResponse.json({ error: error.message }, { status: 500 })
-        }
-        if (!page || page.length === 0) break
-        priceData = priceData.concat(page)
-        if (page.length < PAGE) break
-        offset += PAGE
-    }
+        return query
+    })
 
     if (!priceData?.length) {
         return NextResponse.json([])

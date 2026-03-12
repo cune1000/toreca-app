@@ -69,8 +69,8 @@ export async function GET(req: Request) {
       const { data: syncPage } = await supabase
         .from('justtcg_price_history')
         .select('card_id')
-        .gte('recorded_at', `${today}T00:00:00`)
-        .lte('recorded_at', `${today}T23:59:59`)
+        .gte('recorded_at', `${today}T00:00:00+09:00`)
+        .lte('recorded_at', `${today}T23:59:59+09:00`)
         .range(syncOffset, syncOffset + PAGE - 1)
       if (!syncPage || syncPage.length === 0) break
       alreadySynced = alreadySynced.concat(syncPage)
@@ -171,8 +171,8 @@ export async function GET(req: Request) {
             .from('justtcg_price_history')
             .select('card_id')
             .in('card_id', cardIds)
-            .gte('recorded_at', `${today}T00:00:00`)
-            .lte('recorded_at', `${today}T23:59:59`)
+            .gte('recorded_at', `${today}T00:00:00+09:00`)
+            .lte('recorded_at', `${today}T23:59:59+09:00`)
             .limit(10000)
           const existingSet = new Set((existing || []).map((e) => e.card_id))
           const newRows = historyRows.filter((r) => !existingSet.has(r.card_id))

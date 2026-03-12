@@ -3,9 +3,21 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { formatRelativeTime } from '@/lib/utils'
+
+interface CardSaleUrl {
+    id: string
+    product_url?: string
+    last_scraped_at?: string
+    next_scrape_at?: string
+    last_scrape_status?: string | null
+    last_scrape_error?: string | null
+    site?: { id: string; name: string; icon?: string } | null
+    card?: { id: string; name: string; image_url?: string } | null
+}
 
 export default function SnkrdunkMonitorPage() {
-    const [monitorData, setMonitorData] = useState<any[]>([])
+    const [monitorData, setMonitorData] = useState<CardSaleUrl[]>([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState<'all' | 'error'>('all')
 
@@ -24,7 +36,7 @@ export default function SnkrdunkMonitorPage() {
             if (error) throw error
 
             // スニダンのURLのみフィルタ
-            const snkrdunkData = (data || []).filter((item: any) =>
+            const snkrdunkData = (data as CardSaleUrl[] || []).filter((item) =>
                 item.site?.name?.includes('スニダン') ||
                 item.site?.name?.includes('スニーカーダンク') ||
                 item.site?.name?.toLowerCase().includes('snkrdunk') ||
@@ -32,9 +44,9 @@ export default function SnkrdunkMonitorPage() {
             )
 
             setMonitorData(snkrdunkData)
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Failed to fetch monitor data:', error)
-            alert('エラー: ' + error.message)
+            alert('エラー: ' + (error instanceof Error ? error.message : String(error)))
         } finally {
             setLoading(false)
         }
@@ -45,19 +57,7 @@ export default function SnkrdunkMonitorPage() {
         return true
     })
 
-    const formatRelativeTime = (dateStr: string | null) => {
-        if (!dateStr) return '-'
-        const date = new Date(dateStr)
-        const now = new Date()
-        const diffMs = now.getTime() - date.getTime()
-        const diffMins = Math.floor(diffMs / 60000)
-
-        if (diffMins < 60) return `${diffMins}分前`
-        const diffHours = Math.floor(diffMins / 60)
-        if (diffHours < 24) return `${diffHours}時間前`
-        const diffDays = Math.floor(diffHours / 24)
-        return `${diffDays}日前`
-    }
+    // formatRelativeTime is imported from @/lib/utils
 
     const getStatusIcon = (status: string | null) => {
         if (status === 'success') return <CheckCircle size={16} className="text-green-500" />

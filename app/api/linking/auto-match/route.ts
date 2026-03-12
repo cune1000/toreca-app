@@ -118,9 +118,9 @@ export async function POST(req: NextRequest) {
       .slice(0, limit)
 
     return NextResponse.json({ matches: scored })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[linking/auto-match] Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }
 

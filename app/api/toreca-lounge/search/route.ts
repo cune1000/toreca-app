@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { escapeIlike } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
     try {
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
 
         // 各キーワードでILIKEフィルタ
         for (const kw of keywords) {
-            dbQuery = dbQuery.ilike('name', `%${kw}%`)
+            dbQuery = dbQuery.ilike('name', `%${escapeIlike(kw)}%`)
         }
 
         const { data, error, count } = await dbQuery.limit(50)
@@ -85,11 +86,11 @@ export async function GET(request: NextRequest) {
                 allCount: totalCount || 0,
             },
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[toreca-lounge/search]', error)
         return NextResponse.json({
             success: false,
-            error: error.message,
+            error: error instanceof Error ? error.message : 'Unknown error',
         }, { status: 500 })
     }
 }

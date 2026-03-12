@@ -1,5 +1,6 @@
-import { supabase, TABLES } from '../supabase'
-import { buildKanaSearchFilter, toKatakana, containsHiragana } from '../utils/kana'
+import { supabase } from '../supabase'
+import { buildKanaSearchFilter } from '../utils/kana'
+import { escapeIlike } from '../utils'
 import type {
   Card,
   CardWithRelations,
@@ -22,7 +23,7 @@ export async function getCards(options?: {
   limit?: number
 }): Promise<CardWithRelations[]> {
   let query = supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select(`
       *,
       category_large:category_large_id(name, icon)
@@ -67,7 +68,7 @@ export async function getCardsPaginated(
   const offset = (page - 1) * limit
 
   let query = supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select(`
       *,
       category_large:category_large_id(name, icon)
@@ -108,7 +109,7 @@ export async function getCardsPaginated(
 /** カード1件取得 */
 export async function getCard(id: string): Promise<CardWithRelations | null> {
   const { data, error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select(`
       *,
       category_large:category_large_id(name, icon)
@@ -127,7 +128,7 @@ export async function getCard(id: string): Promise<CardWithRelations | null> {
 /** カード追加 */
 export async function addCard(card: Omit<Card, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: Card | null; error: string | null }> {
   const { data, error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .insert([card])
     .select()
     .single()
@@ -145,7 +146,7 @@ export async function updateCard(
   updates: Partial<Card>
 ): Promise<{ data: Card | null; error: string | null }> {
   const { data, error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
@@ -161,7 +162,7 @@ export async function updateCard(
 /** カード削除 */
 export async function deleteCard(id: string): Promise<{ error: string | null }> {
   const { error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .delete()
     .eq('id', id)
 
@@ -184,7 +185,7 @@ export async function searchCards(query: string, limit: number = 20): Promise<Ca
 
   // 1. 通常検索（元のクエリで検索）
   const { data: exactData, error: exactError } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select('id, name, image_url, card_number, rarity, expansion')
     .or(buildKanaSearchFilter(query, ['name', 'card_number']))
     .limit(limit)
@@ -204,9 +205,9 @@ export async function searchCards(query: string, limit: number = 20): Promise<Ca
   // 基本名が元のクエリと異なる場合のみ追加検索
   if (baseName && baseName.toLowerCase() !== query.toLowerCase()) {
     const { data: baseData, error: baseError } = await supabase
-      .from(TABLES.CARDS)
+      .from('cards')
       .select('id, name, image_url, card_number, rarity, expansion')
-      .ilike('name', `%${baseName}%`)
+      .ilike('name', `%${escapeIlike(baseName)}%`)
       .limit(limit)
 
     if (!baseError && baseData) {
@@ -235,9 +236,9 @@ export async function searchCards(query: string, limit: number = 20): Promise<Ca
 /** 型番で検索（完全一致優先） */
 export async function searchByCardNumber(cardNumber: string): Promise<CardCandidate[]> {
   const { data, error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select('id, name, image_url, card_number, rarity, expansion')
-    .ilike('card_number', `%${cardNumber}%`)
+    .ilike('card_number', `%${escapeIlike(cardNumber)}%`)
     .limit(10)
 
   if (error) {
@@ -260,7 +261,7 @@ export async function searchByCardNumber(cardNumber: string): Promise<CardCandid
 /** 画像URLで存在確認 */
 export async function checkCardExistsByImageUrl(imageUrl: string): Promise<boolean> {
   const { data, error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select('id')
     .eq('image_url', imageUrl)
     .limit(1)
@@ -275,7 +276,7 @@ export async function checkCardExistsByImageUrl(imageUrl: string): Promise<boole
 /** カードの買取価格一覧を取得 */
 export async function getPurchasePrices(cardId: string): Promise<PurchasePrice[]> {
   const { data, error } = await supabase
-    .from(TABLES.PURCHASE_PRICES)
+    .from('purchase_prices')
     .select(`
       *,
       shop:shop_id(name, icon)
@@ -294,7 +295,7 @@ export async function getPurchasePrices(cardId: string): Promise<PurchasePrice[]
 /** 買取価格を追加 */
 export async function addPurchasePrice(price: Omit<PurchasePrice, 'id' | 'created_at'>): Promise<{ data: PurchasePrice | null; error: string | null }> {
   const { data, error } = await supabase
-    .from(TABLES.PURCHASE_PRICES)
+    .from('purchase_prices')
     .insert([price])
     .select()
     .single()
@@ -311,7 +312,7 @@ export async function addPurchasePrices(
   prices: Omit<PurchasePrice, 'id' | 'created_at'>[]
 ): Promise<{ success: number; failed: number }> {
   const { error } = await supabase
-    .from(TABLES.PURCHASE_PRICES)
+    .from('purchase_prices')
     .insert(prices)
 
   if (error) {
@@ -329,7 +330,7 @@ export async function addPurchasePrices(
 /** カードの販売価格一覧を取得 */
 export async function getSalePrices(cardId: string): Promise<SalePrice[]> {
   const { data, error } = await supabase
-    .from(TABLES.SALE_PRICES)
+    .from('sale_prices')
     .select(`
       *,
       site:site_id(name, icon, url)
@@ -352,7 +353,7 @@ export async function getSalePrices(cardId: string): Promise<SalePrice[]> {
 /** カードの販売URL一覧を取得 */
 export async function getCardSaleUrls(cardId: string) {
   const { data, error } = await supabase
-    .from(TABLES.CARD_SALE_URLS)
+    .from('card_sale_urls')
     .select(`
       *,
       site:site_id(name, icon, url)
@@ -374,7 +375,7 @@ export async function upsertCardSaleUrl(
   productUrl: string
 ): Promise<{ error: string | null }> {
   const { error } = await supabase
-    .from(TABLES.CARD_SALE_URLS)
+    .from('card_sale_urls')
     .upsert({
       card_id: cardId,
       site_id: siteId,

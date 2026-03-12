@@ -40,12 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-google-credentials.json".next.zip" 
-"*.zip" 
-.next.zip 
-*.zip 
-google-credentials.json 
-*.zip 
-.next/ 
-.vercel
-.env*.local
+# credentials
+google-credentials.json
+
+# archives
+*.zip

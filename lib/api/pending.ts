@@ -1,4 +1,4 @@
-import { supabase, TABLES } from '../supabase'
+import { supabase } from '../supabase'
 import type {
   PendingCard,
   PendingCardStatus,
@@ -11,7 +11,7 @@ import type {
 /** 保留カード一覧を取得 */
 export async function getPendingCards(status?: PendingCardStatus): Promise<PendingCard[]> {
   let query = supabase
-    .from(TABLES.PENDING_CARDS)
+    .from('pending_cards')
     .select(`
       *,
       matched_card:matched_card_id(id, name, image_url, card_number, rarity),
@@ -45,7 +45,7 @@ export async function addPendingCard(params: {
   tweet_time?: string
 }): Promise<{ data: PendingCard | null; error: string | null }> {
   const { data, error } = await supabase
-    .from(TABLES.PENDING_CARDS)
+    .from('pending_cards')
     .insert({
       ...params,
       status: 'pending' as PendingCardStatus
@@ -67,7 +67,7 @@ export async function matchPendingCard(
   cardId: string
 ): Promise<boolean> {
   const { error } = await supabase
-    .from(TABLES.PENDING_CARDS)
+    .from('pending_cards')
     .update({ 
       matched_card_id: cardId, 
       status: 'matched' as PendingCardStatus 
@@ -88,7 +88,7 @@ export async function updatePendingCardPrice(
   price: number
 ): Promise<boolean> {
   const { error } = await supabase
-    .from(TABLES.PENDING_CARDS)
+    .from('pending_cards')
     .update({ price })
     .eq('id', id)
   
@@ -103,7 +103,7 @@ export async function updatePendingCardPrice(
 /** 保留カードを削除 */
 export async function deletePendingCard(id: string): Promise<boolean> {
   const { error } = await supabase
-    .from(TABLES.PENDING_CARDS)
+    .from('pending_cards')
     .delete()
     .eq('id', id)
   
@@ -121,7 +121,7 @@ export async function savePendingCardsToPurchasePrices(
 ): Promise<{ success: number; failed: number }> {
   // マッチ済みカードを取得
   const { data: pendingCards, error: fetchError } = await supabase
-    .from(TABLES.PENDING_CARDS)
+    .from('pending_cards')
     .select('*')
     .in('id', cardIds)
     .eq('status', 'matched')
@@ -152,7 +152,7 @@ export async function savePendingCardsToPurchasePrices(
   
   // 買取価格に挿入
   const { error: insertError } = await supabase
-    .from(TABLES.PURCHASE_PRICES)
+    .from('purchase_prices')
     .insert(purchaseRecords)
   
   if (insertError) {
@@ -162,7 +162,7 @@ export async function savePendingCardsToPurchasePrices(
   
   // 保存済みカードを削除
   const { error: deleteError } = await supabase
-    .from(TABLES.PENDING_CARDS)
+    .from('pending_cards')
     .delete()
     .in('id', validCards.map(c => c.id))
   

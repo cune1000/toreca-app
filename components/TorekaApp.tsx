@@ -11,7 +11,6 @@ import {
 import DashboardContent from './DashboardContent'
 import CardForm from './CardForm'
 import ShopForm from './ShopForm'
-import TwitterFeed from './TwitterFeed'
 // CategoryManager — サイドバーから削除済み（v2でgame_type CHECK制約に移行予定）
 import CardImporter from './CardImporter'
 import PriceChartingImporter from './PriceChartingImporter'
@@ -38,7 +37,6 @@ const TorekaApp = () => {
   // モーダル状態
   const [showCardForm, setShowCardForm] = useState(false)
   const [showShopForm, setShowShopForm] = useState(false)
-  const [showTwitterFeed, setShowTwitterFeed] = useState(false)
   const [showCardImporter, setShowCardImporter] = useState(false)
   const [showPriceChartingImporter, setShowPriceChartingImporter] = useState(false)
   // 選択状態
@@ -78,8 +76,14 @@ const TorekaApp = () => {
     if (isHydrated) {
       localStorage.setItem('toreca-currentPage', currentPage)
     }
-    setShowTwitterFeed(false)
   }, [currentPage, isHydrated])
+
+  // shop-detailページでselectedShopがnullの場合、shopsページにリダイレクト
+  useEffect(() => {
+    if (currentPage === 'shop-detail' && !selectedShop) {
+      setCurrentPage('shops')
+    }
+  }, [currentPage, selectedShop])
 
   // =============================================================================
   // Handlers
@@ -99,10 +103,6 @@ const TorekaApp = () => {
   const handleShopSelect = (shop: Shop) => {
     setSelectedShop(shop)
     setCurrentPage('shop-detail')
-  }
-
-  const handleOpenTwitterFromDetail = () => {
-    setShowTwitterFeed(true)
   }
 
   const handleRefresh = () => {
@@ -284,14 +284,12 @@ const TorekaApp = () => {
         )
       case 'shop-detail':
         if (!selectedShop) {
-          setCurrentPage('shops')
           return null
         }
         return (
           <ShopDetailPage
             shop={selectedShop}
             onBack={() => setCurrentPage('shops')}
-            onOpenTwitterFeed={handleOpenTwitterFromDetail}
           />
         )
       case 'settings':
@@ -362,16 +360,6 @@ const TorekaApp = () => {
           shop={editingShop}
           onClose={() => { setShowShopForm(false); setEditingShop(null); }}
           onSaved={handleRefresh}
-        />
-      )}
-
-      {showTwitterFeed && selectedShop && (
-        <TwitterFeed
-          shop={selectedShop}
-          onClose={() => setShowTwitterFeed(false)}
-          onImageSelect={() => {
-            setShowTwitterFeed(false)
-          }}
         />
       )}
 

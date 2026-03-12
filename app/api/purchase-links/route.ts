@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
         if (error) throw error
 
         return NextResponse.json({ success: true, data: data || [] })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -46,11 +46,18 @@ export async function POST(request: NextRequest) {
                 resolvedShopId = shops[0].id
             } else {
                 // ショップが未登録なら自動作成
-                const { data: newShop } = await supabase
+                const { data: newShop, error: shopInsertErr } = await supabase
                     .from('purchase_shops')
                     .insert({ name: shop_name, status: 'active' })
                     .select('id')
                     .single()
+                if (shopInsertErr) {
+                    console.error(`[purchase-links] purchase_shops insert error: ${shopInsertErr.message}`)
+                    return NextResponse.json(
+                        { success: false, error: `ショップ作成エラー: ${shopInsertErr.message}` },
+                        { status: 500 }
+                    )
+                }
                 if (newShop) resolvedShopId = newShop.id
             }
         }
@@ -76,8 +83,8 @@ export async function POST(request: NextRequest) {
         if (error) throw error
 
         return NextResponse.json({ success: true, data })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -99,7 +106,7 @@ export async function DELETE(request: NextRequest) {
         if (error) throw error
 
         return NextResponse.json({ success: true })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }

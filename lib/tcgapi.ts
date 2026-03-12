@@ -1,4 +1,4 @@
-import { TCG_API_KEY } from '@/lib/config'
+const TCG_API_KEY = process.env.TCG_API_KEY
 
 const BASE_URL = 'https://api.tcgapi.dev/v1'
 

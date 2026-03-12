@@ -153,7 +153,7 @@ async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>):
     }
 
     return { url, pricechartingId, pricechartingName, imageUrl, imageBase64, setCode, cardData }
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       url,
       pricechartingId: null,
@@ -162,7 +162,7 @@ async function scrapeOne(url: string, model: ReturnType<typeof getGeminiModel>):
       imageBase64: null,
       setCode: null,
       cardData: null,
-      error: err.message || 'Unknown error',
+      error: err instanceof Error ? err.message : 'Unknown error',
     }
   }
 }
@@ -192,10 +192,10 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, results })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PriceCharting import error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'インポートに失敗しました' },
+      { success: false, error: error instanceof Error ? error.message : 'インポートに失敗しました' },
       { status: 500 }
     )
   }

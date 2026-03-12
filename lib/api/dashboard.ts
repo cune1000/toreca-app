@@ -1,4 +1,4 @@
-import { supabase, TABLES } from '../supabase'
+import { supabase } from '../supabase'
 import { buildKanaSearchFilter } from '../utils/kana'
 
 // =============================================================================
@@ -36,8 +36,8 @@ export interface RecentCard {
 /** ダッシュボード統計を取得 */
 export async function getDashboardStats(): Promise<DashboardStats> {
   const [cardResult, shopResult, siteResult] = await Promise.all([
-    supabase.from(TABLES.CARDS).select('*', { count: 'exact', head: true }),
-    supabase.from(TABLES.PURCHASE_SHOPS).select('*', { count: 'exact', head: true }),
+    supabase.from('cards').select('*', { count: 'exact', head: true }),
+    supabase.from('purchase_shops').select('*', { count: 'exact', head: true }),
     supabase.from('sale_sites').select('*', { count: 'exact', head: true }),
   ])
 
@@ -51,7 +51,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 /** 最近登録されたカードを取得 */
 export async function getRecentCards(limit: number = 50): Promise<RecentCard[]> {
   const { data, error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select('id, name, card_number, created_at')
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -135,7 +135,7 @@ export async function searchCardsForDashboard(
   if (!query || query.length < 2) return []
 
   const { data, error } = await supabase
-    .from(TABLES.CARDS)
+    .from('cards')
     .select('id, name, card_number, image_url, justtcg_nm_price_usd')
     .or(buildKanaSearchFilter(query, ['name', 'card_number']))
     .limit(limit)

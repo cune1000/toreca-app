@@ -1,4 +1,4 @@
-import { JUSTTCG_API_KEY } from '@/lib/config'
+const JUSTTCG_API_KEY = process.env.JUSTTCG_API_KEY
 import { SET_NAME_JA } from '@/lib/justtcg-set-names'
 
 const BASE_URL = 'https://api.justtcg.com/v1'

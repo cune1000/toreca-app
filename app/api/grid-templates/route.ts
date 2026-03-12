@@ -40,10 +40,10 @@ export async function GET(request: NextRequest) {
       total: data?.length || 0
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching templates:', error)
     return NextResponse.json(
-      { error: error.message || '取得に失敗しました' },
+      { error: error instanceof Error ? error.message : '取得に失敗しました' },
       { status: 500 }
     )
   }
@@ -119,10 +119,10 @@ export async function POST(request: NextRequest) {
       template: data
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating template:', error)
     return NextResponse.json(
-      { error: error.message || '作成に失敗しました' },
+      { error: error instanceof Error ? error.message : '作成に失敗しました' },
       { status: 500 }
     )
   }
@@ -139,7 +139,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // 更新データを整形
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (updates.name !== undefined) updateData.name = updates.name
     if (updates.shopId !== undefined) updateData.shop_id = updates.shopId
     if (updates.verticalLines !== undefined) updateData.vertical_lines = updates.verticalLines
@@ -162,10 +162,10 @@ export async function PUT(request: NextRequest) {
       template: data
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating template:', error)
     return NextResponse.json(
-      { error: error.message || '更新に失敗しました' },
+      { error: error instanceof Error ? error.message : '更新に失敗しました' },
       { status: 500 }
     )
   }
@@ -193,10 +193,10 @@ export async function DELETE(request: NextRequest) {
       deleted: id
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting template:', error)
     return NextResponse.json(
-      { error: error.message || '削除に失敗しました' },
+      { error: error instanceof Error ? error.message : '削除に失敗しました' },
       { status: 500 }
     )
   }

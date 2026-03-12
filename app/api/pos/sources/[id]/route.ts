@@ -20,8 +20,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json({ success: false, error: '仕入先が見つかりません' }, { status: 404 })
         }
         return NextResponse.json({ success: true, data })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -32,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const body = await request.json()
         const { name, type, trust_level, contact_info, notes } = body
 
-        const updates: any = { updated_at: new Date().toISOString() }
+        const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
         if (name !== undefined) {
             if (!name.trim()) {
                 return NextResponse.json({ success: false, error: '仕入先名を入力してください' }, { status: 400 })
@@ -54,8 +54,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (error) throw error
 
         return NextResponse.json({ success: true, data })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -71,7 +71,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         if (error) throw error
 
         return NextResponse.json({ success: true })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }

@@ -1,3 +1,6 @@
+// Supabase ilike escape
+export { escapeIlike } from './escapeIlike'
+
 // Card matching utilities
 export {
   normalizeCardName,
@@ -15,4 +18,7 @@ export {
   extractStock,
   extractJSON,
 } from './ocr'
+
+// Format utilities
+export { formatRelativeTime } from './format'
 

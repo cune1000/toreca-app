@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { escapeIlike } from '@/lib/utils'
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,7 +33,8 @@ export async function GET(request: NextRequest) {
 
         // 各キーワードでilike AND検索
         for (const kw of keywords) {
-            dbQuery = dbQuery.or(`name.ilike.%${kw}%,name_processed.ilike.%${kw}%`)
+            const escaped = escapeIlike(kw)
+            dbQuery = dbQuery.or(`name.ilike.%${escaped}%,name_processed.ilike.%${escaped}%`)
         }
 
         dbQuery = dbQuery
@@ -94,11 +96,11 @@ export async function GET(request: NextRequest) {
                 total: (data || []).length,
             },
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Shinsoku search error:', error)
         return NextResponse.json({
             success: false,
-            error: error.message,
+            error: error instanceof Error ? error.message : 'Unknown error',
         }, { status: 500 })
     }
 }

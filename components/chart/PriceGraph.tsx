@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { PricePoint } from '@/lib/chart/types'
 import { formatPrice, formatDate, formatUsd } from '@/lib/chart/format'
+import { CONDITION_LABELS } from '@/lib/chart/constants'
 
 const PERIODS = [
     { key: '7d', label: '7日' },
@@ -191,7 +192,7 @@ export default function PriceGraph({ data, onPeriodChange, initialPeriod = '7d' 
                                     stroke="#10b981"
                                     strokeWidth={1.5}
                                     fill="url(#gradGraded)"
-                                    name="PSA10"
+                                    name={CONDITION_LABELS[1]}
                                     dot={false}
                                     activeDot={{ r: 4, fill: '#10b981' }}
                                     strokeDasharray="4 2"

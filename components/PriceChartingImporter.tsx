@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { escapeIlike } from '@/lib/utils'
 import { X, RefreshCw, Globe, Check, Square, CheckSquare, Save, AlertTriangle, ExternalLink } from 'lucide-react'
 
 const supabase = createClient(
@@ -71,7 +72,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
         const { data } = await supabase
           .from('cards')
           .select('id, name, card_number')
-          .ilike('name', name.trim())
+          .ilike('name', escapeIlike(name.trim()))
           .eq('card_number', number.trim())
           .limit(1)
         if (data?.length) {
@@ -283,6 +284,7 @@ export default function PriceChartingImporter({ onClose, onCompleted }: Props) {
           .insert({
             name: card.editName,
             card_number: card.editNumber || null,
+            rarity: card.editRarity || null,
             image_url: uploadedImageUrl,
             pricecharting_id: card.pricechartingId,
             set_code: card.editSetCode || null,

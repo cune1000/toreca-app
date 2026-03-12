@@ -34,21 +34,8 @@ export function formatUsdCompact(pennies: number): string {
     return formatUsd(pennies)
 }
 
-export function formatRelativeTime(dateStr: string): string {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-
-    if (diffMins < 1) return 'たった今'
-    if (diffMins < 60) return `${diffMins}分前`
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours}時間前`
-    const diffDays = Math.floor(diffHours / 24)
-    if (diffDays < 30) return `${diffDays}日前`
-    const diffMonths = Math.floor(diffDays / 30)
-    return `${diffMonths}ヶ月前`
-}
+// Re-export from shared utility
+export { formatRelativeTime } from '@/lib/utils/format'
 
 export function formatDate(dateStr: string): string {
     const d = new Date(dateStr)

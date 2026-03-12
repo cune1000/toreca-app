@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { escapeIlike } from '@/lib/utils'
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(searchParams.get('limit') || '30'), 100)
         const offset = parseInt(searchParams.get('offset') || '0')
 
-        const escaped = q.replace(/[%_\\]/g, '\\$&')
+        const escaped = escapeIlike(q)
 
         // 総件数を取得
         const { count, error: countError } = await supabase
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
         }))
 
         return NextResponse.json({ success: true, data: results, total: count || 0, limit, offset })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }

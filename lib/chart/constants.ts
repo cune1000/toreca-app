@@ -94,6 +94,20 @@ export const CATEGORIES: Category[] = [
     { slug: 'pokemon', name: 'ポケモン' },
 ]
 
+// コンディション/グレードラベル（買取紐付け・チャート共通）
+export const CONDITION_LABELS = ['素体', 'PSA10', '未開封', '開封済み'] as const
+export type ConditionLabel = (typeof CONDITION_LABELS)[number]
+
+// コンディション表示順（PurchasePriceTable等で使用）
+export const CONDITION_SORT_ORDER = ['素体', 'PSA10', '未開封'] as const
+
+// コンディション別スタイル
+export const CONDITION_STYLES: Record<string, { bg: string; text: string }> = {
+    '素体': { bg: 'bg-blue-50', text: 'text-blue-600' },
+    'PSA10': { bg: 'bg-purple-50', text: 'text-purple-600' },
+    '未開封': { bg: 'bg-cyan-50', text: 'text-cyan-600' },
+}
+
 // カテゴリスラグ → DBカテゴリ名マッピング
 export const CATEGORY_SLUG_MAP: Record<string, string> = {
     pokemon: 'ポケモン',

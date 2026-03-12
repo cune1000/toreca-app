@@ -1,5 +1,6 @@
 import { validateApiKey, handleCorsOptions, apiSuccess, apiError } from '@/lib/api/auth'
 import { supabase } from '@/lib/supabase'
+import { escapeIlike } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
             .gte('date', cutoffDateStr)
             .order('date', { ascending: true })
 
-        if (category) query = query.ilike('category', `%${category}%`)
+        if (category) query = query.ilike('category', `%${escapeIlike(category)}%`)
         if (rarity) query = query.eq('rarity', rarity)
         if (grade) query = query.eq('grade', grade)
         if (priceType) query = query.eq('price_type', priceType)
@@ -58,8 +59,8 @@ export async function GET(req: Request) {
             count: data?.length || 0,
             period: { days, from: cutoffDateStr },
         })
-    } catch (error: any) {
-        return apiError(error.message)
+    } catch (error: unknown) {
+        return apiError(error instanceof Error ? error.message : 'Unknown error')
     }
 }
 

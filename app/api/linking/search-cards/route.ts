@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { escapeIlike } from '@/lib/utils'
 
 /**
  * DBカード検索API（紐づけ候補用）
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 特殊文字をエスケープ（Supabaseのilike filter injection防止）
-    const escaped = q.replace(/[%_\\]/g, '\\$&')
+    const escaped = escapeIlike(q)
 
     // cards テーブルからポケカを検索（name, card_number, expansion）
     // category_large_id でポケカフィルタするのが理想だが、
@@ -48,8 +49,8 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json({ cards })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[linking/search-cards] Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }

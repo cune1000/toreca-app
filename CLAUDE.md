@@ -40,7 +40,6 @@ No test runner is configured. Playwright is installed for browser automation (sc
 - `lib/api/` — Client-side API helper functions (barrel export from `lib/api/index.ts`)
 - `lib/scraping/helpers.ts` — Shared scraping parsers (time, grade, price)
 - `lib/ai/gemini.ts` — Gemini AI client
-- `lib/config.ts` — Centralized environment variable access
 - `lib/types.ts` — Core TypeScript interfaces (300+ lines)
 - `.agent/docs/ARCHITECTURE.md` — Detailed system architecture (Japanese)
 

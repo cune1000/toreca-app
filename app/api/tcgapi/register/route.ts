@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { searchProducts } from '@/lib/pricecharting-api'
+import { normalizeRarityForDb } from '@/lib/rarity-mapping'
 
 export const dynamic = 'force-dynamic'
 
@@ -164,16 +165,19 @@ export async function POST(request: NextRequest) {
           pcUrl = `https://www.pricecharting.com/offers?product=${pcId}`
         }
       }
-    } catch (e: any) {
-      console.warn('[tcgapi/register] PriceCharting match failed (non-blocking):', e.message)
+    } catch (e: unknown) {
+      console.warn('[tcgapi/register] PriceCharting match failed (non-blocking):', e instanceof Error ? e.message : e)
     }
+
+    // レアリティ正規化（英語フルネーム → 短縮名）
+    const normalizedRarity = normalizeRarityForDb(str(rarity, 50))
 
     // tcgplayer_id が既に登録済み → 既存カードを最新データで上書きUPDATE
     if (existing) {
       const updateFields: Record<string, unknown> = { name: trimmedName }
       if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
       if (str(card_number, 50)) updateFields.card_number = str(card_number, 50)
-      if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
+      if (normalizedRarity) updateFields.rarity = normalizedRarity
       if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
       if (safeReleaseYear) updateFields.release_year = safeReleaseYear
       if (safeReleaseDate) updateFields.release_date = safeReleaseDate
@@ -233,7 +237,7 @@ export async function POST(request: NextRequest) {
         tcgplayer_id: trimmedTcgplayerId,
       }
       if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
-      if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
+      if (normalizedRarity) updateFields.rarity = normalizedRarity
       if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
       if (safeReleaseYear) updateFields.release_year = safeReleaseYear
       if (safeReleaseDate) updateFields.release_date = safeReleaseDate
@@ -266,7 +270,7 @@ export async function POST(request: NextRequest) {
         name: trimmedName,
         name_en: str(name_en, 200),
         card_number: cardNumber,
-        rarity: str(rarity, 50),
+        rarity: normalizedRarity,
         set_name_en: str(set_name_en, 200),
         release_year: safeReleaseYear,
         release_date: safeReleaseDate,
@@ -292,7 +296,7 @@ export async function POST(request: NextRequest) {
           const fallbackFields: Record<string, unknown> = { name: trimmedName }
           if (str(name_en, 200)) fallbackFields.name_en = str(name_en, 200)
           if (cardNumber) fallbackFields.card_number = cardNumber
-          if (str(rarity, 50)) fallbackFields.rarity = str(rarity, 50)
+          if (normalizedRarity) fallbackFields.rarity = normalizedRarity
           if (safeReleaseDate) fallbackFields.release_date = safeReleaseDate
           if (str(expansion, 200)) fallbackFields.expansion = str(expansion, 200)
           if (category?.id) fallbackFields.category_large_id = category.id

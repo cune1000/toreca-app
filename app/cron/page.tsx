@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { RefreshCw, Play, Clock, AlertCircle, CheckCircle } from 'lucide-react'
+import { formatRelativeTime } from '@/lib/utils'
 
 interface CronJob {
     id: string
@@ -225,10 +226,4 @@ export default function CronDashboard() {
     )
 }
 
-function formatRelativeTime(date: Date) {
-    const diff = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-    if (diff < 60) return `${diff} seconds ago`
-    if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`
-    return `${Math.floor(diff / 86400)} days ago`
-}
+// formatRelativeTime is imported from @/lib/utils

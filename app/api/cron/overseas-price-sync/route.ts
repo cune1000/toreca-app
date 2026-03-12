@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient, TABLES } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 
     // 最新の為替レートを取得
     const { data: rateData } = await supabase
-      .from(TABLES.EXCHANGE_RATES)
+      .from('exchange_rates')
       .select('rate')
       .eq('base_currency', 'USD')
       .eq('target_currency', 'JPY')
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
     const PAGE = 1000
     while (true) {
       const { data: page, error: pageError } = await supabase
-        .from(TABLES.CARDS)
+        .from('cards')
         .select('id, pricecharting_id')
         .not('pricecharting_id', 'is', null)
         .range(cardOffset, cardOffset + PAGE - 1)
@@ -83,10 +83,10 @@ export async function GET(req: Request) {
     let syncOffset = 0
     while (true) {
       const { data: syncPage } = await supabase
-        .from(TABLES.OVERSEAS_PRICES)
+        .from('overseas_prices')
         .select('card_id')
-        .gte('recorded_at', `${today}T00:00:00`)
-        .lte('recorded_at', `${today}T23:59:59`)
+        .gte('recorded_at', `${today}T00:00:00+09:00`)
+        .lte('recorded_at', `${today}T23:59:59+09:00`)
         .range(syncOffset, syncOffset + PAGE - 1)
       if (!syncPage || syncPage.length === 0) break
       alreadySynced = alreadySynced.concat(syncPage)
@@ -127,7 +127,7 @@ export async function GET(req: Request) {
         const psa10Usd = product['manual-only-price'] ?? null
 
         const { error: insertError } = await supabase
-          .from(TABLES.OVERSEAS_PRICES)
+          .from('overseas_prices')
           .insert({
             card_id: card.id,
             pricecharting_id: card.pricecharting_id,

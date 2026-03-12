@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { normalizeCondition } from '@/lib/condition'
 
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
     const { id } = await params
     const supabase = createServiceClient()
 
@@ -31,10 +33,10 @@ export async function GET(
 
     // 全サブクエリを並列実行
     const [
-        { data: latestPrices },
-        { data: maxPrice },
-        { data: minPrice },
-        { data: purchaseData },
+        { data: latestPrices, error: e1 },
+        { data: maxPrice, error: e2 },
+        { data: minPrice, error: e3 },
+        { data: purchaseData, error: e4 },
     ] = await Promise.all([
         // 最新の overseas_prices を取得（最新31日分）
         supabase
@@ -69,6 +71,11 @@ export async function GET(
             .limit(200),
     ])
 
+    const subErrors = [e1, e2, e3, e4].filter(Boolean)
+    if (subErrors.length > 0) {
+        console.error('Chart card sub-query errors:', subErrors.map(e => e!.message))
+    }
+
     const latest = latestPrices?.[0]
     // 日付ベースで変動率計算（インデックスベースだと欠損日でずれる）
     const now = new Date()
@@ -102,16 +109,8 @@ export async function GET(
     for (const row of purchaseData || []) {
         const shopName = (row as any).shop?.name || '不明'
         const label = (row as any).link?.label || ''
-        // condition を決定: link.label > purchase_prices.condition > デフォルト
-        const condition = label.includes('PSA10') || label.includes('PSA')
-            ? 'PSA10'
-            : label.includes('未開封')
-                ? '未開封'
-                : row.condition === 'PSA10' || row.condition === 'psa10' || row.condition === 'psa'
-                    ? 'PSA10'
-                    : row.condition === '未開封' || row.condition === 'sealed'
-                        ? '未開封'
-                        : '素体'
+        // condition を決定: label優先 → condition正規化 → デフォルト'素体'
+        const condition = normalizeCondition(row.condition || '素体', label)
 
         const key = `${shopName}::${condition}`
         if (shopCondMap.has(key)) continue // 最新のみ
@@ -166,4 +165,11 @@ export async function GET(
             'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600',
         },
     })
+  } catch (error: unknown) {
+    console.error('Chart card API error:', error)
+    return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Internal server error' },
+        { status: 500 }
+    )
+  }
 }

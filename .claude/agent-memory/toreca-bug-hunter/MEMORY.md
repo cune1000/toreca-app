@@ -11,11 +11,14 @@ When changing supported games, ALL of these must be updated together:
 5. `app/api/justtcg/register/route.ts` - GAME_CATEGORY_MAP
 6. `docs/v2-db-schema.sql` - valid_game_types() function
 
-### Rarity Mappings (keep in sync)
-- `app/api/justtcg/register/route.ts` - RARITY_EN_TO_JA (28 entries)
-- `app/justtcg/lib/constants.ts` - RARITY_COLORS (visual only)
-- `docs/v2-db-schema.sql` - rarity_mappings INSERT (27 Pokemon + 7 One Piece)
-- Known gap: 'Art Rare' in v2 schema but not in RARITY_EN_TO_JA
+### Rarity System (2026-03-10 refactored)
+- **Canonical source**: `lib/rarity-mapping.ts` - RARITY_EN_TO_JA (35 entries), normalizeRarityForDb()
+- **DB convention**: Short names only (SAR, RR, コモン etc.) — NOT English full names
+- **Normalization**: Both register routes (justtcg, tcgapi) call normalizeRarityForDb() before DB save
+- **Display**: getRarityDisplayName() converts DB values → display labels
+- **Colors**: `app/justtcg/lib/constants.ts` - RARITY_COLORS (both English + short name keys)
+- **Migration**: `docs/migrations/002_normalize_rarity_values.sql` (run manually to fix existing data)
+- Known non-standard DB values: BOX, その他, デッキ, パック (intentionally left as-is)
 
 ### Chart Categories (keep in sync)
 - `lib/chart/constants.ts` - CATEGORIES array + CATEGORY_SLUG_MAP
@@ -103,8 +106,85 @@ See [cron-bugs.md](./cron-bugs.md) for full details.
 Key findings:
 - sale_prices has NO unique constraint → duplicate data accumulates every 5min sync
 - card_sale_urls missing product_type column → getProductInfo called every time
-- justtcg-price-sync: no pagination → large sets partially synced
+- justtcg-price-sync: no pagination → large sets partially synced (FIXED: pagination added)
 - admin/cron manual trigger missing ?force=1
 - daily-price-aggregate depends on v1 category system
 - snkrdunk-items-sync hardcodes brandId='pokemon'
 - maxDuration now 300 (was 120), BATCH_SIZE=15 fits within limit
+
+## Chart Data Granularity Bug (2026-03-09, FIXED)
+- Card detail PriceChartTab: overseas/justTcg lines appeared flat because of timestamp granularity mismatch
+- sale_prices used minute-level timestamps (200 points), overseas/justTcg used dayNoon (30 points)
+- Recharts XAxis = category axis (no type="number") → equal spacing → daily data compressed to left 13%
+- Fix: `roundTimestamp()` function in chartData useMemo — when period > 7 days, all sources use dayNoon bucketing
+- File: `app/cards/[id]/page.tsx` L242-259
+- Note: 7-day period still uses minute-level for intraday detail (overseas has only 7 daily points in this range)
+
+## kaitori-app Bug Audit (2026-03-09)
+See [kaitori-bugs.md](./kaitori-bugs.md) in kaitori-app/.claude/agent-memory/ for full details.
+Key findings (27 bugs total):
+- market_prices has NO unique constraint → duplicate data every cron run (same pattern as toreca-app sale_prices)
+- Supabase 1000-row limit missing on 9+ queries
+- `?manual=true` bypasses cron auth completely
+- cron-gate.ts implemented but never called from either cron route
+- PATCH routes spread `...body` into update → arbitrary column overwrite
+- Parent sheet deletion orphans child pages (ON DELETE SET NULL)
+- ilike pattern injection in card search
+- Multiple .insert() results not checked for errors
+- Card position swap has no error handling (can leave position=-1)
+- snkrdunk-sync has massive code duplication (stream vs batch, 80 lines x2)
+
+## Cron Route Refactoring (2026-03-09)
+Applied to all 11 cron routes:
+- **Module-scope supabase removed**: lounge-cache, shinsoku, shinsoku-sync, snkrdunk-chart-sync, snkrdunk-items-sync, snkrdunk-sync, toreca-lounge all had `const supabase = createServiceClient()` at module scope → moved inside GET handler
+- **catch blocks hardened**: All `error: any` → `error: unknown` with `instanceof Error` check; all `markCronJobRun` in catch blocks wrapped in try-catch to prevent double-fault
+- **`.limit()` added**: justtcg-price-sync inner existingSet query, snkrdunk-sync existingData query
+- **Unused imports removed**: shinsoku-sync had unused `toYen` import
+- **shinsoku-sync**: Added top-level try-catch (was missing — `markCronJobRun` could throw uncaught)
+- **Type improvements**: Replaced `any[]` with typed interfaces for inserts/results in daily-price-aggregate, shinsoku, toreca-lounge, snkrdunk-sync
+- **Supabase query builder `.catch()` doesn't exist**: Use try-catch blocks instead (found in lounge-cache)
+
+## Data Flow Integrity Audit (2026-03-09)
+Key fixes applied:
+- **toreca-lounge**: Added diff check (was inserting purchase_prices every run regardless of price change)
+- **shinsoku conditionToPriceMap**: '素体' was mapped to price_s (sealed) → fixed to price_a
+- **snkrdunk-chart-sync**: Now reads product_type from card_sale_urls to skip getProductInfo API call
+- **card detail limit**: sale_prices/purchase_prices limit 200→2000 (200 only covered ~3 days of data)
+Remaining items (not fixed, low priority):
+- overseas-prices/update inserts exchange_rates every manual call (no dedup)
+- overseas_prices has no unique constraint (chain call date rollover could duplicate)
+- chartData roundTimestamp uses client locale (works for JP users only)
+- daily-price-aggregate still depends on v1 category system
+
+## Security Audit (2026-03-09)
+See [security-audit.md](./security-audit.md) for full details.
+Key fixes applied:
+- **admin/cron SSRF**: Added path prefix restriction (`/api/cron/` only) + traversal prevention
+- **twitter route**: Added CRON_SECRET auth (was exposing X API Bearer Token)
+- **twitter/monitor**: Added Authorization header to internal twitter route call
+- **pokemon-card-scrape SSRF**: Added URL allowlist (pokemon-card.com only)
+- **gemini/classify SSRF**: Added image URL domain allowlist (pbs.twimg.com only)
+- **Module-scope supabase**: Removed from 10 non-cron routes (snkrdunk-scrape, snkrdunk-chart, linking/*)
+- **ilike injection**: Added escape for `%_\,()` in 7 routes + buildKanaSearchFilter utility
+Key remaining issues (reported only, not fixed):
+- No user auth system — all API routes accessible to anyone who knows the URL
+- No rate limiting on most routes (only justtcg/register has basic IP rate limit)
+- No CORS restrictions (Next.js default)
+- POS routes use anon key (RLS-dependent security)
+- Error messages leak internal details (Supabase error messages exposed to client)
+
+## Supabase max_rows=1000 問題 (2026-03-10, FIXED)
+- Supabaseプロジェクトの max_rows 設定が 1000 → `.limit(10000)` を指定してもサーバー側で1000行に切り詰められる
+- `.order('rarity')` + 1000行上限 → アルファベット後半のレアリティ(SAR,SR,RRR,UR等)が欠落
+- 影響箇所: CardEditForm, CardForm, CardsPage の rarity/expansion 取得クエリ
+- 修正: `.range(offset, offset+999)` でページネーション、全行取得後にJS側でユニーク化
+- RARITY_EN_TO_JA に 'Mega Attack Rare' → 'MAR' を追加
+- DB内の全レアリティ値(23種): Amazing Rare, Art Rare, BOX, Black White Rare, Character Rare, Character Super Rare, Common, Double Rare, Hyper Rare, Kagayaku, Mega Attack Rare, Mega Ultra Rare, None, Promo, Shiny Rare, Shiny Secret Rare, Special Art Rare, Super Rare, Triple Rare, Ultra Rare, その他, デッキ, パック
+
+## RLS Issues (2026-03-09)
+- `justtcg_price_history` table likely has RLS enabled with NO select policy → anon key reads return empty
+  - Cron writes with service role (bypasses RLS) → data exists in DB
+  - Frontend reads with anon key → blocked by RLS → chart shows nothing
+  - Same pattern was fixed for overseas_prices/exchange_rates/snkrdunk_sales_history in 20260218_fix_rls_policies.sql
+  - Fix: ALTER TABLE justtcg_price_history DISABLE ROW LEVEL SECURITY;
+  - Verify: SELECT relrowsecurity FROM pg_class WHERE relname='justtcg_price_history'

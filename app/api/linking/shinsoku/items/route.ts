@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { escapeIlike } from '@/lib/utils'
 
 /**
  * シンソク商品一覧API（紐づけ状態付き）
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
       .eq('brand', 'ポケモン')
 
     if (search) {
-      const escaped = search.replace(/[%_\\]/g, '\\$&')
+      const escaped = escapeIlike(search)
       query = query.ilike('name', `%${escaped}%`)
     }
 
@@ -139,8 +140,8 @@ export async function GET(req: NextRequest) {
       items: result,
       pagination: { page, perPage, total: count ?? 0, totalPages: Math.ceil((count ?? 0) / perPage) },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[linking/shinsoku/items] Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }

@@ -48,12 +48,15 @@ export async function POST(req: Request) {
         console.log(`[SnkrdunkAPI] Product: ${productInfo.localizedName} (${productType}) [${timings['1_getProductInfo']}ms]`)
 
         // ② card_sale_urls の apparel_id を更新（初回のみ）
-        await supabase
+        const { error: apparelUpdateErr } = await supabase
             .from('card_sale_urls')
             .update({ apparel_id: apparelId })
             .eq('card_id', cardId)
             .eq('product_url', url)
             .is('apparel_id', null)
+        if (apparelUpdateErr) {
+            console.error(`[SnkrdunkAPI] apparel_id update error: ${apparelUpdateErr.message}`)
+        }
         timings['2_updateApparelId'] = Date.now() - t
         t = Date.now()
 
@@ -115,10 +118,17 @@ export async function POST(req: Request) {
         t = Date.now()
 
         // ⑤ 既存データを取得（重複判定用）
-        const { data: existingData } = await supabase
+        const { data: existingData, error: existingErr } = await supabase
             .from('snkrdunk_sales_history')
             .select('grade, price, sold_at, user_icon_number')
             .eq('card_id', cardId)
+        if (existingErr) {
+            console.error(`[SnkrdunkAPI] existing data fetch error: ${existingErr.message}`)
+            return NextResponse.json(
+                { success: false, error: `既存データ取得エラー: ${existingErr.message}` },
+                { status: 500 }
+            )
+        }
         timings['5_fetchExisting'] = Date.now() - t
         t = Date.now()
 
@@ -226,8 +236,8 @@ export async function POST(req: Request) {
                 // 共通ヘルパーでPSA10/A/Bのグレード別最安値・在庫・トップ3を抽出
                 gradePrices.push(...extractGradePrices(listings))
                 console.log(`[SnkrdunkAPI] Grade prices:`, gradePrices.map(g => `${g.grade}=¥${g.price}(${g.stock}件)`).join(', '))
-            } catch (e: any) {
-                console.error(`[SnkrdunkAPI] Listings fetch error: ${e.message}`)
+            } catch (e: unknown) {
+                console.error(`[SnkrdunkAPI] Listings fetch error: ${e instanceof Error ? e.message : e}`)
             }
         } else {
             // BOX: /sizes APIから価格・出品数を取得
@@ -243,8 +253,8 @@ export async function POST(req: Request) {
                     overallMin = cheapest.minPrice
                     gradePrices.push({ grade: '1個', price: cheapest.minPrice })
                 }
-            } catch (e: any) {
-                console.error(`[SnkrdunkAPI] Box sizes fetch error: ${e.message}`)
+            } catch (e: unknown) {
+                console.error(`[SnkrdunkAPI] Box sizes fetch error: ${e instanceof Error ? e.message : e}`)
             }
             console.log(`[SnkrdunkAPI] BOX overallMin: ${overallMin}`)
         }
@@ -284,7 +294,7 @@ export async function POST(req: Request) {
         timings['8_listingPrices'] = Date.now() - t
 
         // ⑨ スクレイピング成功: ステータスをクリア
-        await supabase
+        const { error: statusUpdateErr } = await supabase
             .from('card_sale_urls')
             .update({
                 last_scraped_at: new Date().toISOString(),
@@ -293,6 +303,9 @@ export async function POST(req: Request) {
             })
             .eq('card_id', cardId)
             .eq('product_url', url)
+        if (statusUpdateErr) {
+            console.error(`[SnkrdunkAPI] status update error: ${statusUpdateErr.message}`)
+        }
 
         return NextResponse.json({
             success: true,
@@ -306,10 +319,10 @@ export async function POST(req: Request) {
             skipped: skippedCount,
             timings,
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[SnkrdunkAPI] Error:', error)
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: error instanceof Error ? error.message : String(error) },
             { status: 500 }
         )
     }

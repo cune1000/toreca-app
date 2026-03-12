@@ -62,7 +62,7 @@ async function scrapePokemonCard(url: string) {
       ...cardData
     }
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (browser) await browser.close()
     throw error
   }
@@ -116,7 +116,7 @@ async function scrapeCardList(listUrl: string, limit: number = 20) {
       cards: cardLinks.slice(0, limit)
     }
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (browser) await browser.close()
     throw error
   }
@@ -169,10 +169,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result)
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Scrape error:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }
@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
         }
         
         // DBに保存
-        await supabase
+        const { error: insertErr } = await supabase
           .from('cards')
           .insert({
             name: detail.name || card.name,
@@ -252,15 +252,21 @@ export async function POST(request: NextRequest) {
             regulation: detail.regulation,
             category_large_id: category?.id || null
           })
-        
+
+        if (insertErr) {
+          errorCount++
+          errors.push(`${card.name}: DB insert error: ${insertErr.message}`)
+          continue
+        }
+
         savedCount++
         
         // レート制限対策
         await new Promise(resolve => setTimeout(resolve, 2000))
         
-      } catch (err: any) {
+      } catch (err: unknown) {
         errorCount++
-        errors.push(`${card.name}: ${err.message}`)
+        errors.push(`${card.name}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
     
@@ -273,10 +279,10 @@ export async function POST(request: NextRequest) {
       errors: errors.slice(0, 10)
     })
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Scrape error:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }

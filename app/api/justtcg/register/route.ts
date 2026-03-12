@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
+import { normalizeRarityForDb } from '@/lib/rarity-mapping'
 
 export const dynamic = 'force-dynamic'
 
@@ -219,13 +220,16 @@ export async function POST(request: NextRequest) {
     const safeReleaseDate = typeof release_date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(release_date)
       ? release_date.slice(0, 10) : null
 
+    // レアリティ正規化（英語フルネーム → 短縮名）
+    const normalizedRarity = normalizeRarityForDb(str(rarity, 50))
+
     // justtcg_id が既に登録済み → 既存カードを最新データで上書きUPDATE
     // nullで既存値を消さないよう、値がある場合のみセット
     if (existing) {
       const updateFields: Record<string, unknown> = { name: trimmedName }
       if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
       if (str(card_number, 50)) updateFields.card_number = str(card_number, 50)
-      if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
+      if (normalizedRarity) updateFields.rarity = normalizedRarity
       if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
       if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
       if (safeReleaseYear) updateFields.release_year = safeReleaseYear
@@ -307,7 +311,7 @@ export async function POST(request: NextRequest) {
         justtcg_id: trimmedJusttcgId,
       }
       if (str(name_en, 200)) updateFields.name_en = str(name_en, 200)
-      if (str(rarity, 50)) updateFields.rarity = str(rarity, 50)
+      if (normalizedRarity) updateFields.rarity = normalizedRarity
       if (str(set_code, 100)) updateFields.set_code = str(set_code, 100)
       if (str(set_name_en, 200)) updateFields.set_name_en = str(set_name_en, 200)
       if (safeReleaseYear) updateFields.release_year = safeReleaseYear
@@ -346,7 +350,7 @@ export async function POST(request: NextRequest) {
         name: trimmedName, // R13-API10: trimmed
         name_en: str(name_en, 200),
         card_number: cardNumber,
-        rarity: str(rarity, 50),
+        rarity: normalizedRarity,
         set_code: str(set_code, 100),
         set_name_en: str(set_name_en, 200),
         release_year: safeReleaseYear,
@@ -378,7 +382,7 @@ export async function POST(request: NextRequest) {
           const fallbackFields: Record<string, unknown> = { name: trimmedName }
           if (str(name_en, 200)) fallbackFields.name_en = str(name_en, 200)
           if (cardNumber) fallbackFields.card_number = cardNumber
-          if (str(rarity, 50)) fallbackFields.rarity = str(rarity, 50)
+          if (normalizedRarity) fallbackFields.rarity = normalizedRarity
           if (str(set_code, 100)) fallbackFields.set_code = str(set_code, 100)
           if (safeReleaseDate) fallbackFields.release_date = safeReleaseDate
           if (str(expansion, 200)) fallbackFields.expansion = str(expansion, 200)

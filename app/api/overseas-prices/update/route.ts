@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient, TABLES } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
 import { getUsdJpyRate } from '@/lib/exchange-rate'
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     // 手動更新時は常にAPIから最新為替レートを取得
     const exchangeRate = await getUsdJpyRate()
     // 取得したレートをDBにも保存
-    const { error: rateErr } = await supabase.from(TABLES.EXCHANGE_RATES).insert({
+    const { error: rateErr } = await supabase.from('exchange_rates').insert({
       base_currency: 'USD',
       target_currency: 'JPY',
       rate: exchangeRate,
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { error: insertError } = await supabase
-      .from(TABLES.OVERSEAS_PRICES)
+      .from('overseas_prices')
       .insert(record)
 
     if (insertError) {
@@ -76,10 +76,10 @@ export async function POST(request: NextRequest) {
         exchangeRate,
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Overseas price update error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || '価格取得に失敗しました' },
+      { success: false, error: error instanceof Error ? error.message : '価格取得に失敗しました' },
       { status: 500 }
     )
   }

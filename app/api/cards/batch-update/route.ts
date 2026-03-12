@@ -79,10 +79,10 @@ export async function POST(request: Request) {
             updated: data?.length || 0
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Batch update API error:', error)
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         )
     }

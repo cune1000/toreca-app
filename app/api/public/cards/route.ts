@@ -1,6 +1,7 @@
 import { validateApiKey, handleCorsOptions, apiSuccess, apiError } from '@/lib/api/auth'
 import { supabase } from '@/lib/supabase'
 import { buildKanaSearchFilter } from '@/lib/utils/kana'
+import { escapeIlike } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
             const { data: catData } = await supabase
                 .from('category_large')
                 .select('id')
-                .ilike('name', `%${category.replace(/[%_\\]/g, '\\$&')}%`)
+                .ilike('name', `%${escapeIlike(category)}%`)
 
             if (catData && catData.length > 0) {
                 query = query.in('category_large_id', catData.map(c => c.id))
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
 
         // レアリティフィルタ
         if (rarity) {
-            query = query.ilike('rarity', `%${rarity.replace(/[%_\\]/g, '\\$&')}%`)
+            query = query.ilike('rarity', `%${escapeIlike(rarity)}%`)
         }
 
         const { data, count, error } = await query
@@ -87,8 +88,8 @@ export async function GET(req: Request) {
             limit,
             offset,
         })
-    } catch (error: any) {
-        return apiError(error.message)
+    } catch (error: unknown) {
+        return apiError(error instanceof Error ? error.message : 'Unknown error')
     }
 }
 

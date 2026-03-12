@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient, TABLES } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 import { getProduct } from '@/lib/pricecharting-api'
 
 export const dynamic = 'force-dynamic'
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     // cards テーブルを更新
     const supabase = createServiceClient()
     const { data, error } = await supabase
-      .from(TABLES.CARDS)
+      .from('cards')
       .update({
         pricecharting_id: resolvedId,
         pricecharting_name: pricechartingName,
@@ -97,10 +97,10 @@ export async function POST(request: NextRequest) {
       pricecharting_id: resolvedId,
       data,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Overseas prices link error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Link failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Link failed' },
       { status: 500 }
     )
   }
@@ -124,7 +124,7 @@ export async function DELETE(request: NextRequest) {
 
     const supabase = createServiceClient()
     const { data, error } = await supabase
-      .from(TABLES.CARDS)
+      .from('cards')
       .update({
         pricecharting_id: null,
         pricecharting_name: null,
@@ -146,10 +146,10 @@ export async function DELETE(request: NextRequest) {
       success: true,
       data,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Overseas prices unlink error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Unlink failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Unlink failed' },
       { status: 500 }
     )
   }

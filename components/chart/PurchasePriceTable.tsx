@@ -2,12 +2,7 @@
 
 import { PurchaseShopPrice } from '@/lib/chart/types'
 import { formatPrice, formatRelativeTime } from '@/lib/chart/format'
-
-const CONDITION_STYLES: Record<string, { bg: string; text: string }> = {
-    '素体': { bg: 'bg-blue-50', text: 'text-blue-600' },
-    'PSA10': { bg: 'bg-purple-50', text: 'text-purple-600' },
-    '未開封': { bg: 'bg-cyan-50', text: 'text-cyan-600' },
-}
+import { CONDITION_STYLES, CONDITION_SORT_ORDER } from '@/lib/chart/constants'
 
 interface Props {
     prices: PurchaseShopPrice[]
@@ -30,8 +25,8 @@ export default function PurchasePriceTable({ prices }: Props) {
         grouped.get(cond)!.push(p)
     }
 
-    // 表示順: 素体 → PSA10 → その他
-    const order = ['素体', 'PSA10', '未開封']
+    // 表示順: 素体 → PSA10 → 未開封 → その他
+    const order: readonly string[] = CONDITION_SORT_ORDER
     const sortedKeys = [...grouped.keys()].sort((a, b) => {
         const ai = order.indexOf(a)
         const bi = order.indexOf(b)

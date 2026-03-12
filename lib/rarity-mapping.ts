@@ -35,66 +35,31 @@ export const RARITY_EN_TO_JA: Record<string, string> = {
   'None': '−',
 }
 
-// raritiesテーブルJOIN結果の短縮名 → 表示用マッピング
-// （raritiesテーブルには C, U, R 等の短縮名が入っている）
-const SHORT_TO_DISPLAY: Record<string, string> = {
-  'C': 'コモン',
-  'U': 'アンコモン',
-}
-
 /**
  * レアリティを日本語表示名に変換
- * - JOINされたrarities オブジェクト → .name を使用（短縮名→表示名変換あり）
  * - 英語テキスト → RARITY_EN_TO_JA でマッピング
  * - マッチしなければ原文を返す
  */
-export function getRarityDisplayName(rarity: string | { name: string } | null | undefined): string {
+export function getRarityDisplayName(rarity: string | null | undefined): string {
   if (!rarity) return ''
-  if (typeof rarity === 'object') {
-    const name = rarity.name
-    return SHORT_TO_DISPLAY[name] || name
-  }
   return RARITY_EN_TO_JA[rarity] || rarity
 }
 
 /**
- * 英語レアリティ名 → raritiesテーブル用の短縮名（C, U, R, SAR等）
- * JustTCG register APIで使用
+ * レアリティ値をDB保存用の正規化された値に変換
+ * - 英語フルネーム（"Special Art Rare"）→ 日本語短縮名（"SAR"）
+ * - 既に短縮名の場合はそのまま返す
+ * - マッチしなければ原文を返す（未知のレアリティも保存可能にする）
+ * - null/undefined/空文字 → null
  */
-export function getRarityShortName(rarityEn: string): string | null {
-  const mapping: Record<string, string> = {
-    'Common': 'C',
-    'Uncommon': 'U',
-    'Rare': 'R',
-    'Holo Rare': 'R',
-    'Double Rare': 'RR',
-    'Triple Rare': 'RRR',
-    'Secret Rare': 'SR',
-    'Ultra Rare': 'UR',
-    'Illustration Rare': 'AR',
-    'Art Rare': 'AR',
-    'Special Art Rare': 'SAR',
-    'Hyper Rare': 'HR',
-    'Promo': 'PR',
-    'Amazing Rare': 'A',
-    'Shiny Rare': 'S',
-    'Character Rare': 'CHR',
-    'Character Super Rare': 'CSR',
-    'Ace Spec Rare': 'ACE',
-    'Rare Holo V': 'V',
-    'Rare Holo VMAX': 'VMAX',
-    'Rare Holo VSTAR': 'VSTAR',
-    'Rare Holo GX': 'GX',
-    'Rare BREAK': 'BREAK',
-    'Rare Holo EX': 'EX',
-    'Trainer Gallery Rare Holo': 'CHR',
-    'Radiant Rare': 'K',
-    'Kagayaku': 'K',
-    'Black White Rare': 'BWR',
-    'Shiny Secret Rare': 'SSR',
-    'Super Rare': 'SR',
-    'Mega Ultra Rare': 'MUR',
-    'Mega Attack Rare': 'MAR',
-  }
-  return mapping[rarityEn] || null
+export function normalizeRarityForDb(rarity: string | null | undefined): string | null {
+  if (!rarity || !rarity.trim()) return null
+  const trimmed = rarity.trim()
+  // RARITY_EN_TO_JA に英語フルネームがあれば短縮名に変換
+  if (RARITY_EN_TO_JA[trimmed]) return RARITY_EN_TO_JA[trimmed]
+  // 既に短縮名（RARITY_EN_TO_JA の value に含まれる）ならそのまま
+  const knownValues = new Set(Object.values(RARITY_EN_TO_JA))
+  if (knownValues.has(trimmed)) return trimmed
+  // 未知の値はそのまま保存
+  return trimmed
 }

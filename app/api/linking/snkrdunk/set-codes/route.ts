@@ -38,8 +38,8 @@ export async function GET() {
       .sort((a, b) => a.jaName.localeCompare(b.jaName, 'ja'))
 
     return NextResponse.json({ setCodes })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[linking/snkrdunk/set-codes] Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { escapeIlike } from '@/lib/utils'
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
             .order('updated_at', { ascending: false })
 
         if (search) {
-            const escaped = search.replace(/[%_\\]/g, '\\$&')
+            const escaped = escapeIlike(search)
             query = query.ilike('name', `%${escaped}%`)
         }
         if (category && category !== 'all') {
@@ -31,8 +32,8 @@ export async function GET(request: NextRequest) {
         if (error) throw error
 
         return NextResponse.json({ success: true, data: data || [] })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
 
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
         if (error) throw error
 
         return NextResponse.json({ success: true, data })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }

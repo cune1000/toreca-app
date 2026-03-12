@@ -137,10 +137,10 @@ ${tweetText ? `\nツイートの文章: "${tweetText}"` : ''}
             reason: result.reason || ''
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Classify error:', error)
         return NextResponse.json({
-            error: error.message,
+            error: error instanceof Error ? error.message : 'Unknown error',
             is_purchase_list: false,
             confidence: 0,
             reason: 'Error occurred'

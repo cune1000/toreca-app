@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { RefreshCw, CheckCircle, Clock, Save, Play, XCircle, Calendar, X, Plus } from 'lucide-react'
+import type { CronSchedule } from '@/lib/cron-gate'
 
 interface CronLog {
   id: string
@@ -36,19 +37,6 @@ interface Stats {
   priceChanges: number
 }
 
-interface CronSchedule {
-  job_name: string
-  display_name: string
-  enabled: boolean
-  schedule_type: 'interval' | 'daily' | 'multi_daily'
-  interval_minutes: number | null
-  run_at_hours: number[] | null
-  run_at_minute: number | null
-  last_run_at: string | null
-  last_status: string | null
-  last_error: string | null
-}
-
 const JOB_DESCRIPTIONS: Record<string, string> = {
   'daily-price-aggregate': '買取・販売価格を日別に集計 → チャート用統計データを生成',
   'exchange-rate-sync':    'USD→JPYの為替レートを取得・更新',
@@ -58,12 +46,10 @@ const JOB_DESCRIPTIONS: Record<string, string> = {
   'shinsoku':              'キャッシュから紐付け済みカードの買取価格を履歴に記録（←shinsoku-syncの後に実行）',
   'overseas-price-sync':   'PriceCharting等の海外価格データを取得・同期',
   'snkrdunk-sync':         'スニダンの売買履歴＋販売中最安値を一括取得（バッチ5件/回）',
-  'twitter-monitor':       'Twitter/Xからトレカ関連ツイートを監視・収集',
 }
 
 const JOB_API_MAP: Record<string, { path: string; method: string }> = {
   'snkrdunk-sync':         { path: '/api/cron/snkrdunk-sync', method: 'GET' },
-  'twitter-monitor':       { path: '/api/twitter/monitor', method: 'POST' },
   'daily-price-aggregate': { path: '/api/cron/daily-price-aggregate', method: 'GET' },
   'shinsoku-sync':         { path: '/api/cron/shinsoku-sync', method: 'GET' },
   'shinsoku':              { path: '/api/cron/shinsoku', method: 'GET' },
@@ -152,7 +138,7 @@ export default function CronDashboard() {
 
   // === Schedule handlers ===
 
-  const updateSchedule = (jobName: string, field: string, value: any) => {
+  const updateSchedule = (jobName: string, field: keyof CronSchedule, value: boolean | number | null) => {
     setSchedules(prev => prev.map(s =>
       s.job_name === jobName ? { ...s, [field]: value } : s
     ))
@@ -204,8 +190,8 @@ export default function CronDashboard() {
       } else {
         throw new Error('Save failed')
       }
-    } catch (err: any) {
-      alert('保存エラー: ' + err.message)
+    } catch (err: unknown) {
+      alert('保存エラー: ' + (err instanceof Error ? err.message : String(err)))
     }
     setScheduleSaving(false)
   }
@@ -226,8 +212,8 @@ export default function CronDashboard() {
         alert(`エラー: ${data.error || 'Unknown'}`)
       }
       fetchSchedules()
-    } catch (err: any) {
-      alert('実行エラー: ' + err.message)
+    } catch (err: unknown) {
+      alert('実行エラー: ' + (err instanceof Error ? err.message : String(err)))
     }
     setRunningJob(null)
   }

@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
             transaction,
             inventory: { id: inventory_id, quantity: newQuantity },
         })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
