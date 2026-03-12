@@ -1,11 +1,46 @@
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+
+/**
+ * Cronジョブの認証・ゲート・エラーハンドリングを共通化するラッパー
+ */
+export function withCronAuth(
+  jobName: string,
+  handler: (req: NextRequest, supabase: ReturnType<typeof createServiceClient>) => Promise<NextResponse>
+) {
+  return async function(req: NextRequest) {
+    const authHeader = req.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const force = req.nextUrl.searchParams.get('force') === '1'
+    const gate = await shouldRunCronJob(jobName, { force })
+    if (!gate.shouldRun) {
+      return NextResponse.json({ skipped: true, reason: gate.reason })
+    }
+
+    try {
+      const supabase = createServiceClient()
+      const result = await handler(req, supabase)
+      await markCronJobRun(jobName, 'success').catch(() => {})
+      return result
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[${jobName}] error:`, message)
+      await markCronJobRun(jobName, 'error', message).catch(() => {})
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
+}
 
 interface GateResult {
   shouldRun: boolean
   reason?: string
 }
 
-interface CronSchedule {
+export interface CronSchedule {
   job_name: string
   display_name: string
   enabled: boolean

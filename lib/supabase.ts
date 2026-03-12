@@ -36,42 +36,31 @@ export function createServiceClient(): SupabaseClient {
 // Helper Functions
 // =============================================================================
 
+/**
+ * Supabaseの1000行制限を回避するページネーション取得
+ * queryBuilder は .range() で消費されるため、毎回新しいクエリを生成する関数を渡す
+ */
+export async function fetchAllPaginated<T = any>(
+  buildQuery: () => any,
+  pageSize = 1000
+): Promise<T[]> {
+  const allData: T[] = []
+  let offset = 0
+  while (true) {
+    const { data: page, error } = await buildQuery().range(offset, offset + pageSize - 1)
+    if (error) {
+      console.error('fetchAllPaginated error:', error.message)
+      break
+    }
+    if (!page || page.length === 0) break
+    allData.push(...page)
+    if (page.length < pageSize) break
+    offset += pageSize
+  }
+  return allData
+}
+
 // NOTE: query(), batchInsert(), upsertRecord() ヘルパーは未使用のため削除済み (2026-03-09)
 // 必要になった場合は git history から復元可能
-
-// =============================================================================
-// Table Names (typo防止)
-// =============================================================================
-
-export const TABLES = {
-  // カード関連
-  CARDS: 'cards',
-  PURCHASE_PRICES: 'purchase_prices',
-  SALE_PRICES: 'sale_prices',
-  CARD_SALE_URLS: 'card_sale_urls',
-
-  // 店舗
-  PURCHASE_SHOPS: 'purchase_shops',
-
-  // 保留
-  PENDING_CARDS: 'pending_cards',
-
-  // カテゴリ
-  CATEGORY_LARGE: 'category_large',
-  CATEGORY_MEDIUM: 'category_medium',
-  CATEGORY_SMALL: 'category_small',
-  CATEGORY_DETAIL: 'category_detail',
-  RARITIES: 'rarities',
-
-  // X自動監視システム
-  FETCHED_TWEETS: 'fetched_tweets',
-  SHOP_MONITOR_SETTINGS: 'shop_monitor_settings',
-
-  // PriceCharting / 海外価格
-  OVERSEAS_PRICES: 'overseas_prices',
-  EXCHANGE_RATES: 'exchange_rates',
-} as const
-
-export type TableName = typeof TABLES[keyof typeof TABLES]
 
 export default supabase
