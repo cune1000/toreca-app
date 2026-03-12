@@ -83,6 +83,7 @@ export default function ChartTopPage() {
                 {/* ランキング一覧 */}
                 {!loading && (
                     <div className="py-2">
+                        <AdBanner />
                         {activeRankings.map((ranking, i) => (
                             <div key={ranking.id}>
                                 <RankingRow
