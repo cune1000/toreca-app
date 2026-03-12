@@ -216,7 +216,7 @@ export default function RankingRow({ ranking, cards }: Props) {
                     {showLeft && (
                         <button
                             onClick={() => scroll('left')}
-                            className={`hidden sm:flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border transition-all duration-300 items-center justify-center opacity-0 group-hover/row:opacity-100 ${theme === 'bento' ? '' : 'rounded-full'} ${getButtonClass()}`}
+                            className={`hidden sm:flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border transition-all duration-300 items-center justify-center sm:opacity-100 ${theme === 'bento' ? '' : 'rounded-full'} ${getButtonClass()}`}
                         >
                             <ChevronLeft size={20} />
                         </button>
@@ -229,7 +229,7 @@ export default function RankingRow({ ranking, cards }: Props) {
                     {showRight && cards.length > 0 && (
                         <button
                             onClick={() => scroll('right')}
-                            className={`hidden sm:flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border transition-all duration-300 items-center justify-center opacity-0 group-hover/row:opacity-100 ${theme === 'bento' ? '' : 'rounded-full'} ${getButtonClass()}`}
+                            className={`hidden sm:flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border transition-all duration-300 items-center justify-center sm:opacity-100 ${theme === 'bento' ? '' : 'rounded-full'} ${getButtonClass()}`}
                         >
                             <ChevronRight size={20} />
                         </button>

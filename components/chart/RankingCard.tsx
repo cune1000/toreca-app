@@ -209,6 +209,76 @@ export default function RankingCard({ card, rank, color, layout = 'carousel' }: 
         )
     }
 
+    // デフォルトテーマ → nativeと同じ実用スタイル
+    if (theme === 'default') {
+        if (layout === 'compact') {
+            return (
+                <Link href={`/chart/card/${card.id}`} className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3 flex items-center gap-3 w-full hover:bg-gray-50 transition-colors">
+                    <div className="w-6 text-center shrink-0 font-bold text-base sm:text-lg text-gray-700">
+                        {rank}
+                    </div>
+                    <div className="relative w-16 h-20 sm:w-20 sm:h-24 shrink-0 flex items-center justify-center">
+                        {card.image_url ? (
+                            <img src={card.image_url} alt={card.name} className="h-full object-contain drop-shadow-sm" loading="lazy" />
+                        ) : (
+                            <ImageIcon className="w-8 h-8 text-gray-300 stroke-1" />
+                        )}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <p className="text-xs sm:text-[13px] font-bold text-gray-900 text-left line-clamp-1 mb-1.5">{card.name}</p>
+                        <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                            <div className="flex justify-between sm:justify-start gap-2 items-center sm:items-baseline">
+                                <span className="text-[10px] text-gray-500">直近価格</span>
+                                <span className="text-[13px] sm:text-[14px] font-bold text-gray-900 leading-none">{formatPrice(card.display_price)}</span>
+                            </div>
+                            <div className="flex justify-between sm:justify-start gap-2 items-center sm:items-baseline">
+                                <span className="text-[10px] text-gray-500">騰落率(30日)</span>
+                                <span className={`text-[12px] font-bold leading-none ${change === 0 ? 'text-gray-500' : isUp ? 'text-red-600' : 'text-blue-600'}`}>
+                                    {change === 0 ? '±0%' : isUp ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </Link>
+            )
+        }
+
+        const defaultWidthClass = layout === 'grid' ? 'w-full' : 'flex-shrink-0 w-[140px] sm:w-[150px]'
+        return (
+            <Link href={`/chart/card/${card.id}`} className={`${defaultWidthClass} bg-white border border-gray-200 rounded-lg flex flex-col hover:border-gray-300 transition-colors group`}>
+                <div className="relative p-2 bg-white rounded-t-lg flex justify-center items-center h-[190px]">
+                    {card.image_url ? (
+                        <img src={card.image_url} alt={card.name} className="h-[170px] object-contain drop-shadow-sm group-hover:scale-105 transition-transform" loading="lazy" />
+                    ) : (
+                        <ImageIcon className="w-12 h-12 text-gray-200 stroke-1" />
+                    )}
+                </div>
+
+                <div className="flex justify-center -mt-3 mb-1 relative z-10">
+                    <span className="text-white text-[10px] font-bold px-4 py-0.5 rounded-full shadow-sm" style={{ backgroundColor: color }}>
+                        {rank}位
+                    </span>
+                </div>
+
+                <div className="px-2 pt-1 pb-2 flex flex-col flex-1">
+                    <p className="text-[11px] font-bold text-gray-800 line-clamp-2 mb-2 text-left h-[32px]">{card.name}</p>
+                    <div className="mt-auto flex flex-col gap-1.5 text-[10px] sm:text-[11px]">
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-1">
+                            <span className="text-gray-500">直近価格</span>
+                            <span className="font-bold text-gray-900">{formatPrice(card.display_price)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pb-0.5">
+                            <span className="text-gray-500">騰落率</span>
+                            <span className={`font-bold ${change === 0 ? 'text-gray-500' : isUp ? 'text-red-600' : 'text-blue-600'}`}>
+                                {change === 0 ? '±0%' : isUp ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </Link>
+        )
+    }
+
     const widthClass = layout === 'grid' ? 'w-full' : 'flex-shrink-0 w-[140px] sm:w-[150px] md:w-[160px]'
 
     return (
@@ -225,13 +295,13 @@ export default function RankingCard({ card, rank, color, layout = 'carousel' }: 
 
             {/* ランク番号 */}
             <div
-                className={`absolute w-7 h-7 flex items-center justify-center font-black z-20 
+                className={`absolute w-7 h-7 flex items-center justify-center font-black z-20
                     ${theme === 'bento' || theme === 'neopop' ? '-top-3 -left-3 border-[3px] border-black text-xl rounded-none' :
                         theme === 'neumorphism' ? 'top-3 left-3 rounded-full text-[13px]' :
                             theme === 'dark' ? 'top-2 left-2 rounded-full text-[13px]' :
                                 theme === 'glass' ? 'top-2 left-2 rounded-full text-[13px]' :
                                     theme === 'elegant' ? 'top-2 left-2 rounded-full text-[13px]' :
-                                        'top-2 left-2 rounded-lg text-[13px] shadow-[0_2px_8px_rgba(0,0,0,0.12)]'} 
+                                        'top-2 left-2 rounded-lg text-[13px] shadow-[0_2px_8px_rgba(0,0,0,0.12)]'}
                     ${getRankStyle()}`}
             >
                 {rank}
@@ -239,12 +309,12 @@ export default function RankingCard({ card, rank, color, layout = 'carousel' }: 
 
             {/* 変動率バッジ(右上) */}
             {(change !== 0 || theme === 'bento' || theme === 'neopop') && (
-                <div className={`absolute z-20 
-                    font-bold 
+                <div className={`absolute z-20
+                    font-bold
                     ${theme === 'bento' || theme === 'neopop' ? 'top-0 right-0 px-2 py-1 text-xs uppercase' :
                         theme === 'neumorphism' ? 'top-3 right-3 px-2 py-1 rounded-full text-[10px]' :
                             theme === 'glass' || theme === 'elegant' ? 'top-2 right-2 px-1.5 py-0.5 rounded-full text-[10px]' :
-                                'top-2 right-2 px-1.5 py-0.5 rounded text-[10px]'} 
+                                'top-2 right-2 px-1.5 py-0.5 rounded text-[10px]'}
                     ${getBadgeClass()}`}
                 >
                     {isUp && theme !== 'bento' && theme !== 'neopop' ? '+' : ''}{change.toFixed(1)}%
