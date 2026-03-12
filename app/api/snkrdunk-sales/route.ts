@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createServiceClient, fetchAllPaginated } from '@/lib/supabase'
 
 /**
  * スニダン売買履歴を取得
@@ -20,38 +20,33 @@ export async function GET(req: Request) {
             )
         }
 
-        // 期間フィルタ（days=0 は全期間）
-        let query = supabase
-            .from('snkrdunk_sales_history')
-            .select('id, card_id, grade, price, sold_at, product_type, size, condition, label')
-            .eq('card_id', cardId)
-            .order('sold_at', { ascending: true })
+        // 期間フィルタ（days=0 は全期間）、1000行制限回避
+        const buildQuery = () => {
+            let q = supabase
+                .from('snkrdunk_sales_history')
+                .select('id, card_id, grade, price, sold_at, product_type, size, condition, label')
+                .eq('card_id', cardId)
+                .order('sold_at', { ascending: true })
 
-        if (days > 0) {
-            const cutoffDate = new Date()
-            cutoffDate.setDate(cutoffDate.getDate() - days)
-            query = query.gte('sold_at', cutoffDate.toISOString())
+            if (days > 0) {
+                const cutoffDate = new Date()
+                cutoffDate.setDate(cutoffDate.getDate() - days)
+                q = q.gte('sold_at', cutoffDate.toISOString())
+            }
+            return q
         }
 
-        const { data, error } = await query
+        const data = await fetchAllPaginated(buildQuery)
 
-        if (error) {
-            console.error('Database query error:', error)
-            return NextResponse.json(
-                { success: false, error: error.message },
-                { status: 500 }
-            )
-        }
-
-        return NextResponse.json({ success: true, data: data || [] }, {
+        return NextResponse.json({ success: true, data }, {
             headers: {
                 'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=60',
             },
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('API error:', error)
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         )
     }

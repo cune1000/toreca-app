@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient, TABLES } from '@/lib/supabase'
+import { createServiceClient, fetchAllPaginated } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,40 +22,36 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createServiceClient()
-    let query = supabase
-      .from(TABLES.OVERSEAS_PRICES)
-      .select('card_id, loose_price_usd, loose_price_jpy, graded_price_usd, graded_price_jpy, recorded_at')
-      .eq('card_id', cardId)
-      .order('recorded_at', { ascending: true })
-      .limit(1000)
 
-    if (days) {
-      const since = new Date()
-      since.setDate(since.getDate() - days)
-      query = query.gte('recorded_at', since.toISOString())
+    const buildQuery = () => {
+      let q = supabase
+        .from('overseas_prices')
+        .select('card_id, loose_price_usd, loose_price_jpy, graded_price_usd, graded_price_jpy, recorded_at')
+        .eq('card_id', cardId)
+        .order('recorded_at', { ascending: true })
+
+      if (days) {
+        const since = new Date()
+        since.setDate(since.getDate() - days)
+        q = q.gte('recorded_at', since.toISOString())
+      }
+      return q
     }
 
-    const { data, error } = await query
-
-    if (error) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 500 }
-      )
-    }
+    const data = await fetchAllPaginated(buildQuery)
 
     return NextResponse.json({
       success: true,
-      data: data || [],
+      data,
     }, {
       headers: {
         'Cache-Control': 'private, s-maxage=3600, stale-while-revalidate=300',
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Overseas prices fetch error:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }

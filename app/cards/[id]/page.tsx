@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, fetchAllPaginated } from '@/lib/supabase'
 import { RefreshCw, ArrowLeft, Home } from 'lucide-react'
 import Link from 'next/link'
 import CardDetailHeader from '@/components/card-detail/CardDetailHeader'
@@ -102,13 +102,13 @@ export default function CardDetailPage({ params }: Props) {
   const fetchPrices = async () => {
     setLoading(true)
     try {
-      const [purchaseRes, saleRes, urlRes] = await Promise.all([
-        supabase.from('purchase_prices').select('*, shop:shop_id(id, name, icon), link:link_id(label)').eq('card_id', card.id).order('created_at', { ascending: false }).limit(2000),
-        supabase.from('sale_prices').select('*, site:site_id(id, name, icon), grade').eq('card_id', card.id).order('created_at', { ascending: false }).limit(2000),
+      const [purchaseData, saleData, urlRes] = await Promise.all([
+        fetchAllPaginated(() => supabase.from('purchase_prices').select('*, shop:shop_id(id, name, icon), link:link_id(label)').eq('card_id', card.id).order('created_at', { ascending: false })),
+        fetchAllPaginated(() => supabase.from('sale_prices').select('*, site:site_id(id, name, icon), grade').eq('card_id', card.id).order('created_at', { ascending: false })),
         supabase.from('card_sale_urls').select('*, site:site_id(id, name, icon, url)').eq('card_id', card.id),
       ])
-      setPurchasePrices(purchaseRes.data || [])
-      setSalePrices(saleRes.data || [])
+      setPurchasePrices(purchaseData)
+      setSalePrices(saleData)
       setSaleUrls(urlRes.data || [])
     } catch (err) { console.error('Failed to fetch prices:', err) } finally { setLoading(false) }
   }
@@ -136,12 +136,12 @@ export default function CardDetailPage({ params }: Props) {
 
   const fetchJustTcgHistory = async () => {
     try {
-      const [{ data: history }, { data: rateData }] = await Promise.all([
-        supabase
+      const [history, { data: rateData }] = await Promise.all([
+        fetchAllPaginated(() => supabase
           .from('justtcg_price_history')
           .select('recorded_at, price_usd')
           .eq('card_id', card.id)
-          .order('recorded_at', { ascending: true }),
+          .order('recorded_at', { ascending: true })),
         supabase
           .from('exchange_rates')
           .select('rate')
@@ -151,19 +151,18 @@ export default function CardDetailPage({ params }: Props) {
           .limit(1),
       ])
       if (rateData?.[0]?.rate) setExchangeRate(rateData[0].rate)
-      setJustTcgHistory(history || [])
+      setJustTcgHistory(history)
     } catch (err) { console.error('Failed to fetch JustTCG history:', err) }
   }
 
   const fetchSnkrdunkChartHistory = async () => {
     try {
-      const { data } = await supabase
+      const data = await fetchAllPaginated(() => supabase
         .from('snkrdunk_chart_data')
         .select('condition, date, price_cleaned')
         .eq('card_id', card.id)
-        .order('date', { ascending: true })
-        .limit(3000)
-      setSnkrdunkChartHistory(data || [])
+        .order('date', { ascending: true }))
+      setSnkrdunkChartHistory(data)
     } catch (err) { console.error('Failed to fetch snkrdunk chart history:', err) }
   }
 

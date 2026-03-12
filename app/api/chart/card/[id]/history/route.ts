@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase'
+import { createServiceClient, fetchAllPaginated } from '@/lib/supabase'
 
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
     const { id } = await params
     const period = req.nextUrl.searchParams.get('period') || '30d'
 
@@ -20,30 +21,31 @@ export async function GET(
 
     const supabase = createServiceClient()
 
-    // overseas_prices と justtcg_price_history を並列取得
-    let overseasQuery = supabase
-        .from('overseas_prices')
-        .select('recorded_at, loose_price_jpy, loose_price_usd, graded_price_jpy, graded_price_usd')
-        .eq('card_id', id)
-        .order('recorded_at', { ascending: true })
-
-    let jtcgQuery = supabase
-        .from('justtcg_price_history')
-        .select('recorded_at, price_usd')
-        .eq('card_id', id)
-        .order('recorded_at', { ascending: true })
-
-    if (period !== 'all') {
-        overseasQuery = overseasQuery.gte('recorded_at', fromDate)
-        jtcgQuery = jtcgQuery.gte('recorded_at', fromDate)
+    // overseas_prices と justtcg_price_history を並列取得（1000行制限回避）
+    const buildOverseasQuery = () => {
+        let q = supabase
+            .from('overseas_prices')
+            .select('recorded_at, loose_price_jpy, loose_price_usd, graded_price_jpy, graded_price_usd')
+            .eq('card_id', id)
+            .order('recorded_at', { ascending: true })
+        if (period !== 'all') q = q.gte('recorded_at', fromDate)
+        return q
     }
 
-    const [{ data, error }, { data: jtcgData }] = await Promise.all([overseasQuery, jtcgQuery])
-
-    if (error) {
-        console.error('Price history API error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+    const buildJtcgQuery = () => {
+        let q = supabase
+            .from('justtcg_price_history')
+            .select('recorded_at, price_usd')
+            .eq('card_id', id)
+            .order('recorded_at', { ascending: true })
+        if (period !== 'all') q = q.gte('recorded_at', fromDate)
+        return q
     }
+
+    const [data, jtcgData] = await Promise.all([
+        fetchAllPaginated(buildOverseasQuery),
+        fetchAllPaginated(buildJtcgQuery),
+    ])
 
     // 日付をキーにしてマージ（デフォルトは null = データなし）
     const dateMap = new Map<string, any>()
@@ -95,4 +97,11 @@ export async function GET(
             'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600',
         },
     })
+  } catch (error: unknown) {
+    console.error('Chart history API error:', error)
+    return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Internal server error' },
+        { status: 500 }
+    )
+  }
 }
