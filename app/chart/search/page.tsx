@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ChartLayoutComponent from '@/components/chart/ChartLayout'
 import SearchBox from '@/components/chart/SearchBox'
-import CategoryTabs from '@/components/chart/CategoryTabs'
 import { searchCards } from '@/lib/chart/queries'
 import { formatPrice, formatUsd } from '@/lib/chart/format'
 import { ChartCard } from '@/lib/chart/types'
@@ -16,24 +15,18 @@ function SearchContent() {
     const q = searchParams.get('q') || ''
     const [results, setResults] = useState<ChartCard[]>([])
     const [loading, setLoading] = useState(false)
-    const [category, setCategory] = useState('all')
-
     useEffect(() => {
         if (!q) return
         setLoading(true)
-        searchCards(q, { category: category !== 'all' ? category : undefined })
+        searchCards(q)
             .then(setResults)
             .finally(() => setLoading(false))
-    }, [q, category])
+    }, [q])
 
     return (
         <ChartLayoutComponent>
             <div className="px-4 py-4">
                 <SearchBox initialQuery={q} />
-
-                <div className="mt-4">
-                    <CategoryTabs selected={category} onChange={setCategory} />
-                </div>
 
                 {/* 検索結果 */}
                 <div className="mt-4">

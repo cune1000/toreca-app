@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import ChartLayoutComponent from '@/components/chart/ChartLayout'
-import CategoryTabs from '@/components/chart/CategoryTabs'
 import RankingRow from '@/components/chart/RankingRow'
 import RankingSettings from '@/components/chart/RankingSettings'
 import AdBanner from '@/components/chart/AdBanner'
@@ -13,7 +12,7 @@ import { ALL_RANKINGS, DEFAULT_VISIBLE_RANKINGS, RANKING_STORAGE_KEY } from '@/l
 import { ChartCard, RankingDef } from '@/lib/chart/types'
 
 export default function ChartTopPage() {
-    const [category, setCategory] = useState('all')
+    const category = 'all'
     const [visibleRankings, setVisibleRankings] = useState<string[]>(DEFAULT_VISIBLE_RANKINGS)
     const [showSettings, setShowSettings] = useState(false)
     const [rankingData, setRankingData] = useState<Record<string, ChartCard[]>>({})
@@ -73,11 +72,6 @@ export default function ChartTopPage() {
         <ChartThemeProvider>
             <ThemeSwitcher />
             <ChartLayoutComponent onOpenSettings={() => setShowSettings(true)}>
-                {/* カテゴリタブ */}
-                <div className="px-4 py-4">
-                    <CategoryTabs selected={category} onChange={setCategory} />
-                </div>
-
                 {/* ローディング */}
                 {loading && (
                     <div className="px-4 py-12 text-center">
