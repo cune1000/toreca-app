@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { getProduct, penniesToJpy } from '@/lib/pricecharting-api'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
@@ -164,9 +164,16 @@ export async function GET(req: Request) {
         ? `https://${process.env.VERCEL_URL}`
         : `http://localhost:3000`
       console.log(`[Overseas Price Sync] Chaining: ${remaining} cards remaining`)
-      fetch(`${host}/api/cron/overseas-price-sync?chain=1`, {
-        headers: { 'Authorization': `Bearer ${cronSecret}` },
-      }).catch(e => console.error('[Overseas Price Sync] Chain failed:', e.message))
+      after(async () => {
+        try {
+          const res = await fetch(`${host}/api/cron/overseas-price-sync?chain=1`, {
+            headers: { 'Authorization': `Bearer ${cronSecret}` },
+          })
+          console.log(`[Overseas Price Sync] Chain response: ${res.status}`)
+        } catch (e: unknown) {
+          console.error('[Overseas Price Sync] Chain failed:', e instanceof Error ? e.message : e)
+        }
+      })
     }
 
     await markCronJobRun('overseas-price-sync', 'success')

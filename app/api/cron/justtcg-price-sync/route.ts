@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 import { getCards, extractSetIdFromJusttcgId } from '@/lib/justtcg-api'
@@ -222,9 +222,16 @@ export async function GET(req: Request) {
         ? `https://${process.env.VERCEL_URL}`
         : `http://localhost:3000`
       console.log(`[justtcg-price-sync] Chaining: ${remaining} sets remaining`)
-      fetch(`${host}/api/cron/justtcg-price-sync?chain=1`, {
-        headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
-      }).catch(e => console.error('[justtcg-price-sync] Chain failed:', e.message))
+      after(async () => {
+        try {
+          const res = await fetch(`${host}/api/cron/justtcg-price-sync?chain=1`, {
+            headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
+          })
+          console.log(`[justtcg-price-sync] Chain response: ${res.status}`)
+        } catch (e: unknown) {
+          console.error('[justtcg-price-sync] Chain failed:', e instanceof Error ? e.message : e)
+        }
+      })
     }
 
     const summary = {
