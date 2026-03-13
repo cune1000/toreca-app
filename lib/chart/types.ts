@@ -8,6 +8,8 @@ export interface ChartCard {
     category: string
     rarity: string
     card_number?: string
+    expansion?: string
+    set_code?: string
     // 海外相場（メイン）
     loose_price_jpy: number
     loose_price_usd: number       // ペニー単位

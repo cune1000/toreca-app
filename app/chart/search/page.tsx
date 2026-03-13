@@ -58,13 +58,18 @@ function SearchContent() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-gray-800 truncate">{card.name}</p>
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                                             {card.rarity && (
                                                 <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md font-medium">
                                                     {card.rarity}
                                                 </span>
                                             )}
-                                            <span className="text-xs text-gray-400">{card.category}</span>
+                                            {card.expansion && (
+                                                <span className="text-xs text-gray-500 truncate max-w-[140px]">{card.expansion}</span>
+                                            )}
+                                            {card.set_code && (
+                                                <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-mono">{card.set_code}</span>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="text-right shrink-0">

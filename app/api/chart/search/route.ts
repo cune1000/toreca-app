@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
 
         const supabase = createServiceClient()
 
-        // カード検索
+        // カード検索（名前・レアリティ・収録弾・セットコード・カード番号）
+        const escaped = escapeIlike(q)
         let cardQuery = supabase
             .from('cards')
             .select(`
@@ -25,9 +26,11 @@ export async function GET(req: NextRequest) {
                 card_number,
                 pricecharting_id,
                 rarity,
+                expansion,
+                set_code,
                 category:category_large_id (name)
             `)
-            .ilike('name', `%${escapeIlike(q)}%`)
+            .or(`name.ilike.%${escaped}%,rarity.ilike.%${escaped}%,expansion.ilike.%${escaped}%,set_code.ilike.%${escaped}%,card_number.ilike.%${escaped}%`)
             .limit(50)
 
         if (category !== 'all') {
@@ -85,6 +88,8 @@ export async function GET(req: NextRequest) {
                 category: card.category?.name || '',
                 rarity: card.rarity || '',
                 card_number: card.card_number || '',
+                expansion: card.expansion || '',
+                set_code: card.set_code || '',
                 loose_price_jpy: price?.loose_price_jpy || 0,
                 loose_price_usd: price?.loose_price_usd || 0,
                 graded_price_jpy: price?.graded_price_jpy || 0,
