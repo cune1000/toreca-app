@@ -111,7 +111,7 @@ export default function ChartLayout({ children, onOpenSettings }: Props) {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="カード名を検索..."
+                                    placeholder="カード名・レアリティ・収録弾・セットコードで検索"
                                     className={`w-full pl-10 pr-4 py-2 border rounded-xl text-sm transition-all font-medium focus:outline-none ${theme === 'bento' ? 'rounded-none border-2' : theme === 'neopop' ? 'rounded-none' : ''} ${getInputClass()}`}
                                 />
                             </div>
@@ -145,7 +145,7 @@ export default function ChartLayout({ children, onOpenSettings }: Props) {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="カード名を検索..."
+                                placeholder="カード名・レアリティ・収録弾・セットコードで検索"
                                 className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm font-medium focus:outline-none transition-all ${theme === 'bento' ? 'rounded-none border-2' : theme === 'neopop' ? 'rounded-none border-[3px] border-black' : ''} ${getInputClass()}`}
                             />
                         </div>

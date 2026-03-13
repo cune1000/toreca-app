@@ -29,7 +29,7 @@ export default function SearchBox({ initialQuery = '', onSearch }: Props) {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="カード名を入力して検索..."
+                placeholder="カード名・レアリティ・収録弾・セットコードで検索"
                 className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm
           focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-red-400
           shadow-sm transition-all"
