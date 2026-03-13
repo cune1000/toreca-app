@@ -54,13 +54,26 @@ export async function getPriceHistory(
 
 export async function searchCards(query: string, filters?: {
     category?: string
+    rarity?: string
+    expansion?: string
 }): Promise<ChartCard[]> {
-    const searchParams = new URLSearchParams({
-        q: query,
-        ...(filters?.category && { category: filters.category }),
-    })
+    const searchParams = new URLSearchParams()
+    if (query) searchParams.set('q', query)
+    if (filters?.category) searchParams.set('category', filters.category)
+    if (filters?.rarity) searchParams.set('rarity', filters.rarity)
+    if (filters?.expansion) searchParams.set('expansion', filters.expansion)
 
     const res = await fetch(`${BASE_URL}/api/chart/search?${searchParams}`)
     if (!res.ok) return []
+    return res.json()
+}
+
+// ============================================================================
+// フィルター選択肢
+// ============================================================================
+
+export async function getSearchFilters(): Promise<{ rarities: string[]; expansions: string[] }> {
+    const res = await fetch(`${BASE_URL}/api/chart/filters`)
+    if (!res.ok) return { rarities: [], expansions: [] }
     return res.json()
 }

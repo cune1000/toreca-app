@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ChartLayoutComponent from '@/components/chart/ChartLayout'
 import SearchBox from '@/components/chart/SearchBox'
-import { searchCards } from '@/lib/chart/queries'
+import { searchCards, getSearchFilters } from '@/lib/chart/queries'
 import { formatPrice, formatUsd } from '@/lib/chart/format'
 import { ChartCard } from '@/lib/chart/types'
 import PriceChangeIndicator from '@/components/chart/PriceChangeIndicator'
@@ -15,18 +15,76 @@ function SearchContent() {
     const q = searchParams.get('q') || ''
     const [results, setResults] = useState<ChartCard[]>([])
     const [loading, setLoading] = useState(false)
+    const [rarity, setRarity] = useState('')
+    const [expansion, setExpansion] = useState('')
+    const [rarities, setRarities] = useState<string[]>([])
+    const [expansions, setExpansions] = useState<string[]>([])
+
+    // フィルター選択肢を取得
     useEffect(() => {
-        if (!q) return
+        getSearchFilters().then(data => {
+            setRarities(data.rarities)
+            setExpansions(data.expansions)
+        })
+    }, [])
+
+    // 検索実行
+    useEffect(() => {
+        if (!q && !rarity && !expansion) {
+            setResults([])
+            return
+        }
         setLoading(true)
-        searchCards(q)
+        searchCards(q, {
+            rarity: rarity || undefined,
+            expansion: expansion || undefined,
+        })
             .then(setResults)
             .finally(() => setLoading(false))
-    }, [q])
+    }, [q, rarity, expansion])
+
+    const selectClass = "w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-red-400 shadow-sm appearance-none cursor-pointer"
 
     return (
         <ChartLayoutComponent>
             <div className="px-4 py-4">
                 <SearchBox initialQuery={q} />
+
+                {/* フィルター */}
+                <div className="flex gap-2 mt-3">
+                    <div className="flex-1">
+                        <select
+                            value={rarity}
+                            onChange={(e) => setRarity(e.target.value)}
+                            className={selectClass}
+                        >
+                            <option value="">レアリティ</option>
+                            {rarities.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex-1">
+                        <select
+                            value={expansion}
+                            onChange={(e) => setExpansion(e.target.value)}
+                            className={selectClass}
+                        >
+                            <option value="">収録弾</option>
+                            {expansions.map(e => (
+                                <option key={e} value={e}>{e}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {(rarity || expansion) && (
+                        <button
+                            onClick={() => { setRarity(''); setExpansion('') }}
+                            className="px-3 py-2.5 text-xs text-gray-500 bg-gray-100 border border-gray-200 rounded-xl hover:bg-gray-200 transition-colors shrink-0"
+                        >
+                            クリア
+                        </button>
+                    )}
+                </div>
 
                 {/* 検索結果 */}
                 <div className="mt-4">
@@ -35,13 +93,16 @@ function SearchContent() {
                             <div className="inline-block w-8 h-8 border-2 border-gray-200 border-t-red-400 rounded-full animate-spin" />
                             <p className="text-sm text-gray-400 mt-3">検索中...</p>
                         </div>
-                    ) : q && results.length === 0 ? (
+                    ) : (q || rarity || expansion) && results.length === 0 ? (
                         <div className="py-12 text-center text-gray-400">
                             <p className="text-lg">検索結果なし</p>
-                            <p className="text-sm mt-1">「{q}」に一致するカードが見つかりませんでした</p>
+                            <p className="text-sm mt-1">条件に一致するカードが見つかりませんでした</p>
                         </div>
                     ) : (
                         <div className="space-y-2">
+                            {results.length > 0 && (
+                                <p className="text-xs text-gray-400 mb-2">{results.length}件</p>
+                            )}
                             {results.map(card => (
                                 <Link
                                     key={card.id}

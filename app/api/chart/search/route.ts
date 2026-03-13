@@ -8,15 +8,16 @@ export async function GET(req: NextRequest) {
         const { searchParams } = req.nextUrl
         const q = searchParams.get('q') || ''
         const category = searchParams.get('category') || 'all'
+        const rarity = searchParams.get('rarity') || ''
+        const expansion = searchParams.get('expansion') || ''
 
-        if (!q || q.length < 1) {
+        if (!q && !rarity && !expansion) {
             return NextResponse.json([])
         }
 
         const supabase = createServiceClient()
 
         // カード検索（名前・レアリティ・収録弾・セットコード・カード番号）
-        const escaped = escapeIlike(q)
         let cardQuery = supabase
             .from('cards')
             .select(`
@@ -30,8 +31,21 @@ export async function GET(req: NextRequest) {
                 set_code,
                 category:category_large_id (name)
             `)
-            .or(`name.ilike.%${escaped}%,rarity.ilike.%${escaped}%,expansion.ilike.%${escaped}%,set_code.ilike.%${escaped}%,card_number.ilike.%${escaped}%`)
-            .limit(50)
+
+        if (q) {
+            const escaped = escapeIlike(q)
+            cardQuery = cardQuery.or(`name.ilike.%${escaped}%,rarity.ilike.%${escaped}%,expansion.ilike.%${escaped}%,set_code.ilike.%${escaped}%,card_number.ilike.%${escaped}%`)
+        }
+
+        if (rarity) {
+            cardQuery = cardQuery.eq('rarity', rarity)
+        }
+
+        if (expansion) {
+            cardQuery = cardQuery.eq('expansion', expansion)
+        }
+
+        cardQuery = cardQuery.limit(50)
 
         if (category !== 'all') {
             const catName = CATEGORY_SLUG_MAP[category]
