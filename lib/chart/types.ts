@@ -25,6 +25,8 @@ export interface ChartCard {
 }
 
 export interface CardDetail extends ChartCard {
+    name_en?: string
+    set_name_en?: string
     expansion?: string
     release_date?: string
     pricecharting_id?: string | null

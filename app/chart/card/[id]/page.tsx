@@ -255,22 +255,43 @@ export default function CardDetailPage({ params }: Props) {
                         広告バナー
                     </div>
 
-                    {/* カード基本情報 */}
-                    <div className="mt-6 bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                        <h3 className="text-sm font-bold text-gray-700 mb-3">カード情報</h3>
-                        <div className="space-y-2 text-sm">
-                            {[
-                                ['カード名', card.name],
-                                ['レアリティ', card.rarity],
-                                ['カード番号', card.card_number || '-'],
-                                ['収録弾', card.expansion || '-'],
-                                ['発売時期', card.release_date || '-'],
-                            ].filter(([_, v]) => v).map(([k, v]) => (
-                                <div key={k} className="flex justify-between">
-                                    <span className="text-gray-400">{k}</span>
-                                    <span className="text-gray-800 font-medium">{v}</span>
-                                </div>
-                            ))}
+                    {/* カード基本情報: 日本語 / 英語 2カラム */}
+                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* 日本語情報 */}
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                            <h3 className="text-sm font-bold text-gray-700 mb-3">カード情報（日本語）</h3>
+                            <div className="space-y-2 text-sm">
+                                {[
+                                    ['カード名', card.name],
+                                    ['レアリティ', card.rarity],
+                                    ['カード番号', card.card_number || '-'],
+                                    ['収録弾', card.expansion || '-'],
+                                    ['発売時期', card.release_date || '-'],
+                                ].filter(([_, v]) => v).map(([k, v]) => (
+                                    <div key={k} className="flex justify-between gap-2">
+                                        <span className="text-gray-400 shrink-0">{k}</span>
+                                        <span className="text-gray-800 font-medium text-right">{v}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        {/* 英語情報 */}
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                            <h3 className="text-sm font-bold text-gray-700 mb-3">Card Info (EN)</h3>
+                            <div className="space-y-2 text-sm">
+                                {[
+                                    ['Name', card.name_en || '-'],
+                                    ['Rarity', card.rarity || '-'],
+                                    ['Number', card.card_number || '-'],
+                                    ['Set', card.set_name_en || '-'],
+                                    ['Released', card.release_date || '-'],
+                                ].map(([k, v]) => (
+                                    <div key={k} className="flex justify-between gap-2">
+                                        <span className="text-gray-400 shrink-0">{k}</span>
+                                        <span className="text-gray-800 font-medium text-right">{v}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
