@@ -70,3 +70,43 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
     }
 }
+
+/**
+ * スケジュール更新
+ * PATCH /api/admin/cron { job_name, ...fields }
+ */
+export async function PATCH(req: Request) {
+    try {
+        const body = await req.json()
+        const { job_name, ...updates } = body
+        if (!job_name) {
+            return NextResponse.json({ success: false, error: 'job_name is required' }, { status: 400 })
+        }
+
+        const allowedFields = ['enabled', 'run_at_hours', 'run_at_minute', 'interval_minutes', 'schedule_type', 'display_name']
+        const filtered: Record<string, unknown> = {}
+        for (const key of allowedFields) {
+            if (key in updates) filtered[key] = updates[key]
+        }
+        if (Object.keys(filtered).length === 0) {
+            return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 })
+        }
+
+        filtered.updated_at = new Date().toISOString()
+
+        const supabase = createServiceClient()
+        const { data, error } = await supabase
+            .from('cron_schedules')
+            .update(filtered)
+            .eq('job_name', job_name)
+            .select()
+
+        if (error) {
+            return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        }
+
+        return NextResponse.json({ success: true, data })
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
+    }
+}
