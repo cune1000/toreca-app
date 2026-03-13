@@ -12,6 +12,7 @@ import PriceChangeIndicator from '@/components/chart/PriceChangeIndicator'
 import { getCardDetail, getPriceHistory } from '@/lib/chart/queries'
 import { getAffiliateLinks } from '@/lib/chart/affiliate'
 import { formatPrice, formatUsd } from '@/lib/chart/format'
+import { getRarityDisplayName } from '@/lib/rarity-mapping'
 import { CardDetail, PricePoint } from '@/lib/chart/types'
 
 interface Props {
@@ -137,7 +138,7 @@ export default function CardDetailPage({ params }: Props) {
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                                 {card.rarity && (
                                     <span className="text-xs px-2.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-semibold">
-                                        {card.rarity}
+                                        {getRarityDisplayName(card.rarity)}
                                     </span>
                                 )}
                                 {card.card_number && (
@@ -263,7 +264,7 @@ export default function CardDetailPage({ params }: Props) {
                             <div className="space-y-2 text-sm">
                                 {[
                                     ['カード名', card.name],
-                                    ['レアリティ', card.rarity],
+                                    ['レアリティ', getRarityDisplayName(card.rarity)],
                                     ['カード番号', card.card_number || '-'],
                                     ['収録弾', card.expansion || '-'],
                                     ['発売時期', card.release_date || '-'],
