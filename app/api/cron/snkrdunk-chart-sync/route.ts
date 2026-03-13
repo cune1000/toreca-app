@@ -14,7 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 300
 
-const BATCH_SIZE = 40
+const BATCH_SIZE = 250
 
 /**
  * スニダンチャートデータ定期更新Cron
