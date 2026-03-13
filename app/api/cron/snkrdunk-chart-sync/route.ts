@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
-import { withCronAuth } from '@/lib/cron-gate'
+import { NextRequest, NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase'
+import { shouldRunCronJob, markCronJobRun } from '@/lib/cron-gate'
 import {
   extractApparelId,
   getProductInfo,
@@ -12,20 +13,41 @@ import { ALLOWED_GRADES } from '@/components/card-detail/constants'
 import { cleanChartData } from '@/lib/snkrdunk-chart'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-const BATCH_SIZE = 250
+// 1バッチあたりの処理数（タイムアウト前にチェーンする）
+const BATCH_SIZE = 30
+// タイムアウト安全マージン（残り30秒でチェーン）
+const TIMEOUT_MARGIN_MS = 30_000
 
 /**
  * スニダンチャートデータ定期更新Cron
- * 紐づけ済みカードの価格推移チャートを日次で更新
- * 初回取得は紐づけ時にfire-and-forgetで実行済み → このcronは差分更新
+ * 全紐づけ済みカードを完走するまでチェーン呼び出しで繰り返す
  */
-export const GET = withCronAuth('snkrdunk-chart-sync', async (req, supabase) => {
+export async function GET(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const params = req.nextUrl.searchParams
+    const isChain = params.get('chain') === '1'
     const limitParam = params.get('limit')
 
-    const now = new Date()
+    // チェーン呼び出し時はcron-gateをスキップ
+    if (!isChain) {
+      const force = params.get('force') === '1'
+      const gate = await shouldRunCronJob('snkrdunk-chart-sync', { force })
+      if (!gate.shouldRun) {
+        return NextResponse.json({ skipped: true, reason: gate.reason })
+      }
+    }
+
+    const startTime = Date.now()
+    const supabase = createServiceClient()
     const batchLimit = limitParam ? Math.min(parseInt(limitParam) || BATCH_SIZE, 500) : BATCH_SIZE
 
     // 紐づけ済みのスニダンURLを取得（最終チャート更新が古い順）
@@ -42,12 +64,21 @@ export const GET = withCronAuth('snkrdunk-chart-sync', async (req, supabase) => 
     }
 
     if (!saleUrls || saleUrls.length === 0) {
+      await markCronJobRun('snkrdunk-chart-sync', 'success')
       return NextResponse.json({ success: true, processed: 0, message: 'No cards to update' })
     }
 
     const results: { cardId: string; status: string; conditions?: number; inserted?: number; error?: string }[] = []
+    let timedOut = false
 
     for (const url of saleUrls) {
+      // タイムアウト前にループを抜ける
+      const elapsed = Date.now() - startTime
+      if (elapsed > (maxDuration * 1000) - TIMEOUT_MARGIN_MS) {
+        timedOut = true
+        break
+      }
+
       const cardId = url.card_id
       const apparelId = url.apparel_id ?? extractApparelId(url.product_url)
       if (!apparelId) {
@@ -65,7 +96,7 @@ export const GET = withCronAuth('snkrdunk-chart-sync', async (req, supabase) => 
           productType = 'single'
         }
 
-        const fetchedAt = now.toISOString()
+        const fetchedAt = new Date().toISOString()
         let totalInserted = 0
         let condCount = 0
 
@@ -105,9 +136,14 @@ export const GET = withCronAuth('snkrdunk-chart-sync', async (req, supabase) => 
           }
         }
 
-        results.push({ cardId, status: 'success', conditions: condCount, inserted: totalInserted })
+        // last_scraped_at を更新（次回は後回しになる）
+        await supabase
+          .from('card_sale_urls')
+          .update({ last_scraped_at: fetchedAt })
+          .eq('card_id', cardId)
+          .like('product_url', '%snkrdunk.com%')
 
-        // カード間のレート制限
+        results.push({ cardId, status: 'success', conditions: condCount, inserted: totalInserted })
         await sleep(500)
       } catch (e: unknown) {
         const eMsg = e instanceof Error ? e.message : String(e)
@@ -116,12 +152,37 @@ export const GET = withCronAuth('snkrdunk-chart-sync', async (req, supabase) => 
       }
     }
 
+    const remaining = saleUrls.length - results.length
+
+    // 未処理カードが残っていたらチェーン呼び出し
+    if (timedOut && remaining > 0) {
+      const host = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000'
+      console.log(`[snkrdunk-chart-sync] Chaining: ${remaining} cards remaining`)
+      fetch(`${host}/api/cron/snkrdunk-chart-sync?chain=1`, {
+        headers: { 'Authorization': `Bearer ${cronSecret}` },
+      }).catch(e => console.error('[snkrdunk-chart-sync] Chain failed:', e.message))
+    }
+
+    if (!isChain) {
+      await markCronJobRun('snkrdunk-chart-sync', 'success').catch(() => {})
+    }
+
     return NextResponse.json({
       success: true,
       processed: results.length,
+      remaining,
+      chained: timedOut && remaining > 0,
       results,
     })
-})
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[snkrdunk-chart-sync] Error:', error)
+    await markCronJobRun('snkrdunk-chart-sync', 'error', message).catch(() => {})
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
+  }
+}
 
 async function upsertChartData(
   supabase: SupabaseClient,
