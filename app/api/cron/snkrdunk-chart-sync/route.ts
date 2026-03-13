@@ -154,12 +154,13 @@ export async function GET(req: NextRequest) {
 
     const remaining = saleUrls.length - results.length
 
-    // 未処理カードが残っていたらチェーン呼び出し
-    if (timedOut && remaining > 0) {
+    // チェーン判定: タイムアウトで中断 OR バッチが満杯（＝まだ未処理カードがある可能性）
+    const shouldChain = (timedOut && remaining > 0) || saleUrls.length >= batchLimit
+    if (shouldChain) {
       const host = process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : 'http://localhost:3000'
-      console.log(`[snkrdunk-chart-sync] Chaining: ${remaining} cards remaining`)
+      console.log(`[snkrdunk-chart-sync] Chaining: batch=${saleUrls.length}, batchLimit=${batchLimit}, timedOut=${timedOut}`)
       fetch(`${host}/api/cron/snkrdunk-chart-sync?chain=1`, {
         headers: { 'Authorization': `Bearer ${cronSecret}` },
       }).catch(e => console.error('[snkrdunk-chart-sync] Chain failed:', e.message))
@@ -173,7 +174,7 @@ export async function GET(req: NextRequest) {
       success: true,
       processed: results.length,
       remaining,
-      chained: timedOut && remaining > 0,
+      chained: shouldChain,
       results,
     })
   } catch (error: unknown) {
