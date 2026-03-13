@@ -97,8 +97,7 @@ export async function PATCH(req: Request) {
         const supabase = createServiceClient()
         const { data, error } = await supabase
             .from('cron_schedules')
-            .update(filtered)
-            .eq('job_name', job_name)
+            .upsert({ job_name, ...filtered }, { onConflict: 'job_name' })
             .select()
 
         if (error) {
