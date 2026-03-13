@@ -42,7 +42,7 @@
     },
     {
       "path": "/api/cron/snkrdunk-chart-sync",
-      "schedule": "0 21 * * *"
+      "schedule": "0 9,21 * * *"
     }
   ]
 }
